@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = ["crates/sim-core", "crates/sim-wasm"]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "UNLICENSED"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+# Las pruebas de física en modo debug son muy lentas; se optimizan también en test.
+[profile.test]
+opt-level = 3
+
+[profile.dev.package."*"]
+opt-level = 3

@@ -1,0 +1,6 @@
+target/
+node_modules/
+dist/
+crates/sim-wasm/pkg/
+*.log
+.DS_Store
