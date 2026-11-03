@@ -17,17 +17,13 @@ use std::collections::BinaryHeap;
 pub const MAX_SNAP_M: f64 = 60.0;
 
 #[derive(Clone, Copy, Debug)]
+#[derive(Default)]
 pub struct RouteOptions {
     pub respect_oneway: bool,
     /// Agrega el tramo del último punto al primero.
     pub closed: bool,
 }
 
-impl Default for RouteOptions {
-    fn default() -> Self {
-        Self { respect_oneway: false, closed: false }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -103,6 +99,9 @@ fn nearest_distance(g: &RoadGraph, p: GeoPoint) -> f64 {
     }
     best
 }
+
+/// Mejor tramo encontrado entre dos puntos ajustados: (costo, pasos intermedios, directo).
+type Candidate = (f64, Vec<(usize, bool)>, bool);
 
 pub fn snap(g: &RoadGraph, p: GeoPoint) -> Result<Snap, String> {
     let q = g.frame.to_en(p);
@@ -182,7 +181,7 @@ fn leg(g: &RoadGraph, adj: &[Vec<(usize, bool)>], a: &Snap, b: &Snap, opts: Rout
     let allow = |e: &crate::graph::Edge, fwd: bool| !opts.respect_oneway || e.oneway.allows(fwd);
 
     // Mismo tramo: recorrido directo si el sentido lo permite.
-    let mut best: Option<(f64, Vec<(usize, bool)>, bool)> = None; // (costo, pasos intermedios, directo)
+    let mut best: Option<Candidate> = None;
     if a.edge_index == b.edge_index {
         let fwd = b.along_m >= a.along_m;
         if allow(ea, fwd) {
