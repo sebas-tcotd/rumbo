@@ -1,0 +1,28 @@
+//! track-compiler: compilador de circuitos desde geografía real.
+//!
+//! S1 cubre la mitad "geográfica" del pipeline:
+//! ingesta de OSM (Overpass JSON) → proyección WGS84 → ENU local → grafo vial dirigido
+//! → ruteo A* entre puntos de paso → recorrido resuelto.
+//! La geometría conducible (S2) y las intersecciones (S3) vienen después.
+//!
+//! Convenciones:
+//! - Coordenadas geográficas siempre como campos con nombre (`lat`, `lon`).
+//!   Solo la exportación GeoJSON usa el orden `[lon, lat]` que exige el estándar.
+//! - Espacio local en metros, `f64`, X este y Y norte. La altura llega en S2 con el
+//!   modelo de elevación; aquí el grafo es plano.
+//! - Todo lo que entra al hash se recorre en orden fijo (ids ordenados, `BTreeMap`).
+
+pub mod diagnostics;
+pub mod export;
+pub mod geo;
+pub mod graph;
+pub mod hash;
+pub mod osm;
+pub mod routing;
+
+pub use diagnostics::{Diagnostic, Severity};
+pub use geo::{GeoPoint, LocalFrame};
+pub use graph::{RoadGraph, BuildOptions};
+pub use routing::{ResolvedRoute, RouteOptions};
+
+pub const COMPILER_VERSION: &str = "0.1.0";
