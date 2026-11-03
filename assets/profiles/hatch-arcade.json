@@ -41,6 +41,7 @@
     "drift_speed_assist_n": 2600.0,
     "drift_exit_angle_deg": 6.0,
     "handbrake_grip_scale": 0.35,
+    "drift_brake_tap": 0.0,
     "wall_friction": 0.06,
     "wall_restitution": 0.12,
     "air_control_nm": 1800.0

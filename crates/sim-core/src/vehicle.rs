@@ -54,6 +54,8 @@ pub struct Vehicle {
     prev_beta: f32,
     prev_brake: f32,
     brake_time: f32,
+    prev_handbrake: bool,
+    handbrake_time: f32,
     prev_v_heading: f32,
     pub compression: [f32; 4],
     pub contact: [bool; 4],
@@ -110,6 +112,8 @@ impl Vehicle {
             prev_beta: 0.0,
             prev_brake: 0.0,
             brake_time: 10.0,
+            prev_handbrake: false,
+            handbrake_time: 10.0,
             prev_v_heading: 0.0,
             compression: [0.0; 4],
             contact: [false; 4],
@@ -210,19 +214,28 @@ impl Vehicle {
         self.steer_angle = (self.steer * lock + cs).clamp(-max_angle, max_angle);
 
         // ── Máquina de estados del derrape ──
-        // Un "toque" es freno presionado hace menos de 0,35 s: tolera que el jugador
-        // pise el freno un instante antes de que la rampa de dirección pase el umbral.
+        // Como en los NFS clásicos: freno + dirección es una frenada en curva normal;
+        // freno de mano + dirección inicia el derrape. La entrada por toque de freno
+        // queda como opción del perfil (`drift_brake_tap`).
+        // Se recuerda una pulsación de hasta 0,35 s: tolera que el jugador la haga un
+        // instante antes de que la rampa de dirección pase el umbral.
         if brake > 0.3 && self.prev_brake <= 0.3 {
-            self.brake_time = 0.0; // flanco de subida: empieza a contar el toque
+            self.brake_time = 0.0;
         } else {
             self.brake_time = (self.brake_time + dt).min(10.0);
         }
-        let brake_tap = self.brake_time < 0.35;
+        if handbrake && !self.prev_handbrake {
+            self.handbrake_time = 0.0;
+        } else {
+            self.handbrake_time = (self.handbrake_time + dt).min(10.0);
+        }
+        let brake_tap = p.drift_brake_tap >= 0.5 && self.brake_time < 0.35;
+        let handbrake_pull = handbrake || self.handbrake_time < 0.35;
         if !self.drift
             && speed_kmh > p.drift_entry_speed_kmh
             && self.steer.abs() > 0.3
             && v_fwd > 0.0
-            && (brake_tap || handbrake)
+            && (brake_tap || handbrake_pull)
         {
             self.drift = true;
             self.drift_dir = sign(self.steer);
@@ -353,11 +366,15 @@ impl Vehicle {
 
             // Agarre disponible.
             let mut lat_grip = if front { p.front_grip } else { p.rear_grip };
-            if !front && self.drift {
-                lat_grip *= p.drift_rear_grip_scale;
-            }
-            if !front && handbrake {
-                lat_grip *= p.handbrake_grip_scale;
+            if !front {
+                // En derrape con freno de mano sostenido manda el menor de los dos: no se suman.
+                let scale = match (self.drift, handbrake) {
+                    (true, true) => p.drift_rear_grip_scale.min(p.handbrake_grip_scale),
+                    (true, false) => p.drift_rear_grip_scale,
+                    (false, true) => p.handbrake_grip_scale,
+                    (false, false) => 1.0,
+                };
+                lat_grip *= scale;
             }
             let fx_max = p.long_grip * h.load * h.grip;
             fx = fx.clamp(-fx_max, fx_max);
@@ -434,6 +451,7 @@ impl Vehicle {
 
         self.prev_beta = beta;
         self.prev_brake = brake;
+        self.prev_handbrake = handbrake;
         self.prev_v_heading = v_heading;
         self.telemetry = Telemetry {
             speed_kmh: v_fwd.signum() * speed_kmh,
@@ -449,7 +467,7 @@ impl Vehicle {
 
     pub fn hash_into(&self, h: &mut Fnv64) {
         h.f32(self.steer).f32(self.steer_angle).u32(self.drift as u32).f32(self.drift_dir).f32(self.drift_time);
-        h.f32(self.prev_beta).f32(self.prev_brake).f32(self.brake_time).f32(self.prev_v_heading).u32(self.touching_wall as u32);
+        h.f32(self.prev_beta).f32(self.prev_brake).f32(self.brake_time).u32(self.prev_handbrake as u32).f32(self.handbrake_time).f32(self.prev_v_heading).u32(self.touching_wall as u32);
         for c in self.compression {
             h.f32(c);
         }

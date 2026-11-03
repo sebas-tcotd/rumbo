@@ -114,6 +114,7 @@ profile_params! {
         drift_speed_assist_n: "Empuje en derrape", "N", 2600.0, 0.0, 8000.0, 50.0, "Mantiene la velocidad al derrapar con acelerador.";
         drift_exit_angle_deg: "Ángulo de salida", "°", 6.0, 1.0, 20.0, 0.5, "Por debajo de este ángulo el derrape termina.";
         handbrake_grip_scale: "Agarre trasero con freno de mano", "0–1", 0.35, 0.05, 1.0, 0.01, "";
+        drift_brake_tap: "Derrapar también con toque de freno", "sí/no", 0.0, 0.0, 1.0, 1.0, "Apagado: solo el freno de mano inicia el derrape y el freno normal frena en curva.";
     }
     "Colisiones y aire" {
         wall_friction: "Fricción contra muros", "μ", 0.06, 0.0, 1.0, 0.01, "Bajo = rozar un muro no frena en seco.";

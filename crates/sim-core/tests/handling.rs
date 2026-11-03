@@ -79,24 +79,54 @@ fn autopilot_laps_are_smooth_and_valid() {
     assert_eq!(wall_ticks, 0, "el piloto automático tocó el muro");
 }
 
-#[test]
-fn brake_tap_starts_a_controlled_drift() {
-    let mut s = sim();
-    while state(&s)[SPEED] < 110.0 {
+/// Acelera en la recta hasta `kmh` y devuelve la sesión lista para la maniobra.
+fn at_speed(profile: sim_core::ProfileFile, kmh: f32) -> sim_core::Simulation {
+    let mut s = sim_core::Simulation::new(&track(), &profile, 7).unwrap();
+    while state(&s)[SPEED] < kmh {
         s.step(InputFrame { throttle: 255, ..Default::default() });
     }
+    s
+}
+
+/// Maniobra estándar: 10 ticks de `entry` con volante a fondo, luego acelerador sostenido 1 s.
+/// Devuelve (entró en derrape, ángulo máximo).
+fn maneuver(s: &mut sim_core::Simulation, entry: InputFrame) -> (bool, f32) {
     let mut max_slip = 0.0f32;
     let mut entered = false;
     for t in 0..HZ {
-        let brake = if t < 10 { 255 } else { 0 };
-        s.step(InputFrame { steer: 127, throttle: if t >= 10 { 255 } else { 0 }, brake, flags: 0 });
-        let st = state(&s);
+        let i = if t < 10 { InputFrame { steer: 127, ..entry } } else { InputFrame { steer: 127, throttle: 255, ..Default::default() } };
+        s.step(i);
+        let st = state(s);
         entered |= st[DRIFT] > 0.5;
         max_slip = max_slip.max(st[SLIP].abs());
-        assert!(st[SPEED] > 60.0, "perdió demasiada velocidad derrapando");
+        assert!(st[SPEED] > 60.0, "perdió demasiada velocidad");
     }
-    assert!(entered, "el toque de freno no inició el derrape");
+    (entered, max_slip)
+}
+
+#[test]
+fn brake_and_steer_turns_without_drifting() {
+    let mut s = at_speed(profile(), 110.0);
+    let (entered, max_slip) = maneuver(&mut s, InputFrame { brake: 255, ..Default::default() });
+    assert!(!entered, "frenar en curva no debería iniciar un derrape");
+    assert!(max_slip < 12.0, "frenando en curva deslizó {max_slip:.1}°");
+}
+
+#[test]
+fn handbrake_and_steer_starts_a_controlled_drift() {
+    let mut s = at_speed(profile(), 110.0);
+    let (entered, max_slip) = maneuver(&mut s, InputFrame { flags: sim_core::input::FLAG_HANDBRAKE, ..Default::default() });
+    assert!(entered, "el freno de mano no inició el derrape");
     assert!((15.0..40.0).contains(&max_slip), "ángulo de derrape fuera de rango: {max_slip:.1}°");
+}
+
+#[test]
+fn brake_tap_drift_is_an_option_of_the_profile() {
+    let mut p = profile();
+    p.params.drift_brake_tap = 1.0;
+    let mut s = at_speed(p, 110.0);
+    let (entered, _) = maneuver(&mut s, InputFrame { brake: 255, ..Default::default() });
+    assert!(entered, "con la opción activa, el toque de freno debería iniciar el derrape");
 }
 
 #[test]
