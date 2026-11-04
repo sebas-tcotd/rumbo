@@ -12,6 +12,11 @@ Spikes del PoC, en orden de riesgo:
 
 - **S3 · Intersecciones:** cruces en T y de cuatro brazos conducibles, con calles laterales.
   Responde: ¿cuánto cuesta de verdad una intersección? Ver [S3](#s3--intersecciones).
+- **S4 · Determinismo:** los mismos replays dan los mismos hashes en nativo, Node y cinco navegadores.
+  Responde: ¿se puede confiar un tiempo entre jugadores? Ver [S4](#s4--determinismo).
+
+**El PoC está cerrado** (ver [Estado del PoC](#estado-del-poc)). Compartir (S5) y la identidad visual (S6)
+pasan al desarrollo formal con BMAD.
 
 ## Requisitos
 
@@ -331,6 +336,54 @@ deja ver para lo que falta:
 - [x] Esfuerzo medido para estimar rotondas e intercambios.
 - [ ] Manejarlo a mano: doblar en los cruces, meterse a las calles laterales y volver.
 - [ ] Puentes separados por nivel: queda para cuando haya un caso real en el circuito (ver intercambios).
+
+## S4 · Determinismo
+
+Ocho replays dorados se graban en nativo (`crates/sim-core/tests/golden.rs`) y se re-simulan con el binario
+WASM en cada entorno. Cada replay guarda un hash del estado cada 5 s: el resultado tiene que coincidir en todos,
+no solo el final.
+
+| Pista | Casos |
+|---|---|
+| `test-loop` | piloto automático, guion de teclado, adversos |
+| `costa-verde-sprint` | piloto automático (90 s), adversos |
+| `san-borja-las-artes` | piloto automático, guion de teclado, adversos |
+
+Los adversos son una secuencia pseudoaleatoria fija: a fondo contra muros y barreras, volante de tope a tope,
+freno de mano, resets y reinicios.
+
+```bash
+cd apps/web && npm run wasm          # compila el WASM
+cd ../../ci/determinism && npm ci
+node run.mjs --browser node          # o chromium, firefox, webkit (Playwright), safari (safaridriver)
+```
+
+En GitHub Actions (`.github/workflows/determinism.yml`), cada push corre las pruebas nativas, compila el WASM,
+lo verifica en Node y en Chromium y Firefox (Linux), WebKit y Safari real (macOS), y publica la tabla en el
+resumen del run.
+
+### Resultado
+
+**Cero diferencias:** los 8 replays dan los mismos hashes que en nativo en Node 22, Chrome 156, Firefox 157,
+WebKit y Safari 26.6. Cada replay tarda entre 0,1 y 0,9 s en re-simularse en el navegador.
+
+### Criterios de salida de S4
+
+- [x] Replays de referencia desde S0, ampliados a las tres pistas y a casos adversos.
+- [x] Arnés en CI con casos adversos.
+- [x] Cero diferencias de hash en Chrome, Firefox y Safari.
+
+## Estado del PoC
+
+| Spike | Pregunta | Respuesta |
+|---|---|---|
+| S0 · Manejo | ¿Es divertido? | Sí: arcade estilo NFS, 120 Hz, perfil calibrable en vivo. |
+| S1 · Datos | ¿El grafo de Lima es ruteable y limpio? | Sí, con ruteo que evita medias vueltas. |
+| S2 · Carreteras | ¿Se maneja continuo sobre datos reales? | Sí. La elevación (modelo de superficie) es el punto débil y necesita anclas o un modelo de terreno. |
+| S3 · Intersecciones | ¿Cuánto cuesta una intersección? | T y cruces: una sesión. Rotondas: algo parecido. Pasos a desnivel: más que todo S3 junto. |
+| S4 · Determinismo | ¿Mismo replay, mismo hash en tres navegadores? | Sí, en cinco entornos. |
+| S5 · Compartir | — | Pasa al desarrollo formal. |
+| S6 · Visual | — | Pasa al desarrollo formal. |
 
 ## Decisiones tomadas en S0
 
