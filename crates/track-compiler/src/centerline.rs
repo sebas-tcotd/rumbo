@@ -69,7 +69,7 @@ pub fn resample(pts: &[[f64; 2]], step: f64) -> Vec<[f64; 2]> {
 
 /// Suavizado gaussiano a paso constante. Los extremos se mantienen fijos y la ventana se
 /// recorta cerca de ellos, para no acortar el recorrido.
-fn gaussian(pts: &[[f64; 2]], step: f64, sigma: f64, closed: bool) -> Vec<[f64; 2]> {
+pub fn gaussian(pts: &[[f64; 2]], step: f64, sigma: f64, closed: bool) -> Vec<[f64; 2]> {
     let n = pts.len();
     let r = ((3.0 * sigma) / step).ceil() as isize;
     let weights: Vec<f64> = (-r..=r).map(|k| libm::exp(-0.5 * ((k as f64 * step) / sigma).powi(2))).collect();

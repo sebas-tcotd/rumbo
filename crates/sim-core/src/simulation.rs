@@ -156,6 +156,14 @@ impl Simulation {
 
         let pos = self.world.bodies[self.vehicle.body].translation();
         self.near_idx = self.track.nearest_near(pos, self.near_idx, 12);
+        // En una red (S3) el auto puede irse por una calle lateral y volver a la pista por
+        // otro lado: si quedó lejos de la ventana, se busca en toda la pista.
+        if self.track.network {
+            let smp = &self.track.samples[self.near_idx];
+            if (smp.pos - pos).length() > smp.width * 0.5 + 6.0 {
+                self.near_idx = self.track.nearest_global(pos);
+            }
+        }
         let new_s = self.track.project_s(pos, self.near_idx);
         self.tick += 1;
         self.last_event = self.timer.update(&self.track, self.s, new_s, self.tick);

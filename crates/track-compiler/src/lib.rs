@@ -5,7 +5,8 @@
 //! → ruteo A* entre puntos de paso → recorrido resuelto.
 //! S2 agrega la mitad "conducible" para un tramo: eje suavizado, elevación filtrada desde
 //! un modelo de elevación y exportación a una pista de sim-core (`trackgen`).
-//! Las intersecciones (S3) vienen después.
+//! S3 agrega la red conducible de un circuito urbano: calles, cruces y calles laterales
+//! (`network`), con la altura como un campo 2D suavizado (`terrain`).
 //!
 //! Convenciones:
 //! - Coordenadas geográficas siempre como campos con nombre (`lat`, `lon`).
@@ -22,8 +23,10 @@ pub mod export;
 pub mod geo;
 pub mod graph;
 pub mod hash;
+pub mod network;
 pub mod osm;
 pub mod routing;
+pub mod terrain;
 pub mod trackgen;
 
 pub use diagnostics::{Diagnostic, Severity};

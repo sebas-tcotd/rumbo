@@ -6,6 +6,7 @@
 //!                         [--geojson <archivo>] [--descriptor <archivo>]
 //!   track-compiler track  <grafo.json> --dem <modelo.tif> --from lat,lon --to lat,lon [--via lat,lon]...
 //!                         --id <id> [--name <nombre>] --out <pista.json> [--profile <perfil.csv>] [--geojson <archivo>]
+//!                         [--anchor lat,lon,altura]... [--network]
 //!   track-compiler stats  <grafo.json>
 
 use std::process::ExitCode;
@@ -26,6 +27,7 @@ const USAGE: &str = "uso:
   track-compiler track  <grafo.json> --dem <modelo.tif> --from lat,lon --to lat,lon [--via lat,lon]...
                         --id <id> [--name <nombre>] --out <pista.json> [--profile <perfil.csv>] [--geojson <archivo>]
                         [--anchor lat,lon,altura]...   altura conocida de la vía en un punto, en metros
+                        [--network]   circuito urbano: cruces y calles laterales conducibles (S3, con --closed)
                         (y las mismas opciones de ruteo que route)
   track-compiler stats  <grafo.json>";
 
@@ -42,7 +44,7 @@ impl Args {
         while i < raw.len() {
             let a = &raw[i];
             if let Some(name) = a.strip_prefix("--") {
-                let takes_value = !matches!(name, "closed" | "respect-oneway");
+                let takes_value = !matches!(name, "closed" | "respect-oneway" | "network");
                 let value = if takes_value { raw.get(i + 1).cloned() } else { None };
                 if takes_value {
                     i += 1;
@@ -203,6 +205,9 @@ fn run(raw: Vec<String>) -> Result<(), String> {
             let out = args.get("out").ok_or("falta --out")?;
             let (r, _) = route_from_args(&args, &g)?;
             let mut opts = TrackOptions::new(id, args.get("name").unwrap_or(id));
+            if args.has("network") {
+                opts.network = Some(track_compiler::network::NetworkOptions::default());
+            }
             for a in args.all("anchor") {
                 let parts: Vec<&str> = a.split(',').collect();
                 if parts.len() != 3 {

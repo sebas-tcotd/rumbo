@@ -179,6 +179,16 @@ export class LabRenderer {
       minZ = Math.min(minZ, p.y); maxZ = Math.max(maxZ, p.y);
     }
     const pad = 220;
+    // Celdas de 6 m ocupadas por la superficie conducible (incluye calles laterales y cruces
+    // de una red): ahí no va vegetación.
+    const CELL = 6;
+    const occupied = new Set<string>();
+    const dp = ready.meshes.drivable.positions;
+    for (let i = 0; i < dp.length; i += 3) {
+      const cx = Math.floor(dp[i] / CELL), cz = Math.floor(dp[i + 2] / CELL);
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) occupied.add(`${cx + dx},${cz + dz}`);
+    }
+    const onRoad = (x: number, z: number) => occupied.has(`${Math.floor(x / CELL)},${Math.floor(z / CELL)}`);
     const clearance = (x: number, z: number) => {
       let best = Infinity;
       for (const p of pts) best = Math.min(best, (p.x - x) ** 2 + (p.y - z) ** 2);
@@ -203,7 +213,7 @@ export class LabRenderer {
       const x = minX - pad + rand() * (maxX - minX + pad * 2);
       const z = minZ - pad + rand() * (maxZ - minZ + pad * 2);
       const d = clearance(x, z);
-      if (d < 26) continue;
+      if (d < 26 || onRoad(x, z)) continue;
       const y = ready.groundY;
       if (rand() < 0.72) {
         const s = 1.6 + rand() * 2.4;

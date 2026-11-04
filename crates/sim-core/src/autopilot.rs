@@ -31,6 +31,12 @@ impl Autopilot {
 
         // Punto objetivo por delante sobre el eje.
         let look = 7.0 + speed * 0.55;
+        // En una esquina cerrada, apuntar lejos corta camino por dentro (persecución pura):
+        // se acorta la mirada para que la cuerda no se aparte del eje más de `cut` metros.
+        let k_near = track.max_curvature_ahead(st.sample_index, look).max(1e-4);
+        let cut = 0.8 + 0.06 * speed;
+        let chord = 2.0 * (2.0 * cut / k_near - cut * cut).max(0.0).sqrt();
+        let look = look.min(chord.max(5.0));
         let ahead = (look / track.spacing).ceil() as isize;
         let target = track.sample(st.sample_index as isize + ahead).pos;
         let d = norm(target - st.pos);
