@@ -6,3 +6,4 @@ crates/sim-wasm/pkg/
 .DS_Store
 data/graphs/*.json
 data/graphs/*.geojson
+ci/determinism/results/

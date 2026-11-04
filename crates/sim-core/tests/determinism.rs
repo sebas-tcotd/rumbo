@@ -3,11 +3,6 @@ mod common;
 use common::*;
 use sim_core::input::FLAG_RESET;
 use sim_core::{InputFrame, ReplayManifest, STATE_LEN};
-use std::path::PathBuf;
-
-fn golden_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/autopilot-test-loop.json")
-}
 
 #[test]
 fn same_inputs_same_hashes() {
@@ -85,21 +80,4 @@ fn adversarial_inputs_stay_finite_and_deterministic() {
         s.state_hash()
     };
     assert_eq!(run(), run());
-}
-
-#[test]
-fn golden_replay_matches() {
-    let path = golden_path();
-    if std::env::var("UPDATE_GOLDEN").is_ok() || !path.exists() {
-        let mut s = sim();
-        run_autopilot(&mut s, HZ * 60);
-        let json = serde_json::to_string(&s.replay()).unwrap();
-        std::fs::write(&path, json).unwrap();
-        if std::env::var("UPDATE_GOLDEN").is_err() {
-            panic!("no había replay dorado; se generó en {}. Vuelve a correr las pruebas.", path.display());
-        }
-    }
-    let manifest = ReplayManifest::from_json(&std::fs::read_to_string(&path).unwrap()).unwrap();
-    let report = manifest.verify(&track()).unwrap();
-    assert!(report.ok, "{}: esperado {}, obtenido {}", report.message, report.expected_final, report.actual_final);
 }
