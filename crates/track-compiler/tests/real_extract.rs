@@ -79,10 +79,14 @@ fn real_routes_are_valid_and_deterministic() {
         assert_eq!(r1.descriptor_route(), r2.descriptor_route(), "la ruta no es determinista");
         let ratio = r1.length_m / straight;
         assert!((1.0..3.0).contains(&ratio), "ruta de {:.0} m para {:.0} m en línea recta", r1.length_m, straight);
-        // Respetando sentidos puede no existir ruta, pero si existe no es más corta.
-        if let Ok(r3) = route(&g, &pts, RouteOptions { respect_oneway: true, ..RouteOptions::default() }) {
-            assert!(r3.length_m + 1e-6 >= r1.length_m);
+        // Con la ruta más corta pura: respetando sentidos puede no existir, pero si existe
+        // no es más corta.
+        let pure = route(&g, &pts, RouteOptions::shortest()).unwrap();
+        if let Ok(r3) = route(&g, &pts, RouteOptions { respect_oneway: true, ..RouteOptions::shortest() }) {
+            assert!(r3.length_m + 1e-6 >= pure.length_m);
         }
+        // El límite de giro solo puede alargar la ruta, nunca acortarla.
+        assert!(r1.length_m + 1e-6 >= pure.length_m);
         checked += 1;
     }
     eprintln!("{checked} rutas verificadas");

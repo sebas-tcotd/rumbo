@@ -138,6 +138,9 @@ pub struct CompiledTrack {
     pub id: String,
     pub name: String,
     pub closed: bool,
+    /// Sprint: posición de la línea de salida y de la llegada sobre `s` (0 en circuitos).
+    pub start_s: f32,
+    pub finish_s: f32,
     pub spacing: f32,
     pub samples: Vec<Sample>,
     pub length: f32,
@@ -159,6 +162,10 @@ pub struct CompiledTrack {
 const KERB_W: f32 = 1.0;
 const SHOULDER_W: f32 = 3.5;
 const WALL_H: f32 = 1.2;
+/// Sprint: carrerilla entre el inicio de la pista y la línea de salida.
+pub const OPEN_START_M: f32 = 24.0;
+/// Sprint: zona de frenado entre la llegada y el muro final (frenar desde ~200 km/h).
+pub const OPEN_RUNOFF_M: f32 = 120.0;
 const WALL_T: f32 = 1.0;
 
 /// Caja orientada: centro, semiejes (grosor, alto, largo) y rotación.
@@ -178,19 +185,21 @@ impl TrackDef {
         if self.points.len() < 4 {
             return Err("la pista necesita al menos 4 puntos de control".into());
         }
-        if !self.closed {
-            return Err("S0 solo admite pistas cerradas".into());
-        }
+        // Las pistas abiertas (sprint) recorren los mismos pasos sin dar la vuelta en los
+        // extremos. La rama cerrada conserva exactamente la aritmética de S0.
+        let closed = self.closed;
         let n = self.points.len();
         let p = |i: isize| -> [f32; 5] {
-            let c = &self.points[i.rem_euclid(n as isize) as usize];
+            let idx = if closed { i.rem_euclid(n as isize) } else { i.clamp(0, n as isize - 1) };
+            let c = &self.points[idx as usize];
             [c.x, c.y, c.z, c.width.unwrap_or(self.default_width), c.bank]
         };
 
-        // 1. Polilínea densa con Catmull-Rom uniforme cerrado.
+        // 1. Polilínea densa con Catmull-Rom uniforme.
         const SUB: usize = 48;
+        let segments = if closed { n } else { n - 1 };
         let mut dense: Vec<[f32; 5]> = Vec::with_capacity(n * SUB + 1);
-        for i in 0..n as isize {
+        for i in 0..segments as isize {
             let (p0, p1, p2, p3) = (p(i - 1), p(i), p(i + 1), p(i + 2));
             for k in 0..SUB {
                 let t = k as f32 / SUB as f32;
@@ -206,7 +215,11 @@ impl TrackDef {
                 dense.push(out);
             }
         }
-        dense.push(dense[0]);
+        if closed {
+            dense.push(dense[0]);
+        } else {
+            dense.push(p(n as isize - 1));
+        }
 
         // 2. Longitud acumulada y re-muestreo por distancia.
         let pos = |d: &[f32; 5]| Vec3::new(d[0], d[1], d[2]);
@@ -217,9 +230,11 @@ impl TrackDef {
         let total = *acc.last().unwrap();
         let count = (total / self.sample_spacing).floor().max(8.0) as usize;
         let spacing = total / count as f32;
-        let mut raw: Vec<[f32; 5]> = Vec::with_capacity(count);
+        let mut raw: Vec<[f32; 5]> = Vec::with_capacity(count + 1);
         let mut j = 0usize;
-        for k in 0..count {
+        // Cerrada: la última muestra se une con la primera. Abierta: incluye el extremo final.
+        let last = if closed { count } else { count + 1 };
+        for k in 0..last {
             let target = k as f32 * spacing;
             while j + 1 < acc.len() - 1 && acc[j + 1] < target {
                 j += 1;
@@ -235,7 +250,8 @@ impl TrackDef {
 
         // 3. Marcos locales: tangente, curvatura con signo, peralte.
         let m = raw.len();
-        let at = |i: isize| pos(&raw[i.rem_euclid(m as isize) as usize]);
+        let wrap = |i: isize| if closed { i.rem_euclid(m as isize) as usize } else { i.clamp(0, m as isize - 1) as usize };
+        let at = |i: isize| pos(&raw[wrap(i)]);
         let tangents: Vec<Vec3> = (0..m as isize).map(|i| norm(at(i + 1) - at(i - 1))).collect();
         let world_up = Vec3::Y;
         let flat_right = |t: Vec3| norm(t.cross(world_up));
@@ -243,11 +259,12 @@ impl TrackDef {
         const W: isize = 6;
         let curv: Vec<f32> = (0..m as isize)
             .map(|i| {
-                let ta = tangents[(i - W).rem_euclid(m as isize) as usize];
-                let tb = tangents[(i + W).rem_euclid(m as isize) as usize];
+                let (ia, ib) = (wrap(i - W), wrap(i + W));
+                let (ta, tb) = (tangents[ia], tangents[ib]);
                 let d = tb - ta;
                 let r = flat_right(tangents[i as usize]);
-                d.dot(r) / (2.0 * W as f32 * spacing)
+                let span = if closed { 2.0 * W as f32 } else { (ib - ia).max(1) as f32 };
+                d.dot(r) / (span * spacing)
             })
             .collect();
 
@@ -274,12 +291,26 @@ impl TrackDef {
         let min_y = samples.iter().map(|s| s.pos.y).fold(f32::INFINITY, f32::min);
         let ground_y = min_y - 0.6;
 
+        let length = if closed { spacing * m as f32 } else { spacing * (m - 1) as f32 };
+        // Sprint: líneas de salida y llegada separadas de los extremos para tener carrerilla.
+        let (start_s, finish_s) = if closed {
+            (0.0, 0.0)
+        } else {
+            (OPEN_START_M, (length - OPEN_RUNOFF_M).max(OPEN_START_M + 50.0).min(length - 10.0))
+        };
+        if !closed && finish_s <= start_s {
+            return Err(format!("el sprint mide {length:.0} m: hacen falta al menos {:.0} m", OPEN_START_M + 60.0));
+        }
+        let line_index = |s_line: f32| (s_line / spacing).round() as usize;
+        let lines: Vec<usize> = if closed { vec![0] } else { vec![line_index(start_s), line_index(finish_s)] };
+
         // 4. Mallas.
         let mut drivable = MeshPart::default();
         let mut walls = MeshPart::default();
         let mut wall_boxes = Vec::with_capacity(m * 2);
         let mut decals = MeshPart::default();
-        for i in 0..m {
+        let quads = if closed { m } else { m - 1 };
+        for i in 0..quads {
             let a = &samples[i];
             let b = &samples[(i + 1) % m];
             let edge = |s: &Sample, off: f32| s.pos + s.right * off;
@@ -290,8 +321,8 @@ impl TrackDef {
                 part.quad(edge(a, lo_a), edge(a, hi_a), edge(b, hi_b), edge(b, lo_b), s);
             };
 
-            // Calzada (la primera franja es la línea de meta).
-            let road = if i == 0 { Surface::StartLine } else { Surface::Asphalt };
+            // Calzada (la franja de cada línea de salida o meta se marca aparte).
+            let road = if lines.contains(&i) { Surface::StartLine } else { Surface::Asphalt };
             strip(&mut drivable, -hw(a), hw(a), -hw(b), hw(b), road);
             let kerb = if (i / 2) % 2 == 0 { Surface::KerbA } else { Surface::KerbB };
             let (ka, kb) = (hw(a) + KERB_W, hw(b) + KERB_W);
@@ -302,7 +333,7 @@ impl TrackDef {
             strip(&mut drivable, ka, sa, kb, sb, Surface::Shoulder);
 
             // Línea central discontinua (solo render), apenas sobre la calzada.
-            if i % 6 < 3 && i != 0 {
+            if i % 6 < 3 && !lines.contains(&i) {
                 let lift = 0.02;
                 let base = (decals.positions.len() / 3) as u32;
                 for p in [edge(a, -0.15), edge(a, 0.15), edge(b, 0.15), edge(b, -0.15)] {
@@ -353,20 +384,63 @@ impl TrackDef {
             }
         }
 
-        let length = spacing * m as f32;
-        let mut checkpoints: Vec<f32> = self
-            .checkpoints
-            .iter()
-            .map(|f| (f.clamp(0.0, 0.999)) * length)
-            .collect();
-        checkpoints.sort_by(|a, b| a.total_cmp(b));
-        if checkpoints.first().copied() != Some(0.0) {
-            checkpoints.insert(0, 0.0);
+        // Muros transversales al principio y al final de un sprint.
+        if !closed {
+            for (idx, dir) in [(0usize, -1.0f32), (m - 1, 1.0)] {
+                let smp = &samples[idx];
+                let half = smp.width * 0.5 + KERB_W + SHOULDER_W + WALL_T;
+                let fwd = norm(Vec3::new(smp.tangent.x, 0.0, smp.tangent.z));
+                let right_axis = norm(fwd.cross(Vec3::Y));
+                let top_y = smp.pos.y + WALL_H;
+                let base = smp.pos + fwd * (WALL_T * 0.5 * dir);
+                wall_boxes.push(WallBox {
+                    center: Vec3::new(base.x, (ground_y + top_y) * 0.5, base.z),
+                    half_extents: Vec3::new(half, (top_y - ground_y) * 0.5, WALL_T * 0.5),
+                    rotation: crate::mathx::basis_to_quat(right_axis, Vec3::Y, fwd),
+                });
+                // Cara hacia la pista y tapa, para el render.
+                let (l, r) = (smp.pos - right_axis * half, smp.pos + right_axis * half);
+                let (lg, rg) = (Vec3::new(l.x, ground_y, l.z), Vec3::new(r.x, ground_y, r.z));
+                let (lt, rt) = (l + Vec3::Y * WALL_H, r + Vec3::Y * WALL_H);
+                let back = fwd * (WALL_T * dir);
+                if dir < 0.0 {
+                    walls.quad(lg, rg, rt, lt, Surface::Wall);
+                } else {
+                    walls.quad(rg, lg, lt, rt, Surface::Wall);
+                }
+                walls.quad(lt, rt, rt + back, lt + back, Surface::Wall);
+            }
         }
-        checkpoints.dedup();
+
+        let checkpoints: Vec<f32> = if closed {
+            let mut c: Vec<f32> = self.checkpoints.iter().map(|f| (f.clamp(0.0, 0.999)) * length).collect();
+            c.sort_by(|a, b| a.total_cmp(b));
+            if c.first().copied() != Some(0.0) {
+                c.insert(0, 0.0);
+            }
+            c.dedup();
+            c
+        } else {
+            // Salida, intermedios (fracciones del tramo entre salida y llegada) y llegada.
+            let mut c = vec![start_s];
+            let mut mids: Vec<f32> = self
+                .checkpoints
+                .iter()
+                .filter(|f| **f > 0.0 && **f < 1.0)
+                .map(|f| start_s + f * (finish_s - start_s))
+                .collect();
+            mids.sort_by(|a, b| a.total_cmp(b));
+            c.extend(mids);
+            c.push(finish_s);
+            c.dedup();
+            c
+        };
 
         let mut h = Fnv64::new();
         h.str("compiled-track/1").str(crate::COMPILER_VERSION).str(&self.id);
+        if !closed {
+            h.str("open"); // solo en pistas abiertas: el hash de las cerradas no cambia
+        }
         for s in &samples {
             for v in [s.pos, s.right, s.up] {
                 h.f32(v.x).f32(v.y).f32(v.z);
@@ -380,7 +454,9 @@ impl TrackDef {
         Ok(CompiledTrack {
             id: self.id.clone(),
             name: self.name.clone(),
-            closed: true,
+            closed,
+            start_s,
+            finish_s,
             spacing,
             samples,
             length,
@@ -398,15 +474,21 @@ impl TrackDef {
 impl CompiledTrack {
     pub fn sample(&self, i: isize) -> &Sample {
         let m = self.samples.len() as isize;
-        &self.samples[i.rem_euclid(m) as usize]
+        let idx = if self.closed { i.rem_euclid(m) } else { i.clamp(0, m - 1) };
+        &self.samples[idx as usize]
     }
 
     /// Muestra más cercana buscando en una ventana alrededor de `hint`.
     pub fn nearest_near(&self, p: Vec3, hint: usize, window: isize) -> usize {
         let mut best = hint;
         let mut best_d = f32::INFINITY;
+        let m = self.samples.len() as isize;
         for k in -window..=window {
-            let i = (hint as isize + k).rem_euclid(self.samples.len() as isize) as usize;
+            let j = hint as isize + k;
+            if !self.closed && (j < 0 || j >= m) {
+                continue;
+            }
+            let i = j.rem_euclid(m) as usize;
             let d = (self.samples[i].pos - p).length_squared();
             if d < best_d {
                 best_d = d;
@@ -433,7 +515,11 @@ impl CompiledTrack {
     pub fn project_s(&self, p: Vec3, i: usize) -> f32 {
         let smp = &self.samples[i];
         let s = smp.s + (p - smp.pos).dot(smp.tangent);
-        s.rem_euclid(self.length)
+        if self.closed {
+            s.rem_euclid(self.length)
+        } else {
+            s.clamp(0.0, self.length)
+        }
     }
 
     /// Curvatura máxima absoluta entre `s` y `s + ahead` metros.

@@ -196,7 +196,10 @@ export class LabRenderer {
     const trunks: THREE.Matrix4[] = [];
     const rocks: THREE.Matrix4[] = [];
     const m = new THREE.Matrix4();
-    for (let k = 0; k < 900; k++) {
+    // Densidad pareja: más intentos en pistas más grandes.
+    const area = (maxX - minX + pad * 2) * (maxZ - minZ + pad * 2);
+    const attempts = Math.min(7000, Math.max(900, Math.round(area / 2600)));
+    for (let k = 0; k < attempts; k++) {
       const x = minX - pad + rand() * (maxX - minX + pad * 2);
       const z = minZ - pad + rand() * (maxZ - minZ + pad * 2);
       const d = clearance(x, z);
@@ -228,13 +231,14 @@ export class LabRenderer {
     inst(rock, rockMat, rocks);
   }
 
-  /** Pórtico de meta y postes ámbar en los checkpoints. */
+  /** Pórticos (meta en circuitos; salida y llegada en sprints) y postes ámbar en los checkpoints. */
   private addLandmarks(ready: ReadyMsg) {
     const cl = ready.centerline;
     const n = cl.length / 10;
-    const spacing = ready.trackLength / n;
+    const { closed, spacing, startS, finishS } = ready.track;
     const at = (s: number) => {
-      const i = Math.round(s / spacing) % n;
+      const raw = Math.round(s / spacing);
+      const i = closed ? ((raw % n) + n) % n : Math.min(n - 1, Math.max(0, raw));
       const o = i * 10;
       return {
         pos: new THREE.Vector3(cl[o], cl[o + 1], cl[o + 2]),
@@ -245,21 +249,30 @@ export class LabRenderer {
     const dark = new THREE.MeshStandardMaterial({ color: SCENE.gantry, roughness: 0.8 });
     const accent = new THREE.MeshStandardMaterial({ color: SCENE.checkpoint, roughness: 0.6 });
 
-    const start = at(0);
-    const span = start.width + 6;
-    for (const side of [-1, 1]) {
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.5, 7, 0.5), dark);
-      post.position.copy(start.pos).addScaledVector(start.right, (span / 2) * side).add(new THREE.Vector3(0, 3.5, 0));
-      post.castShadow = true;
-      this.scene.add(post);
+    const gantry = (s: number, beamMat: THREE.Material) => {
+      const g = at(s);
+      const span = g.width + 6;
+      for (const side of [-1, 1]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.5, 7, 0.5), dark);
+        post.position.copy(g.pos).addScaledVector(g.right, (span / 2) * side).add(new THREE.Vector3(0, 3.5, 0));
+        post.castShadow = true;
+        this.scene.add(post);
+      }
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(span + 0.5, 0.9, 0.6), beamMat);
+      beam.position.copy(g.pos).add(new THREE.Vector3(0, 7, 0));
+      beam.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), new THREE.Vector3(g.right.x, 0, g.right.z).normalize());
+      beam.castShadow = true;
+      this.scene.add(beam);
+    };
+    if (closed) {
+      gantry(0, accent);
+    } else {
+      gantry(startS, accent);
+      gantry(finishS, dark);
     }
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(span + 0.5, 0.9, 0.6), accent);
-    beam.position.copy(start.pos).add(new THREE.Vector3(0, 7, 0));
-    beam.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), new THREE.Vector3(start.right.x, 0, start.right.z).normalize());
-    beam.castShadow = true;
-    this.scene.add(beam);
 
-    for (const s of ready.checkpoints.slice(1)) {
+    const mids = closed ? ready.checkpoints.slice(1) : ready.checkpoints.slice(1, -1);
+    for (const s of mids) {
       const cp = at(s);
       for (const side of [-1, 1]) {
         const pole = new THREE.Mesh(new THREE.BoxGeometry(0.35, 2.4, 0.35), accent);

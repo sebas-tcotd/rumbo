@@ -52,6 +52,12 @@ export function Hud({ snap, ghostTicksAt, autopilot, paused }: Props) {
   const slip = s[I.slipDeg];
   const drifting = s[I.drift] > 0.5;
   const started = s[I.nextCheckpoint] >= 1;
+  const sprint = !ready.track.closed;
+  const idle = sprint
+    ? s[I.lap] > 0
+      ? 'Llegada · T para otro intento'
+      : 'Cruza la salida para empezar'
+    : 'Cruza la meta para empezar';
   const params = appliedProfile?.params ?? {};
   const ghostTicks = started ? ghostTicksAt(s[I.progressS]) : null;
   const delta = ghostTicks !== null ? (s[I.lapTicks] - ghostTicks) / hz : null;
@@ -59,10 +65,10 @@ export function Hud({ snap, ghostTicksAt, autopilot, paused }: Props) {
   return (
     <div className="hud" aria-live="off">
       <section className="hud-timing">
-        <div className="lap-now">{started ? formatLap(s[I.lapTicks], hz) : 'Cruza la meta para empezar'}</div>
+        <div className="lap-now">{started ? formatLap(s[I.lapTicks], hz) : idle}</div>
         <dl className="lap-meta">
           <div>
-            <dt>Vuelta</dt>
+            <dt>{sprint ? 'Intento' : 'Vuelta'}</dt>
             <dd>{s[I.lap] + (started ? 1 : 0)}</dd>
           </div>
           <div>

@@ -69,9 +69,11 @@ export class InputSampler {
       brake: pad.buttons[6]?.value ?? 0,
       handbrake: !!(pad.buttons[0]?.pressed || pad.buttons[5]?.pressed),
     };
-    // Botones de acción del mando con detección de flanco: Y = recolocar, Select = cámara.
+    // Botones de acción del mando con detección de flanco: Y = recolocar,
+    // Start = volver a la salida, Select = cámara.
     const pressed = pad.buttons.map((b) => b.pressed);
     if (pressed[3] && !this.lastPadButtons[3]) this.onKeyAction('KeyR');
+    if (pressed[9] && !this.lastPadButtons[9]) this.onKeyAction('KeyT');
     if (pressed[8] && !this.lastPadButtons[8]) this.onKeyAction('KeyC');
     this.lastPadButtons = pressed;
 

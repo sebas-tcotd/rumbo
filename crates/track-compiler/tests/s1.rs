@@ -153,7 +153,7 @@ fn oneway_is_ignored_for_races_and_respected_on_request() {
     let pts = [geo(100.0, 200.0), geo(100.0, 0.0)]; // V1 hacia el sur, contra su sentido
     let free = route(&g, &pts, RouteOptions::default()).unwrap();
     assert!(close(free.length_m, 200.0, 1.0), "{}", free.length_m);
-    let legal = route(&g, &pts, RouteOptions { respect_oneway: true, closed: false }).unwrap();
+    let legal = route(&g, &pts, RouteOptions { respect_oneway: true, ..RouteOptions::default() }).unwrap();
     assert!(close(legal.length_m, 400.0, 1.5), "debe rodear por V0 o V2: {}", legal.length_m);
     assert!(legal.legs[0].steps.iter().all(|s| !s.0.contains("w21")), "no debe usar V1 al revés");
 }
@@ -170,7 +170,7 @@ fn route_within_a_single_edge() {
 #[test]
 fn closed_circuit_returns_to_the_start() {
     let g = graph();
-    let r = route(&g, &[geo(0.0, 0.0), geo(200.0, 0.0), geo(200.0, 200.0)], RouteOptions { respect_oneway: false, closed: true }).unwrap();
+    let r = route(&g, &[geo(0.0, 0.0), geo(200.0, 0.0), geo(200.0, 200.0)], RouteOptions { closed: true, ..RouteOptions::default() }).unwrap();
     assert_eq!(r.legs.len(), 3);
     assert!(close(r.length_m, 800.0, 3.0), "{}", r.length_m);
     let (a, b) = (r.geo.first().unwrap(), r.geo.last().unwrap());
@@ -209,4 +209,73 @@ fn geojson_uses_lon_lat_order() {
     let r = route(&g, &[geo(0.0, 0.0), geo(200.0, 0.0)], RouteOptions::default()).unwrap();
     let rj = route_geojson(&r);
     assert!(close(rj["features"][0]["geometry"]["coordinates"][0][1].as_f64().unwrap(), LAT0, 0.01));
+}
+
+// ── Giros ──
+
+/// Una rampa que sale de la avenida en ángulo agudo. La ruta más corta pura pasa de largo
+/// el empalme y entra con una media vuelta de ~146°; con el límite de giro tiene que
+/// llegar por el otro lado, aunque sea mucho más largo.
+fn ramp_graph() -> RoadGraph {
+    let f = LocalFrame::new(GeoPoint::new(LAT0, LON0));
+    let pts = [
+        (1, 0.0, 0.0),
+        (2, 100.0, 0.0),   // J: empalme de la rampa
+        (3, 300.0, 0.0),
+        (4, 600.0, 0.0),   // F
+        (5, 250.0, 100.0), // R: final de la rampa
+        (6, 600.0, 300.0), // G
+        (7, 250.0, 300.0), // N
+    ];
+    let mut els: Vec<String> = pts
+        .iter()
+        .map(|(id, e, n)| {
+            let p = f.en_to_geo([*e, *n]);
+            format!(r#"{{"type":"node","id":{id},"lat":{},"lon":{}}}"#, p.lat, p.lon)
+        })
+        .collect();
+    for (id, nodes) in [(10, "[1,2,3,4]"), (11, "[2,5]"), (12, "[4,6]"), (13, "[6,7]"), (14, "[7,5]")] {
+        els.push(format!(r#"{{"type":"way","id":{id},"nodes":{nodes},"tags":{{"highway":"residential"}}}}"#));
+    }
+    let json = format!(r#"{{"elements":[{}]}}"#, els.join(","));
+    let ex = Extract::from_overpass_json(&json).unwrap();
+    RoadGraph::build(&ex, &BuildOptions { region: "rampa".into(), origin: Some(GeoPoint::new(LAT0, LON0)) }).unwrap()
+}
+
+#[test]
+fn ramp_hairpin_is_avoided() {
+    let g = ramp_graph();
+    let f = g.frame;
+    let from = f.en_to_geo([200.0, 0.0]); // sobre la avenida, pasado el empalme
+    let to = f.en_to_geo([220.0, 80.0]); // sobre la rampa, cerca de su final
+    let pure = route(&g, &[from, to], RouteOptions::shortest()).unwrap();
+    let max_pure = pure.junction_turns(&g).into_iter().fold(0.0, f64::max);
+    assert!(max_pure > 140.0, "el caso debería forzar una media vuelta: {max_pure:.0}°");
+    assert!(pure.length_m < 300.0);
+
+    let r = route(&g, &[from, to], RouteOptions::default()).unwrap();
+    let max = r.junction_turns(&g).into_iter().fold(0.0, f64::max);
+    assert!(max <= 135.0, "giro de {max:.0}° con límite de 135°");
+    assert!(r.length_m > 1000.0, "debería dar la vuelta por el otro lado: {:.0} m", r.length_m);
+}
+
+#[test]
+fn no_u_turn_at_an_intermediate_waypoint() {
+    let g = graph();
+    // Ir de oeste a este por la calle central y volver hacia el oeste desde un punto
+    // de paso: sin media vuelta, el retorno tiene que rodear una manzana.
+    let r = route(&g, &[geo(20.0, 0.0), geo(150.0, 0.0), geo(40.0, 0.0)], RouteOptions::default());
+    match r {
+        Ok(r) => assert!(r.length_m > 2.0 * 130.0 + 1.0, "volvió por la misma calle: {:.0} m", r.length_m),
+        Err(e) => assert!(e.contains("giros"), "{e}"),
+    }
+}
+
+#[test]
+fn turn_angle_is_symmetric_and_bounded() {
+    use track_compiler::routing::turn_angle_deg;
+    assert!((turn_angle_deg([1.0, 0.0], [1.0, 0.0])).abs() < 1e-9);
+    assert!((turn_angle_deg([1.0, 0.0], [0.0, 1.0]) - 90.0).abs() < 1e-9);
+    assert!((turn_angle_deg([1.0, 0.0], [0.0, -1.0]) - 90.0).abs() < 1e-9);
+    assert!((turn_angle_deg([1.0, 0.0], [-1.0, 0.0]) - 180.0).abs() < 1e-9);
 }

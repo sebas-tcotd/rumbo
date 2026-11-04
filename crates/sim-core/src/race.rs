@@ -30,6 +30,9 @@ pub enum LapEvent {
 impl LapTimer {
     /// Procesa el avance de `prev_s` a `cur_s` en el tick actual.
     pub fn update(&mut self, track: &CompiledTrack, prev_s: f32, cur_s: f32, tick: u64) -> LapEvent {
+        if !track.closed {
+            return self.update_sprint(track, prev_s, cur_s, tick);
+        }
         let l = track.length;
         let ds = wrap_delta(prev_s, cur_s, l);
         if ds <= 0.0 || ds > 50.0 {
@@ -67,6 +70,51 @@ impl LapTimer {
             self.next_cp = 1;
         }
         event
+    }
+
+    /// Sprint: el cronómetro corre de la línea de salida a la de llegada.
+    /// Al llegar se detiene; para otro intento se vuelve a la salida (`FLAG_RESTART`).
+    fn update_sprint(&mut self, track: &CompiledTrack, prev_s: f32, cur_s: f32, tick: u64) -> LapEvent {
+        let ds = cur_s - prev_s;
+        if ds <= 0.0 || ds > 50.0 {
+            return LapEvent::None;
+        }
+        let crossed = |c: f32| prev_s < c && cur_s >= c;
+        let cps = &track.checkpoints;
+        let finish = cps.len() - 1;
+        if !self.started {
+            if crossed(cps[0]) {
+                self.started = true;
+                self.next_cp = 1;
+                self.lap_start_tick = tick;
+                return LapEvent::Started;
+            }
+            return LapEvent::None;
+        }
+        if self.next_cp < finish && crossed(cps[self.next_cp]) {
+            self.next_cp += 1;
+            return LapEvent::Checkpoint(self.next_cp - 1);
+        }
+        if self.next_cp == finish && crossed(cps[finish]) {
+            let ticks = tick - self.lap_start_tick;
+            let best = self.best_lap_ticks.is_none_or(|b| ticks < b);
+            if best {
+                self.best_lap_ticks = Some(ticks);
+            }
+            self.last_lap_ticks = Some(ticks);
+            self.completed.push(ticks);
+            self.lap += 1;
+            self.started = false;
+            self.next_cp = 0;
+            return LapEvent::Completed { ticks, best };
+        }
+        LapEvent::None
+    }
+
+    /// Vuelve a la salida: el intento en curso se descarta; mejores tiempos se conservan.
+    pub fn restart(&mut self) {
+        self.started = false;
+        self.next_cp = 0;
     }
 
     pub fn current_ticks(&self, tick: u64) -> u64 {

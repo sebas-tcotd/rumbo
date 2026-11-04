@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 pub const FLAG_HANDBRAKE: u8 = 1 << 0;
 /// Recoloca el auto sobre la pista (evento de un solo tick).
 pub const FLAG_RESET: u8 = 1 << 1;
+/// Vuelve a la grilla de salida y descarta el intento en curso (evento de un solo tick).
+pub const FLAG_RESTART: u8 = 1 << 2;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputFrame {
@@ -52,6 +54,10 @@ impl InputFrame {
 
     pub fn reset(self) -> bool {
         self.flags & FLAG_RESET != 0
+    }
+
+    pub fn restart(self) -> bool {
+        self.flags & FLAG_RESTART != 0
     }
 }
 

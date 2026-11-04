@@ -44,7 +44,11 @@ impl Autopilot {
         let v_curve = (self.aggression * p.front_grip * 9.81 / k).sqrt();
         let v_max = p.top_speed_kmh / 3.6 * 0.97;
         let v_target = v_curve.min(v_max);
-        let (throttle, brake) = if speed < v_target - 1.0 {
+        // Sprint: después de la llegada, frena hasta detenerse antes del muro final.
+        let v_target = if !track.closed && st.s > track.finish_s + 2.0 { 0.0 } else { v_target };
+        let (throttle, brake) = if !track.closed && v_target == 0.0 {
+            (0.0, if speed > 0.5 { 1.0 } else { 0.0 })
+        } else if speed < v_target - 1.0 {
             (1.0, 0.0)
         } else if speed > v_target + 2.0 {
             (0.0, ((speed - v_target) / 10.0).clamp(0.15, 1.0))

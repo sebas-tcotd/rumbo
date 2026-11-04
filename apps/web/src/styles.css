@@ -657,3 +657,60 @@ kbd {
     transition: none !important;
   }
 }
+
+/* ── Selector de pista ── */
+
+.field {
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.field select {
+  font: inherit;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f4f5f2;
+}
+
+.track-status {
+  font-size: 14px;
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 8px 0;
+}
+
+.track-status.valid {
+  background: #dcebdf;
+}
+
+.track-status.degraded {
+  background: #f6e7c4;
+}
+
+.track-status.unsupported {
+  background: #f3d9d4;
+}
+
+.diagnostics {
+  font-size: 14px;
+}
+
+.diagnostics summary {
+  cursor: pointer;
+}
+
+.diagnostics ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.diagnostics li {
+  margin-bottom: 6px;
+  color: var(--muted);
+}
+
+.diagnostics a {
+  color: var(--signal-deep);
+}
