@@ -55,6 +55,9 @@ export class LabRenderer {
   private camPos = new THREE.Vector3();
   private camLook = new THREE.Vector3();
   private camInit = false;
+  /** Aceleración longitudinal suavizada (m/s²), para que la cámara reaccione al frenar. */
+  private accelSmooth = 0;
+  private tickHz = 120;
   private resizeObs: ResizeObserver;
   onFrame: (dt: number) => void = () => {};
 
@@ -116,6 +119,7 @@ export class LabRenderer {
 
   build(ready: ReadyMsg, index: StateIndex) {
     this.I = index;
+    this.tickHz = ready.tickHz;
     this.wheelRadius = ready.vehicle.wheelRadius;
     this.hardpoints = ready.vehicle.hardpoints;
     const surface = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 });
@@ -365,7 +369,7 @@ export class LabRenderer {
     const I = this.I;
     const msg = this.latest;
     if (I && msg && this.car) {
-      const hz = 120;
+      const hz = this.tickHz;
       const alpha = THREE.MathUtils.clamp((performance.timeOrigin + now - msg.at) / (1000 / hz), 0, 1);
       const a = msg.prev;
       const b = msg.curr;
@@ -387,6 +391,9 @@ export class LabRenderer {
       this.car.root.quaternion.copy(tmpQ);
       this.placeWheels(b, I, dt);
       this.updateGhost(b, I);
+      // Cambio de rapidez entre dos ticks consecutivos: aceleración longitudinal real.
+      const accel = ((Math.abs(b[I.speedKmh]) - Math.abs(a[I.speedKmh])) / 3.6) * hz;
+      this.accelSmooth += (accel - this.accelSmooth) * (1 - Math.exp(-dt * 6));
       this.updateCamera(pos, tmpQ, b, I, dt);
       this.sun.position.copy(pos).add(new THREE.Vector3(-60, 140, 45));
       this.sun.target.position.copy(pos);
@@ -445,6 +452,13 @@ export class LabRenderer {
       dist = 22;
       height = 26;
       look = 8;
+    }
+    if (this.cameraMode !== 'aerea') {
+      // Frenada: la cámara se acerca (más cuanto más brusca); aceleración: se aleja un poco.
+      const braking = THREE.MathUtils.clamp(-this.accelSmooth / 11, 0, 1);
+      const pulling = THREE.MathUtils.clamp(this.accelSmooth / 7, 0, 1);
+      dist *= 1 - 0.3 * braking + 0.07 * pulling;
+      height *= 1 - 0.12 * braking;
     }
     const desired = pos.clone().addScaledVector(fwd, -dist).add(new THREE.Vector3(0, height, 0));
     const target = pos.clone().addScaledVector(fwd, look).add(new THREE.Vector3(0, 0.8, 0));

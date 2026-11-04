@@ -83,6 +83,18 @@ export function TuningPanel({ schema, applied, onApply }: Props) {
             const v = draft[m.key];
             const dirty = v !== applied.params[m.key];
             const isDefault = v === m.default;
+            const isToggle = m.min === 0 && m.max === 1 && m.step === 1;
+            if (isToggle) {
+              return (
+                <div key={m.key} className={dirty ? 'param dirty' : 'param'}>
+                  <label className="toggle">
+                    <input type="checkbox" checked={v >= 0.5} onChange={(e) => set(m.key, e.target.checked ? 1 : 0, m)} />
+                    {m.label}
+                  </label>
+                  {m.help && <div className="param-help">{m.help}</div>}
+                </div>
+              );
+            }
             return (
               <div key={m.key} className={dirty ? 'param dirty' : 'param'}>
                 <label htmlFor={`p-${m.key}`} title={m.help || undefined}>

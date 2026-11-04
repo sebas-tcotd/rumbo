@@ -52,8 +52,8 @@ scripts/verify-golden.mjs     Verifica los replays dorados con el WASM en Node
 | W / ↑ | Acelerar |
 | S / ↓ | Frenar; marcha atrás si estás detenido |
 | A D / ← → | Dirección |
-| Espacio | Freno de mano |
-| Toque de S en curva | Inicia un derrape (sobre 55 km/h, con dirección marcada) |
+| Espacio + dirección | Derrape (sobre 55 km/h, con dirección marcada) |
+| S + dirección | Frenada en curva, sin derrape |
 | R | Recolocar el auto sobre la pista |
 | P | Piloto automático |
 | C | Cambiar cámara (persecución, cercana, aérea) |
@@ -90,8 +90,8 @@ Incluyen:
 - **Casos adversos:** choques a fondo, volante al tope y resets repetidos; el estado nunca deja de ser finito.
 - **Prueba de manejo automática:** el piloto automático da varias vueltas; falla ante golpes verticales,
   ruedas en el aire o contacto con el muro.
-- **Manejo:** reposo sobre cuatro ruedas, 0-100 km/h en un rango plausible, derrape controlado por toque de freno
-  y roce de muro sin salir despedido.
+- **Manejo:** reposo sobre cuatro ruedas, 0-100 km/h en un rango plausible, frenada en curva sin derrape,
+  derrape controlado con freno de mano (y por toque de freno si el perfil lo activa) y roce de muro sin salir despedido.
 
 ### Nativo contra WASM
 
@@ -103,6 +103,7 @@ npm run verify-golden
 Corre el mismo replay dorado con el binario WASM en Node. Si coincide, nativo y WASM son deterministas entre sí.
 En el navegador, **Sesión → Verificar esta sesión** re-simula todo lo que manejaste y compara hashes.
 
+`cargo run -p sim-core --release --example drift_entry` compara frenar en curva contra derrapar con freno de mano.
 `cargo run -p sim-core --release --example probe` imprime telemetría de escenarios básicos (reposo, aceleración,
 derrape, choque y piloto automático), útil al tocar la física.
 
@@ -115,6 +116,8 @@ derrape, choque y piloto automático), útil al tocar la física.
   hacia arriba por la tapa del muro. La malla del muro queda solo para el render.
 - **Muro indulgente:** mientras el chasis toca un muro, se recorta la velocidad vertical hacia arriba y se amortiguan
   cabeceo y balanceo. Rozar un muro desvía el auto, no lo lanza.
+- **Derrape con freno de mano**, como en los NFS clásicos: el freno normal frena en curva. La entrada por toque de
+  freno sigue disponible como opción del perfil (`drift_brake_tap`).
 - **Derrape con control de velocidad de giro**, no de ángulo directo: el ángulo converge sin oscilar.
 - **Los rayos de rueda ignoran los muros** y las normales casi verticales.
 - **`postMessage` entre worker y render**, sin `SharedArrayBuffer`: el estado de un auto pesa unos cientos de bytes.
