@@ -1,0 +1,17 @@
+{
+  "name": "rumbo-determinism",
+  "private": true,
+  "type": "module",
+  "description": "S4: re-simula los replays dorados con el WASM en Node, Chromium, Firefox, WebKit y Safari.",
+  "scripts": {
+    "node": "node run.mjs --browser node",
+    "chromium": "node run.mjs --browser chromium",
+    "firefox": "node run.mjs --browser firefox",
+    "webkit": "node run.mjs --browser webkit",
+    "safari": "node run.mjs --browser safari"
+  },
+  "devDependencies": {
+    "playwright": "^1.48.0",
+    "selenium-webdriver": "^4.25.0"
+  }
+}

@@ -37,6 +37,39 @@ pub struct TrackDef {
     #[serde(default = "default_checkpoints")]
     pub checkpoints: Vec<f32>,
     pub points: Vec<ControlPoint>,
+    /// S3: superficie y muros ya compilados (calles, cruces y calles laterales). Si está, la
+    /// cinta de `points` solo sirve de referencia para el cronómetro y el piloto automático.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub network: Option<NetworkDef>,
+}
+
+/// Red conducible compilada por `track-compiler` (S3).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NetworkDef {
+    pub vertices: Vec<[f32; 3]>,
+    /// Triángulos antihorarios vistos desde arriba.
+    pub triangles: Vec<[u32; 3]>,
+    /// Superficie de cada triángulo (`Surface`).
+    pub surfaces: Vec<u8>,
+    /// Muros: polilíneas a nivel de la calzada, con la zona conducible a la izquierda.
+    pub walls: Vec<Vec<[f32; 3]>>,
+    /// Barreras de carrera que cierran las calles laterales (sólidas como un muro).
+    #[serde(default)]
+    pub barriers: Vec<BarrierDef>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BarrierDef {
+    pub line: Vec<[f32; 3]>,
+    /// +1: las flechas apuntan del primer punto al último; -1: al revés.
+    pub arrow: f32,
+}
+
+/// Barrera compilada: puntos a nivel de la calzada y sentido de las flechas (solo render).
+#[derive(Clone, Debug)]
+pub struct Barrier {
+    pub line: Vec<Vec3>,
+    pub arrow: f32,
 }
 
 fn default_spacing() -> f32 {
@@ -97,6 +130,9 @@ pub struct Sample {
     pub s: f32,
     /// Curvatura con signo (1/m). Positiva = curva a la derecha.
     pub curvature: f32,
+    /// Curvatura sin signo medida en una ventana corta (±4 muestras). La de arriba se
+    /// promedia en ±12 m para el peralte y subestima las esquinas cortas de una ciudad.
+    pub curvature_tight: f32,
 }
 
 /// Malla con vértices sin compartir entre caras (cada triángulo tiene su etiqueta).
@@ -157,6 +193,10 @@ pub struct CompiledTrack {
     pub decals: MeshPart,
     pub ground_y: f32,
     pub hash: u64,
+    /// La superficie viene de una red compilada (S3) y no de la cinta.
+    pub network: bool,
+    /// Barreras de carrera (su colisión ya está en `wall_boxes`).
+    pub barriers: Vec<Barrier>,
 }
 
 const KERB_W: f32 = 1.0;
@@ -268,6 +308,14 @@ impl TrackDef {
             })
             .collect();
 
+        const WT: isize = 2;
+        let tight: Vec<f32> = (0..m as isize)
+            .map(|i| {
+                let (ia, ib) = (wrap(i - WT), wrap(i + WT));
+                let span = if closed { 2.0 * WT as f32 } else { (ib - ia).max(1) as f32 };
+                (tangents[ib] - tangents[ia]).length() / (span * spacing)
+            })
+            .collect();
         let mut samples = Vec::with_capacity(m);
         for i in 0..m {
             let t = tangents[i];
@@ -285,10 +333,14 @@ impl TrackDef {
                 width: raw[i][3],
                 s: i as f32 * spacing,
                 curvature: curv[i],
+                curvature_tight: tight[i],
             });
         }
 
-        let min_y = samples.iter().map(|s| s.pos.y).fold(f32::INFINITY, f32::min);
+        let mut min_y = samples.iter().map(|s| s.pos.y).fold(f32::INFINITY, f32::min);
+        if let Some(net) = &self.network {
+            min_y = net.vertices.iter().map(|v| v[1]).fold(min_y, f32::min);
+        }
         let ground_y = min_y - 0.6;
 
         let length = if closed { spacing * m as f32 } else { spacing * (m - 1) as f32 };
@@ -309,7 +361,7 @@ impl TrackDef {
         let mut walls = MeshPart::default();
         let mut wall_boxes = Vec::with_capacity(m * 2);
         let mut decals = MeshPart::default();
-        let quads = if closed { m } else { m - 1 };
+        let quads = if self.network.is_some() { 0 } else if closed { m } else { m - 1 };
         for i in 0..quads {
             let a = &samples[i];
             let b = &samples[(i + 1) % m];
@@ -384,8 +436,12 @@ impl TrackDef {
             }
         }
 
+        if let Some(net) = &self.network {
+            build_network(net, &samples, &lines, ground_y, &mut drivable, &mut walls, &mut wall_boxes, &mut decals)?;
+        }
+
         // Muros transversales al principio y al final de un sprint.
-        if !closed {
+        if !closed && self.network.is_none() {
             for (idx, dir) in [(0usize, -1.0f32), (m - 1, 1.0)] {
                 let smp = &samples[idx];
                 let half = smp.width * 0.5 + KERB_W + SHOULDER_W + WALL_T;
@@ -450,6 +506,30 @@ impl TrackDef {
         for c in &checkpoints {
             h.f32(*c);
         }
+        if let Some(net) = &self.network {
+            h.str("network");
+            for v in &net.vertices {
+                h.f32(v[0]).f32(v[1]).f32(v[2]);
+            }
+            for (t, s) in net.triangles.iter().zip(&net.surfaces) {
+                h.u32(t[0]).u32(t[1]).u32(t[2]).u32(*s as u32);
+            }
+            for w in &net.walls {
+                h.u32(w.len() as u32);
+                for v in w {
+                    h.f32(v[0]).f32(v[1]).f32(v[2]);
+                }
+            }
+            if !net.barriers.is_empty() {
+                h.str("barriers");
+                for b in &net.barriers {
+                    h.u32(b.line.len() as u32).f32(b.arrow);
+                    for v in &b.line {
+                        h.f32(v[0]).f32(v[1]).f32(v[2]);
+                    }
+                }
+            }
+        }
 
         Ok(CompiledTrack {
             id: self.id.clone(),
@@ -467,8 +547,103 @@ impl TrackDef {
             decals,
             ground_y,
             hash: h.finish(),
+            network: self.network.is_some(),
+            barriers: self
+                .network
+                .iter()
+                .flat_map(|n| n.barriers.iter())
+                .map(|b| Barrier { line: b.line.iter().map(|p| Vec3::new(p[0], p[1], p[2])).collect(), arrow: b.arrow })
+                .collect(),
         })
     }
+}
+
+/// Muro sólido de `a` a `b` con la pista a la izquierda: caja de colisión y caras para el render.
+fn wall_segment(a: Vec3, b: Vec3, ground_y: f32, walls: &mut MeshPart, wall_boxes: &mut Vec<WallBox>) {
+    let along = Vec3::new(b.x - a.x, 0.0, b.z - a.z);
+    let seg_len = along.length();
+    if seg_len < 1e-3 {
+        return;
+    }
+    let d = along / seg_len;
+    let outward = norm(d.cross(Vec3::Y));
+    let top_y = a.y.max(b.y) + WALL_H;
+    let mid = (a + b) * 0.5;
+    wall_boxes.push(WallBox {
+        center: Vec3::new(mid.x, (ground_y + top_y) * 0.5, mid.z) + outward * (WALL_T * 0.5),
+        half_extents: Vec3::new(WALL_T * 0.5, (top_y - ground_y) * 0.5, seg_len * 0.5 + 0.15),
+        rotation: crate::mathx::basis_to_quat(outward, Vec3::Y, d),
+    });
+    let out = outward * WALL_T;
+    let top = Vec3::Y * WALL_H;
+    let (ga, gb) = (Vec3::new(a.x, ground_y, a.z), Vec3::new(b.x, ground_y, b.z));
+    let (ta, tb) = (a + top, b + top);
+    let (oa, ob) = (ta + out, tb + out);
+    walls.quad(ga, ta, tb, gb, Surface::Wall);
+    walls.quad(ta, oa, ob, tb, Surface::Wall);
+    walls.quad(oa, ga + out, gb + out, ob, Surface::Wall);
+}
+
+/// S3: superficie, muros y marcas a partir de la red compilada.
+#[allow(clippy::too_many_arguments)]
+fn build_network(
+    net: &NetworkDef,
+    samples: &[Sample],
+    lines: &[usize],
+    ground_y: f32,
+    drivable: &mut MeshPart,
+    walls: &mut MeshPart,
+    wall_boxes: &mut Vec<WallBox>,
+    decals: &mut MeshPart,
+) -> Result<(), String> {
+    if net.surfaces.len() != net.triangles.len() {
+        return Err("red inválida: una superficie por triángulo".into());
+    }
+    let nv = net.vertices.len() as u32;
+    let v = |i: u32| {
+        let p = net.vertices[i as usize];
+        Vec3::new(p[0], p[1], p[2])
+    };
+    for (t, &s) in net.triangles.iter().zip(&net.surfaces) {
+        if t.iter().any(|&i| i >= nv) {
+            return Err("red inválida: triángulo con un vértice que no existe".into());
+        }
+        let base = (drivable.positions.len() / 3) as u32;
+        for &i in t {
+            let p = v(i);
+            drivable.positions.extend_from_slice(&[p.x, p.y, p.z]);
+            drivable.surfaces.push(Surface::from_u8(s) as u8);
+        }
+        drivable.indices.extend_from_slice(&[base, base + 1, base + 2]);
+    }
+    for w in &net.walls {
+        for seg in w.windows(2) {
+            let (a, b) = (Vec3::new(seg[0][0], seg[0][1], seg[0][2]), Vec3::new(seg[1][0], seg[1][1], seg[1][2]));
+            wall_segment(a, b, ground_y, walls, wall_boxes);
+        }
+    }
+    // Barreras: misma colisión que un muro; el render las dibuja aparte, con flechas.
+    let mut hidden = MeshPart::default();
+    for b in &net.barriers {
+        for seg in b.line.windows(2) {
+            let (a, c) = (Vec3::new(seg[0][0], seg[0][1], seg[0][2]), Vec3::new(seg[1][0], seg[1][1], seg[1][2]));
+            wall_segment(a, c, ground_y, &mut hidden, wall_boxes);
+        }
+    }
+    // Línea de salida o meta pintada sobre la calzada (solo render).
+    for &i in lines {
+        let smp = &samples[i.min(samples.len() - 1)];
+        let (hw, half_len, lift) = (smp.width * 0.5, 0.6, smp.up * 0.03);
+        let along = smp.tangent * half_len;
+        let base = (decals.positions.len() / 3) as u32;
+        for p in [smp.pos - smp.right * hw - along, smp.pos - smp.right * hw + along, smp.pos + smp.right * hw + along, smp.pos + smp.right * hw - along] {
+            let q = p + lift;
+            decals.positions.extend_from_slice(&[q.x, q.y, q.z]);
+            decals.surfaces.push(Surface::StartLine as u8);
+        }
+        decals.indices.extend_from_slice(&[base, base + 2, base + 1, base, base + 3, base + 2]);
+    }
+    Ok(())
 }
 
 impl CompiledTrack {
@@ -525,7 +700,12 @@ impl CompiledTrack {
     /// Curvatura máxima absoluta entre `s` y `s + ahead` metros.
     pub fn max_curvature_ahead(&self, i: usize, ahead: f32) -> f32 {
         let steps = (ahead / self.spacing).ceil() as isize;
-        (0..=steps).map(|k| self.sample(i as isize + k).curvature.abs()).fold(0.0, f32::max)
+        (0..=steps)
+            .map(|k| {
+                let s = self.sample(i as isize + k);
+                s.curvature.abs().max(s.curvature_tight)
+            })
+            .fold(0.0, f32::max)
     }
 
     pub fn track_hash_hex(&self) -> String {

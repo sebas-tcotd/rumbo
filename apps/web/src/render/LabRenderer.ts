@@ -143,6 +143,7 @@ export class LabRenderer {
 
     this.addScenery(ready);
     this.addLandmarks(ready);
+    this.addBarriers(ready);
     this.car = this.buildCar(ready.vehicle.halfExtents, false);
     this.scene.add(this.car.root);
     const g = this.buildCar(ready.vehicle.halfExtents, true);
@@ -179,6 +180,16 @@ export class LabRenderer {
       minZ = Math.min(minZ, p.y); maxZ = Math.max(maxZ, p.y);
     }
     const pad = 220;
+    // Celdas de 6 m ocupadas por la superficie conducible (incluye calles laterales y cruces
+    // de una red): ahí no va vegetación.
+    const CELL = 6;
+    const occupied = new Set<string>();
+    const dp = ready.meshes.drivable.positions;
+    for (let i = 0; i < dp.length; i += 3) {
+      const cx = Math.floor(dp[i] / CELL), cz = Math.floor(dp[i + 2] / CELL);
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) occupied.add(`${cx + dx},${cz + dz}`);
+    }
+    const onRoad = (x: number, z: number) => occupied.has(`${Math.floor(x / CELL)},${Math.floor(z / CELL)}`);
     const clearance = (x: number, z: number) => {
       let best = Infinity;
       for (const p of pts) best = Math.min(best, (p.x - x) ** 2 + (p.y - z) ** 2);
@@ -203,7 +214,7 @@ export class LabRenderer {
       const x = minX - pad + rand() * (maxX - minX + pad * 2);
       const z = minZ - pad + rand() * (maxZ - minZ + pad * 2);
       const d = clearance(x, z);
-      if (d < 26) continue;
+      if (d < 26 || onRoad(x, z)) continue;
       const y = ready.groundY;
       if (rand() < 0.72) {
         const s = 1.6 + rand() * 2.4;
@@ -229,6 +240,85 @@ export class LabRenderer {
     inst(crown, crownMats[1], trees.slice(half));
     inst(trunk, trunkMat, trunks);
     inst(rock, rockMat, rocks);
+  }
+
+  /**
+   * Barreras de carrera al estilo de los NFS clásicos: franjas blancas y negras con flechas
+   * naranjas encendidas que apuntan hacia donde sigue la carrera.
+   */
+  private addBarriers(ready: ReadyMsg) {
+    if (!ready.barriers?.length) return;
+    const W = 256, H = 128;
+    const paint = (glowOnly: boolean) => {
+      const c = document.createElement('canvas');
+      c.width = W;
+      c.height = H;
+      const g = c.getContext('2d')!;
+      g.fillStyle = glowOnly ? '#000' : '#141414';
+      g.fillRect(0, 0, W, H);
+      if (!glowOnly) {
+        g.fillStyle = '#e8e8e8';
+        for (let x = -H; x < W + H; x += 32) {
+          g.beginPath();
+          g.moveTo(x, H);
+          g.lineTo(x + 14, H);
+          g.lineTo(x + 14 + H * 0.6, 0);
+          g.lineTo(x + H * 0.6, 0);
+          g.closePath();
+          g.fill();
+        }
+      }
+      // Flecha ">" que apunta hacia +u.
+      g.strokeStyle = '#ff8a1f';
+      g.lineWidth = 22;
+      g.lineJoin = 'miter';
+      g.beginPath();
+      g.moveTo(W * 0.32, H * 0.16);
+      g.lineTo(W * 0.68, H * 0.5);
+      g.lineTo(W * 0.32, H * 0.84);
+      g.stroke();
+      const t = new THREE.CanvasTexture(c);
+      t.wrapS = THREE.RepeatWrapping;
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = 4;
+      return t;
+    };
+    const mat = new THREE.MeshStandardMaterial({
+      map: paint(false),
+      emissiveMap: paint(true),
+      emissive: new THREE.Color(0xffffff),
+      emissiveIntensity: 1.6,
+      roughness: 0.7,
+      side: THREE.DoubleSide,
+    });
+    const TILE = 2.2; // metros por flecha
+    const HEIGHT = 2.0;
+    const pos: number[] = [], uv: number[] = [], idx: number[] = [];
+    for (const b of ready.barriers) {
+      const pts = b.line.map(([x, y, z]) => new THREE.Vector3(x, y, z));
+      const total = pts.slice(1).reduce((acc, p, i) => acc + p.distanceTo(pts[i]), 0);
+      let along = 0;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [a, c] = [pts[i], pts[i + 1]];
+        const seg = a.distanceTo(c);
+        // u crece en el sentido de las flechas: así la flecha ">" apunta hacia donde sigue la carrera.
+        const ua = (b.arrow > 0 ? along : total - along) / TILE;
+        const uc = (b.arrow > 0 ? along + seg : total - along - seg) / TILE;
+        const base = pos.length / 3;
+        pos.push(a.x, a.y - 0.05, a.z, c.x, c.y - 0.05, c.z, c.x, c.y + HEIGHT, c.z, a.x, a.y + HEIGHT, a.z);
+        uv.push(ua, 0, uc, 0, uc, 1, ua, 1);
+        idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+        along += seg;
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true;
+    this.scene.add(mesh);
   }
 
   /** Pórticos (meta en circuitos; salida y llegada en sprints) y postes ámbar en los checkpoints. */

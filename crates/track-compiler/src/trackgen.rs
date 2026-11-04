@@ -13,7 +13,9 @@ use crate::dem::Dem;
 use crate::diagnostics::{Diagnostic, Severity};
 use crate::elevation::{self, ElevationOptions, Profile};
 use crate::graph::RoadGraph;
+use crate::network::{self, NetworkOptions};
 use crate::routing::ResolvedRoute;
+use crate::terrain::{HeightField, TerrainOptions};
 use serde_json::{json, Value};
 
 #[derive(Clone, Debug)]
@@ -26,6 +28,10 @@ pub struct TrackOptions {
     pub checkpoints: Vec<f64>,
     pub centerline: CenterlineOptions,
     pub elevation: ElevationOptions,
+    /// S3: si está, la pista lleva su red conducible (calles, cruces y calles laterales) y
+    /// la altura sale de un campo 2D (`terrain`) en lugar del perfil a lo largo del eje.
+    pub network: Option<NetworkOptions>,
+    pub terrain: TerrainOptions,
 }
 
 impl TrackOptions {
@@ -37,6 +43,8 @@ impl TrackOptions {
             checkpoints: vec![0.33, 0.66],
             centerline: CenterlineOptions::default(),
             elevation: ElevationOptions::default(),
+            network: None,
+            terrain: TerrainOptions::default(),
         }
     }
 }
@@ -73,9 +81,102 @@ fn round(v: f64, digits: i32) -> f64 {
 }
 
 pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &Dem, opts: &TrackOptions) -> Result<GeneratedTrack, String> {
-    let samples = centerline::build(g, r, &opts.centerline)?;
-    let profile = elevation::profile(&samples, dem, &g.frame, &opts.elevation)?;
+    let mut cl = opts.centerline;
+    if let Some(n) = &opts.network {
+        cl.min_width_m = n.min_width_m;
+        cl.max_width_m = n.max_width_m;
+    }
+    // En una red, el eje sale de la línea de referencia (arcos en los giros).
+    let net = opts.network.as_ref().map(|n| network::build(g, r, n)).transpose()?;
+    let samples = match &net {
+        None => centerline::build(g, r, &cl)?,
+        Some(net) => {
+            let step = ((cl.spacing_m).round() as usize).max(1);
+            let mut s = 0.0;
+            let mut prev: Option<[f64; 2]> = None;
+            net.reference
+                .iter()
+                .step_by(step)
+                .map(|q| {
+                    if let Some(p) = prev {
+                        s += libm::hypot(q.en[0] - p[0], q.en[1] - p[1]);
+                    }
+                    prev = Some(q.en);
+                    CenterSample { en: q.en, s, edge: q.edge, width: q.width, bridge: false, tunnel: false }
+                })
+                .collect()
+        }
+    };
+    let mut profile = elevation::profile(&samples, dem, &g.frame, &opts.elevation)?;
     let mut diags = profile.diagnostics.clone();
+
+    // S3: red conducible y altura como campo 2D.
+    let mut network_json = Value::Null;
+    let mut junctions_json = Value::Null;
+    if let Some(net) = &net {
+        let (mut mn, mut mx) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+        for p in net.vertices.iter().chain(samples.iter().map(|c| &c.en)) {
+            mn = [mn[0].min(p[0]), mn[1].min(p[1])];
+            mx = [mx[0].max(p[0]), mx[1].max(p[1])];
+        }
+        let field = HeightField::build(dem, &g.frame, mn, mx, &opts.terrain)?;
+        profile.filtered = samples.iter().map(|c| field.at(c.en)).collect();
+        let ds = cl.spacing_m;
+        profile.climb_m = profile.filtered.windows(2).map(|w| (w[1] - w[0]).max(0.0)).sum();
+        profile.max_grade = profile.filtered.windows(2).map(|w| ((w[1] - w[0]) / ds).abs()).fold(0.0, f64::max);
+        // Los avisos del perfil 1D (paredes, altura estimada) no aplican: en la ciudad las
+        // fachadas siempre "varían a lo ancho". La altura sale del campo.
+        diags.retain(|d| !d.code.starts_with("elevation-"));
+        diags.push(Diagnostic::new(
+            Severity::Info,
+            "elevation-field",
+            format!(
+                "altura de la red: percentil {:.0} del modelo en {:.0} m a la redonda, suavizado de {:.0} m",
+                opts.terrain.percentile, opts.terrain.radius_m, opts.terrain.sigma_m
+            ),
+        ));
+        diags.extend(net.diagnostics.iter().cloned());
+        for j in &net.junctions {
+            let (sev, code) = match j.status {
+                Status::Valid => continue,
+                Status::Degraded => (Severity::Warning, "junction-degraded"),
+                Status::Unsupported => (Severity::Error, "junction-unsupported"),
+            };
+            diags.push(
+                Diagnostic::new(sev, code, format!("{} de {} brazos: {}", j.kind, j.arms, j.reason.clone().unwrap_or_default()))
+                    .at(g.frame.en_to_geo(j.en)),
+            );
+        }
+        let o = samples[0].en;
+        let xyz = |p: [f64; 2]| json!([round(p[0] - o[0], 3), round(field.at(p), 3), round(-(p[1] - o[1]), 3)]);
+        network_json = json!({
+            "vertices": net.vertices.iter().map(|&p| xyz(p)).collect::<Vec<_>>(),
+            "triangles": net.triangles.iter().map(|(t, _)| json!(t)).collect::<Vec<_>>(),
+            "surfaces": net.triangles.iter().map(|(_, s)| *s).collect::<Vec<_>>(),
+            "walls": net.walls.iter().map(|w| w.iter().map(|&p| xyz(p)).collect::<Vec<_>>()).collect::<Vec<_>>(),
+            "barriers": net.barriers.iter().map(|b| json!({
+                "line": b.line.iter().map(|&p| xyz(p)).collect::<Vec<_>>(),
+                "arrow": b.arrow,
+            })).collect::<Vec<_>>(),
+        });
+        junctions_json = json!(net
+            .junctions
+            .iter()
+            .map(|j| {
+                let p = g.frame.en_to_geo(j.en);
+                json!({
+                    "lat": round(p.lat, 7),
+                    "lon": round(p.lon, 7),
+                    "kind": j.kind,
+                    "arms": j.arms,
+                    "minAngleDeg": round(j.min_angle_deg, 1),
+                    "status": j.status.as_str(),
+                    "reason": j.reason,
+                    "edges": j.arm_edges,
+                })
+            })
+            .collect::<Vec<_>>());
+    }
 
     // Cruces atravesados: en S2 la pista es una sola cinta; las calles laterales y la
     // geometría de cada cruce llegan con S3 (Junction Compiler).
@@ -112,7 +213,7 @@ pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &Dem, opts: &TrackOptions
             ),
         ));
     }
-    if junctions > 0 {
+    if junctions > 0 && opts.network.is_none() {
         diags.push(Diagnostic::new(
             Severity::Info,
             "junctions-not-modeled",
@@ -127,8 +228,8 @@ pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &Dem, opts: &TrackOptions
             format!(
                 "el ancho de {:.0} % de la pista se estimó por carriles y tipo de vía (acotado entre {:.0} y {:.0} m)",
                 100.0 * estimated as f64 / samples.len() as f64,
-                opts.centerline.min_width_m,
-                opts.centerline.max_width_m
+                cl.min_width_m,
+                cl.max_width_m
             ),
         ));
     }
@@ -144,7 +245,7 @@ pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &Dem, opts: &TrackOptions
 
     // Puntos de control en el espacio del motor, centrados en el inicio.
     let o = samples[0].en;
-    let every = ((opts.control_every_m / opts.centerline.spacing_m).round() as usize).max(1);
+    let every = ((opts.control_every_m / cl.spacing_m).round() as usize).max(1);
     let mut picks: Vec<usize> = (0..samples.len()).step_by(every).collect();
     if *picks.last().unwrap() != samples.len() - 1 {
         picks.push(samples.len() - 1);
@@ -169,7 +270,7 @@ pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &Dem, opts: &TrackOptions
         "id": opts.id,
         "name": opts.name,
         "closed": r.closed,
-        "sampleSpacing": opts.centerline.spacing_m,
+        "sampleSpacing": cl.spacing_m,
         "defaultWidth": 12.0,
         "checkpoints": opts.checkpoints,
         "points": points,
@@ -183,6 +284,8 @@ pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &Dem, opts: &TrackOptions
             "maxElevationM": round(max_h, 1),
             "maxTurnRateDegPerM": round(turn_rate, 2),
         },
+        "junctions": junctions_json,
+        "network": network_json,
         "source": {
             "generator": format!("track-compiler {}", crate::COMPILER_VERSION),
             "graph": format!("{}@{}", g.region, g.hash),
@@ -200,6 +303,24 @@ pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &Dem, opts: &TrackOptions
             "attribution": "© colaboradores de OpenStreetMap (ODbL) · Copernicus DEM GLO-30 © DLR e.V. 2010-2014 y © Airbus Defence and Space GmbH 2014-2018, provisto bajo COPERNICUS por la Unión Europea y la ESA",
         },
     });
+    let mut json = json;
+    if let Some(n) = &opts.network {
+        // Receta de la red, para reconstruir la pista igual.
+        json["source"]["network"] = json!({
+            "sidewalkM": n.sidewalk_m,
+            "curbRadiusM": n.curb_radius_m,
+            "stubM": n.stub_m,
+            "terrain": {
+                "stepM": opts.terrain.step_m,
+                "radiusM": opts.terrain.radius_m,
+                "percentile": opts.terrain.percentile,
+                "sigmaM": opts.terrain.sigma_m,
+            },
+        });
+    }
+    if let Some(obj) = json.as_object_mut() {
+        obj.retain(|_, v| !v.is_null()); // pistas sin red: el JSON queda como en S2
+    }
     Ok(GeneratedTrack { json, samples, profile, diagnostics: diags, status })
 }
 

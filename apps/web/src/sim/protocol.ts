@@ -76,6 +76,8 @@ export interface ReadyMsg {
   schema: ParamMeta[];
   meshes: { drivable: MeshData; walls: MeshData; decals: MeshData };
   centerline: Float32Array;
+  /** Barreras de carrera (calles laterales cerradas): puntos a nivel de calzada y sentido de las flechas. */
+  barriers: { line: [number, number, number][]; arrow: number }[];
   groundY: number;
   trackLength: number;
   checkpoints: number[];

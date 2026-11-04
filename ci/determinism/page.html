@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Determinismo</title></head>
+<body>
+<pre id="log">Verificando replays…</pre>
+<script type="module">
+  import init, { verify_replay, physics_version } from '/crates/sim-wasm/pkg/sim_wasm.js';
+  const out = { userAgent: navigator.userAgent, results: [] };
+  const log = document.getElementById('log');
+  try {
+    await init();
+    out.physics = physics_version();
+    const cases = await (await fetch('/__cases.json')).json();
+    for (const c of cases) {
+      const [track, replay] = await Promise.all([fetch(c.track).then((r) => r.text()), fetch(c.replay).then((r) => r.text())]);
+      const t0 = performance.now();
+      let rep;
+      try {
+        rep = JSON.parse(verify_replay(track, replay));
+      } catch (e) {
+        rep = { ok: false, message: String(e) };
+      }
+      out.results.push({
+        case: c.name, ok: rep.ok, message: rep.message, ticks: rep.ticks,
+        expected: c.expected, actual: rep.actualFinal, firstMismatch: rep.firstMismatchTick ?? null,
+        ms: Math.round(performance.now() - t0),
+      });
+      log.textContent += `\n${rep.ok ? 'OK   ' : 'FALLA'} ${c.name} ${rep.actualFinal ?? ''}`;
+      await new Promise((r) => setTimeout(r, 0)); // deja respirar al hilo para el sondeo del driver
+    }
+  } catch (e) {
+    out.error = String(e?.stack || e);
+  }
+  window.__determinism = out;
+</script>
+</body>
+</html>
