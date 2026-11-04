@@ -120,6 +120,16 @@ fn generated_track_is_smooth_and_consistent() {
     for i in (0..3000 - reach).chain(3000 + reach..a.samples.len()) {
         assert!((a.profile.filtered[i] - base.profile.filtered[i]).abs() < 1e-9, "el ancla movió la muestra {i}");
     }
+    // Dos anclas cercanas fijan el tramo entre ellas en línea recta, aunque el modelo tenga una loma.
+    let mut opts = TrackOptions::new("x", "x");
+    for (k, h) in [(2000usize, 5.0), (2150, 8.0)] {
+        opts.elevation.anchors.push(Anchor { at: g.frame.en_to_geo(t.samples[k].en), height_m: h });
+    }
+    let b = generate(&g, &r, &dem, &opts).unwrap();
+    for k in 2030..2120 {
+        let want = 5.0 + 3.0 * (k - 2000) as f64 / 150.0;
+        assert!((b.profile.filtered[k] - want).abs() < 0.3, "muestra {k}: {} en vez de {want}", b.profile.filtered[k]);
+    }
 }
 
 /// La pista de `assets/` debe ser exactamente la que produce el compilador actual.

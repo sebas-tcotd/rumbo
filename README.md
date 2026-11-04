@@ -181,6 +181,7 @@ cargo run -p track-compiler --release -- track data/graphs/lima-costa-verde.json
   --dem data/raw/Copernicus_DSM_COG_10_S13_00_W078_00_DEM.tif \
   --from -12.100321,-77.069759 --to -12.1596,-77.0256 --respect-oneway \
   --anchor -12.109,-77.057,6 --anchor -12.113,-77.051,6 \
+  --anchor -12.149711,-77.024503,4.2 --anchor -12.1527,-77.0245,4.5 --anchor -12.154993,-77.025104,4.3 \
   --id costa-verde-sprint --name "Costa Verde · Circuito de Playas" \
   --out assets/tracks/costa-verde-sprint.json --profile perfil.csv
 ```
@@ -199,9 +200,10 @@ varía el terreno a lo ancho. Ábrelo en una planilla y grafícalo para ver dón
   suaviza para no tener escalones.
 - **Elevación:** percentil bajo a lo ancho de la calzada, puentes y túneles interpolados entre sus extremos,
   mediana móvil de 120 m, pendiente máxima del 14 % y suavizado.
-- **Anclas:** `--anchor lat,lon,altura` (repetible) fija la altura de la vía donde la conoces. La corrección es
-  local: se desvanece a 400 m del ancla, y dos anclas a menos de 800 m se unen en línea recta. Quedan registradas
-  en `source.elevationAnchors` de la pista.
+- **Anclas:** `--anchor lat,lon,altura` (repetible) fija la altura de la vía donde la conoces. Un ancla sola corrige
+  su entorno y la corrección se desvanece a 400 m. Entre dos anclas a menos de 800 m, la vía queda en línea recta
+  de una a otra: así se dice "este tramo es plano". Para aplanar una loma falsa, pon un ancla en cada borde (con la
+  altura que ya tiene ahí) y otra en medio. Quedan registradas en `source.elevationAnchors` de la pista.
 - **Sentido de las calles:** si el recorrido va contra el sentido de una calle de un solo sentido, la pista lleva
   el aviso `against-oneway`. En una vía de calzadas separadas eso suele significar que va por la calzada del otro
   lado, que puede ir a otra altura. Usa `--respect-oneway`.
@@ -218,8 +220,9 @@ varía el terreno a lo ancho. Ábrelo en una planilla y grafícalo para ver dón
   la calzada que va de sur a norte, que en el km 2 sube por la ladera. Con `--respect-oneway` la pista va por la
   calzada de abajo. Lo confirmamos en Google Maps 3D: cerca de -12.109,-77.057 una calzada sube y la otra sigue
   abajo, y en -12.113,-77.051 las dos están al mismo nivel. Ahí quedaba una loma de 20 m que el modelo sacaba de la
-  ladera, así que pusimos dos anclas a 6 m (el nivel de los tramos planos vecinos). La pista sube 49 m en total en
-  lugar de 111 m, y su altura va de 3 a 15 m.
+  ladera, así que pusimos dos anclas a 6 m (el nivel de los tramos planos vecinos).
+- **En Los Yuyos (km 8,1) el modelo marcaba una loma de 10 m** donde la vía es plana (confirmado en Google Maps 3D).
+  Tres anclas la dejan a nivel de playa. En total, la pista sube 35 m en lugar de 111 m y su altura va de 3 a 11 m.
 - **OSM de Lima casi no etiqueta anchos:** el 100 % del ancho de esta pista es estimado.
 
 ### Criterios de salida de S2

@@ -43,8 +43,8 @@ pub struct ElevationOptions {
     /// …si se mantiene al menos esta distancia.
     pub wall_length_m: f64,
     pub anchors: Vec<Anchor>,
-    /// Alcance de cada ancla (m): su corrección se desvanece a esta distancia. Dos anclas
-    /// más cercanas que el doble del alcance se unen con una corrección lineal.
+    /// Alcance de cada ancla (m): su corrección se desvanece a esta distancia. Entre dos anclas
+    /// más cercanas que el doble del alcance, la vía queda en línea recta de una a otra.
     pub anchor_reach_m: f64,
     pub median_window_m: f64,
     /// Pendiente máxima (0,14 = 14 %). Las bajadas de la Costa Verde rondan el 10-12 %.
@@ -234,7 +234,8 @@ pub fn profile(samples: &[CenterSample], dem: &Dem, frame: &LocalFrame, opts: &E
     let mut anchored = vec![false; n];
     // Anclas: corrección interpolada a lo largo de la pista entre alturas conocidas.
     if !opts.anchors.is_empty() {
-        let mut fixes: Vec<(usize, f64)> = opts
+        // (muestra, corrección, altura) de cada ancla.
+        let mut fixes: Vec<(usize, f64, f64)> = opts
             .anchors
             .iter()
             .map(|a| {
@@ -246,19 +247,21 @@ pub fn profile(samples: &[CenterSample], dem: &Dem, frame: &LocalFrame, opts: &E
                         dx.total_cmp(&dy)
                     })
                     .unwrap();
-                (k, a.height_m - filtered[k])
+                (k, a.height_m - filtered[k], a.height_m)
             })
             .collect();
         fixes.sort_by_key(|f| f.0);
         // La corrección es local: cada ancla arregla su entorno y no mueve el resto de la pista.
+        // Dos anclas cercanas fijan el tramo entre ellas: el error del modelo no tiene forma de
+        // recta, así que restarle una corrección lineal dejaría hoyos y lomas.
         let reach = (opts.anchor_reach_m / ds).max(1.0);
-        let fade = |fix: (usize, f64), i: usize| fix.1 * (1.0 - (fix.0.abs_diff(i) as f64 / reach)).max(0.0);
+        let fade = |fix: (usize, f64, f64), i: usize| fix.1 * (1.0 - (fix.0.abs_diff(i) as f64 / reach)).max(0.0);
         let mut corr = vec![0.0; n];
         for (i, c) in corr.iter_mut().enumerate() {
             let next = fixes.partition_point(|f| f.0 < i);
             *c = match (next.checked_sub(1).map(|k| fixes[k]), fixes.get(next).copied()) {
                 (Some(a), Some(b)) if b.0 > a.0 && (b.0 - a.0) as f64 <= 2.0 * reach => {
-                    a.1 + (b.1 - a.1) * (i - a.0) as f64 / (b.0 - a.0) as f64
+                    a.2 + (b.2 - a.2) * (i - a.0) as f64 / (b.0 - a.0) as f64 - filtered[i]
                 }
                 (a, b) => a.map_or(0.0, |a| fade(a, i)) + b.map_or(0.0, |b| fade(b, i)),
             };
