@@ -1,9 +1,13 @@
-# Laboratorio de manejo (S0)
+# Rumbo — spikes del PoC
 
-Primer spike del PoC: un auto, una pista hecha a mano y un panel para calibrar el manejo en vivo.
-Responde una sola pregunta: **¿el manejo arcade engancha lo suficiente como para seguir dando vueltas?**
+Spikes del PoC, en orden de riesgo:
 
-Todavía no hay OpenStreetMap, elevación real ni intersecciones. Eso viene en S1 a S3.
+- **S0 · Laboratorio de manejo:** un auto, una pista hecha a mano y un panel para calibrar el manejo en vivo.
+  Responde: ¿el manejo arcade engancha lo suficiente como para seguir dando vueltas?
+- **S1 · Datos geográficos:** extracto de OpenStreetMap, proyección al plano local, grafo vial y ruteo A→B.
+  Responde: ¿la red vial de Lima es ruteable y limpia? Ver [S1](#s1--datos-geográficos).
+
+Todavía no hay elevación real ni intersecciones conducibles. Eso viene en S2 y S3.
 
 ## Requisitos
 
@@ -106,6 +110,62 @@ En el navegador, **Sesión → Verificar esta sesión** re-simula todo lo que ma
 `cargo run -p sim-core --release --example drift_entry` compara frenar en curva contra derrapar con freno de mano.
 `cargo run -p sim-core --release --example probe` imprime telemetría de escenarios básicos (reposo, aceleración,
 derrape, choque y piloto automático), útil al tocar la física.
+
+## S1 · Datos geográficos
+
+El crate `crates/track-compiler` lleva la red vial real hasta un recorrido resuelto, que es la entrada de S2.
+
+```
+data/queries/lima-costa-verde.overpassql   Consulta: Miraflores, Barranco, parte de San Isidro y la Costa Verde
+scripts/fetch-osm.mjs                      Descarga el extracto y lo archiva con fecha en data/raw/
+crates/track-compiler/src/
+  osm.rs          Lectura de Overpass JSON
+  geo.rs          WGS84 → plano tangente ENU en metros (f64, libm)
+  graph.rs        Grafo dirigido: se parte solo en nodos compartidos; atributos y anchos estimados
+  routing.rs      Ajuste a la calle y A* determinista entre puntos de paso
+  diagnostics.rs  Severidad (info, advertencia, error), independiente del estado de la pista
+  export.rs       GeoJSON (orden [lon, lat]) del grafo y de la ruta
+```
+
+### Cerrar S1 con datos reales
+
+```bash
+# 1. Descargar el extracto (si Overpass responde 429 o 504, espera o usa otro servidor con OVERPASS_URL)
+node scripts/fetch-osm.mjs
+
+# 2. Construir el grafo y su GeoJSON
+cargo run -p track-compiler --release -- ingest data/raw/lima-costa-verde-AAAA-MM-DD.overpass.json \
+  --region lima-costa-verde --out data/graphs/lima-costa-verde.json --geojson data/graphs/lima-costa-verde.geojson
+
+# 3. Rutear entre dos puntos (lat,lon; cópialos con clic derecho en openstreetmap.org)
+cargo run -p track-compiler --release -- route data/graphs/lima-costa-verde.json \
+  --from LAT,LON --to LAT,LON --geojson ruta.geojson --descriptor ruta.descriptor.json
+
+# 4. Pruebas sobre el extracto real (se activan solas si hay un archivo en data/raw/)
+cargo test -p track-compiler --release
+```
+
+Para verificar contra el mapa, arrastra los `.geojson` a [geojson.io](https://geojson.io): el grafo debería calzar
+con las calles y la ruta debería seguirlas sin atajos por veredas ni manzanas.
+
+Los criterios de salida de S1 son:
+
+- [ ] El extracto descarga, se archiva y el grafo se construye sin errores.
+- [ ] La mayor componente conexa tiene más del 85 % de los nodos (lo comprueba la prueba real).
+- [ ] Varias rutas A→B en la Costa Verde siguen las calles al revisarlas en geojson.io, incluidas las bajadas.
+- [ ] Los pasos a desnivel no aparecen como cruces: no hay giros entre una vía y el puente que la cruza.
+- [ ] Revisar los diagnósticos: cuántas vías no tienen ancho ni carriles en OSM y si eso cambia la estimación.
+
+Algunas notas:
+
+- **Sentidos de circulación:** por defecto el ruteo los ignora, como propone el documento para carreras.
+  `--respect-oneway` los respeta (modo Exploración). `--closed` cierra el circuito volviendo al primer punto.
+- **Orden de coordenadas:** siempre `lat,lon`. Si un punto cae lejos de la red pero invertido sí cae dentro,
+  el error lo dice. El rango por sí solo no basta: la longitud de Lima (−77) cabe como latitud.
+- **Snapshots:** versiona en git el extracto con el que valides S1, porque el hash del grafo depende de él.
+  Si supera unos 20 MB, usa Git LFS.
+- **Licencia:** los datos son © colaboradores de OpenStreetMap, bajo licencia
+  [ODbL](https://www.openstreetmap.org/copyright). Cualquier pantalla que los muestre debe atribuirlos.
 
 ## Decisiones tomadas en S0
 

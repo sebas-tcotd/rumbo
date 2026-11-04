@@ -8,4 +8,4 @@ license.workspace = true
 rapier3d = { version = "0.36", default-features = false, features = ["std", "dim3", "f32", "enhanced-determinism"] }
 libm = "0.2"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["float_roundtrip"] }  # igual en nativo y WASM
