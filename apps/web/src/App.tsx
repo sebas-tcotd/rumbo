@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import trackJson from '@assets/tracks/test-loop.json?raw';
 import defaultProfile from '@assets/profiles/hatch-arcade.json';
 import { SimClient, type LabSnapshot } from './sim/client';
 import type { ProfileFile } from './sim/protocol';
@@ -10,6 +9,9 @@ import { TuningPanel } from './debug/TuningPanel';
 import { TelemetryPanel } from './debug/TelemetryPanel';
 import { SessionPanel } from './debug/SessionPanel';
 import { download } from './debug/download';
+import { selectedTrack, switchTrack, TRACKS } from './sim/tracks';
+
+const TRACK = selectedTrack();
 
 const CAMERAS: CameraMode[] = ['persecucion', 'cercana', 'aerea'];
 const CAMERA_NAMES: Record<CameraMode, string> = { persecucion: 'persecución', cercana: 'cercana', aerea: 'aérea' };
@@ -75,7 +77,7 @@ export function App() {
     };
 
     const profile = defaultProfile as ProfileFile;
-    c.init(trackJson, profile);
+    c.init(TRACK.json, profile);
     r.setSuspensionRest(profile.params.suspension_rest_m);
     r.start().then(() => {
       if (!disposed) setRenderer(r);
@@ -83,6 +85,7 @@ export function App() {
     setClient(c);
 
     keyActions.set('KeyR', () => c.send({ type: 'reset' }));
+    keyActions.set('KeyT', () => c.send({ type: 'restart' }));
     keyActions.set('KeyP', () => setAutopilot((v) => !v));
     keyActions.set('KeyC', () => setCamera((v) => CAMERAS[(CAMERAS.indexOf(v) + 1) % CAMERAS.length]));
     keyActions.set('KeyG', () => setGhostOn((v) => !v));
@@ -140,7 +143,7 @@ export function App() {
         <aside className="panel" aria-label="Laboratorio">
           <header className="panel-head">
             <h1>Laboratorio de manejo</h1>
-            <p>{snap.ready ? `Pista de control · ${(snap.ready.trackLength / 1000).toFixed(2)} km` : 'S0'}</p>
+            <p>{`${TRACK.name} · ${snap.ready ? (snap.ready.trackLength / 1000).toFixed(2) + ' km' : '…'}`}</p>
           </header>
           <nav className="tabs" role="tablist">
             {(
@@ -167,6 +170,9 @@ export function App() {
             {tab === 'sesion' && (
               <SessionPanel
                 snap={snap}
+                track={TRACK}
+                tracks={TRACKS}
+                onTrack={switchTrack}
                 autopilot={autopilot}
                 onAutopilot={setAutopilot}
                 ghostOn={ghostOn}

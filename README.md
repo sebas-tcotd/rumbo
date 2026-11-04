@@ -7,7 +7,10 @@ Spikes del PoC, en orden de riesgo:
 - **S1 · Datos geográficos:** extracto de OpenStreetMap, proyección al plano local, grafo vial y ruteo A→B.
   Responde: ¿la red vial de Lima es ruteable y limpia? Ver [S1](#s1--datos-geográficos).
 
-Todavía no hay elevación real ni intersecciones conducibles. Eso viene en S2 y S3.
+- **S2 · Primer tramo real (First Drivable):** del recorrido resuelto a una pista conducible con elevación.
+  Responde: ¿se maneja continuo sobre datos reales? Ver [S2](#s2--primer-tramo-real).
+
+Todavía no hay intersecciones conducibles: eso viene en S3.
 
 ## Requisitos
 
@@ -59,6 +62,7 @@ scripts/verify-golden.mjs     Verifica los replays dorados con el WASM en Node
 | Espacio + dirección | Derrape (sobre 55 km/h, con dirección marcada) |
 | S + dirección | Frenada en curva, sin derrape |
 | R | Recolocar el auto sobre la pista |
+| T | Volver a la salida y empezar otro intento (en sprints, otra pasada) |
 | P | Piloto automático |
 | C | Cambiar cámara (persecución, cercana, aérea) |
 | G | Fantasma de la mejor vuelta |
@@ -166,6 +170,56 @@ Algunas notas:
   Si supera unos 20 MB, usa Git LFS.
 - **Licencia:** los datos son © colaboradores de OpenStreetMap, bajo licencia
   [ODbL](https://www.openstreetmap.org/copyright). Cualquier pantalla que los muestre debe atribuirlos.
+
+## S2 · Primer tramo real
+
+`track-compiler track` convierte una ruta en una pista de `sim-core`: eje suavizado, ancho por calle, elevación
+filtrada desde Copernicus GLO-30 y un estado (`VALID`, `DEGRADED`, `UNSUPPORTED`) con diagnósticos localizados.
+
+```bash
+cargo run -p track-compiler --release -- track data/graphs/lima-costa-verde.json \
+  --dem data/raw/Copernicus_DSM_COG_10_S13_00_W078_00_DEM.tif \
+  --from -12.1003572,-77.0694077 --to -12.1599165,-77.0252561 \
+  --id costa-verde-sprint --name "Costa Verde · Circuito de Playas" \
+  --out assets/tracks/costa-verde-sprint.json --profile perfil.csv
+```
+
+En el laboratorio, elige la pista en **Sesión → Pista activa** (o abre `?pista=costa-verde-sprint`).
+Es un sprint: el tiempo corre de la salida a la llegada, y **T** vuelve a la salida.
+
+`perfil.csv` trae, por cada muestra, la altura del modelo en el eje, la tomada a lo ancho, la de la pista y cuánto
+varía el terreno a lo ancho. Ábrelo en una planilla y grafícalo para ver dónde el modelo engaña.
+
+### Qué hace con los datos
+
+- **Ruteo con límite de giro:** A* sobre aristas dirigidas; ningún cruce con giros de más de 135° (`--max-turn`)
+  y un costo por giro (`--turn-cost`). Sin esto, la ruta entraba a las rampas con medias vueltas de 168°.
+- **Eje:** suavizado gaussiano de 4 m y re-muestreo cada 2 m. El ancho sale de la calle (acotado a 7-16 m) y se
+  suaviza para no tener escalones.
+- **Elevación:** percentil bajo a lo ancho de la calzada, puentes y túneles interpolados entre sus extremos,
+  mediana móvil de 120 m, pendiente máxima del 14 % y suavizado.
+- **Anclas:** `--anchor lat,lon,altura` (repetible) fija la altura de la vía donde la conoces; la corrección se
+  reparte a lo largo de la pista.
+
+### Lo que aprendimos
+
+- **First Drivable pasa:** el piloto automático recorre los 8,9 km en 3 min 14 s, hasta 184 km/h, con un golpe
+  vertical máximo de 0,10 m/s, sin ruedas en el aire ni contacto con muros (`sim-core/tests/first_drivable.rs`).
+- **El modelo de elevación es el punto débil.** GLO-30 es un modelo de *superficie* (incluye edificios y árboles),
+  difumina el acantilado en unos 100 m y se tomó entre 2011 y 2015. En una vía que corre a nivel del mar marca
+  lomas de hasta 41 m (cerca del km 2). Por eso la pista queda `DEGRADED`, con avisos en cada tramo con pared al
+  costado. Para el producto hará falta un modelo de *terreno* (sin edificios) o anclas puestas a mano.
+- **OSM de Lima casi no etiqueta anchos:** el 100 % del ancho de esta pista es estimado.
+
+### Criterios de salida de S2
+
+- [x] Un tramo real conducible de punta a punta sin saltos ni huecos (prueba automática).
+- [x] Puentes y túneles con altura interpolada; estado y diagnósticos en la pista.
+- [ ] Manejarlo a mano con el perfil calibrado y confirmar que se siente bien.
+- [ ] Revisar las lomas del perfil y, si la vía es plana donde el modelo dice que no, fijar anclas.
+
+Cuando cambies el compilador, regenera la pista con el comando de arriba: la prueba
+`committed_asset_is_up_to_date` falla si `assets/tracks/costa-verde-sprint.json` quedó desactualizada.
 
 ## Decisiones tomadas en S0
 

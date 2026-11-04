@@ -43,6 +43,17 @@ export interface VerifyReport {
   message: string;
 }
 
+export interface TrackInfo {
+  id: string;
+  name: string;
+  closed: boolean;
+  /** Sprint: líneas de salida y llegada sobre `s` (0 en circuitos). */
+  startS: number;
+  finishS: number;
+  length: number;
+  spacing: number;
+}
+
 export interface Hashes {
   track: string;
   profile: string;
@@ -52,6 +63,7 @@ export type ToWorker =
   | { type: 'init'; trackJson: string; profileJson: string }
   | { type: 'input'; steer: number; throttle: number; brake: number; handbrake: boolean }
   | { type: 'reset' }
+  | { type: 'restart' }
   | { type: 'newSession'; profileJson: string }
   | { type: 'autopilot'; on: boolean }
   | { type: 'pause'; on: boolean }
@@ -67,6 +79,7 @@ export interface ReadyMsg {
   groundY: number;
   trackLength: number;
   checkpoints: number[];
+  track: TrackInfo;
   vehicle: VehicleGeometry;
   hashes: Hashes;
   physicsVersion: string;
@@ -107,3 +120,4 @@ export const GHOST_STRIDE = 8;
 
 export const FLAG_HANDBRAKE = 1;
 export const FLAG_RESET = 2;
+export const FLAG_RESTART = 4;

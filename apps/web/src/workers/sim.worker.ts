@@ -16,6 +16,7 @@ import init, {
 import {
   FLAG_HANDBRAKE,
   FLAG_RESET,
+  FLAG_RESTART,
   GHOST_STRIDE,
   type FromWorker,
   type MeshData,
@@ -33,6 +34,7 @@ let I: Record<string, number> = {};
 
 let input = { steer: 0, throttle: 0, brake: 0, handbrake: false };
 let resetPending = false;
+let restartPending = false;
 let autopilot = false;
 let paused = false;
 
@@ -91,6 +93,10 @@ function stepOnce(l: Lab) {
   if (resetPending) {
     flags |= FLAG_RESET;
     resetPending = false;
+  }
+  if (restartPending) {
+    flags |= FLAG_RESTART;
+    restartPending = false;
   }
   l.step(steer, throttle, brake, flags);
 }
@@ -191,6 +197,7 @@ ctx.onmessage = async (ev: MessageEvent<ToWorker>) => {
           groundY: l.ground_y(),
           trackLength: l.track_length(),
           checkpoints: Array.from(l.checkpoints()),
+          track: JSON.parse(l.track_info()),
           vehicle: JSON.parse(vehicle_geometry()),
           hashes: { track: l.track_hash(), profile: l.profile_hash() },
           physicsVersion: physics_version(),
@@ -205,6 +212,9 @@ ctx.onmessage = async (ev: MessageEvent<ToWorker>) => {
         break;
       case 'reset':
         resetPending = true;
+        break;
+      case 'restart':
+        restartPending = true;
         break;
       case 'newSession':
         startSession(msg.profileJson);

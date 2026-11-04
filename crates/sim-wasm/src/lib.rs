@@ -67,6 +67,21 @@ impl Lab {
         self.sim.track().length
     }
 
+    /// Datos de la pista para el render (JSON): id, nombre, si es cerrada, salida y llegada.
+    pub fn track_info(&self) -> String {
+        let t = self.sim.track();
+        serde_json::json!({
+            "id": t.id,
+            "name": t.name,
+            "closed": t.closed,
+            "startS": t.start_s,
+            "finishS": t.finish_s,
+            "length": t.length,
+            "spacing": t.spacing,
+        })
+        .to_string()
+    }
+
     pub fn checkpoints(&self) -> Vec<f32> {
         self.sim.track().checkpoints.clone()
     }
