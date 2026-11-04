@@ -43,6 +43,9 @@ pub struct ElevationOptions {
     /// …si se mantiene al menos esta distancia.
     pub wall_length_m: f64,
     pub anchors: Vec<Anchor>,
+    /// Alcance de cada ancla (m): su corrección se desvanece a esta distancia. Dos anclas
+    /// más cercanas que el doble del alcance se unen con una corrección lineal.
+    pub anchor_reach_m: f64,
     pub median_window_m: f64,
     /// Pendiente máxima (0,14 = 14 %). Las bajadas de la Costa Verde rondan el 10-12 %.
     pub max_grade: f64,
@@ -62,6 +65,7 @@ impl Default for ElevationOptions {
             wall_probe_m: 30.0,
             wall_length_m: 100.0,
             anchors: Vec::new(),
+            anchor_reach_m: 400.0,
             median_window_m: 120.0,
             max_grade: 0.14,
             smooth_sigma_m: 12.0,
@@ -226,6 +230,8 @@ pub fn profile(samples: &[CenterSample], dem: &Dem, frame: &LocalFrame, opts: &E
     let ds = if samples.len() > 1 { samples[1].s - samples[0].s } else { 1.0 };
     let mut filtered = filter(&raw, ds, opts).ok_or("ninguna muestra del recorrido tiene elevación")?;
 
+    // Muestras cuya altura fijó un ancla: ahí el aviso de "altura estimada" no aplica.
+    let mut anchored = vec![false; n];
     // Anclas: corrección interpolada a lo largo de la pista entre alturas conocidas.
     if !opts.anchors.is_empty() {
         let mut fixes: Vec<(usize, f64)> = opts
@@ -244,15 +250,23 @@ pub fn profile(samples: &[CenterSample], dem: &Dem, frame: &LocalFrame, opts: &E
             })
             .collect();
         fixes.sort_by_key(|f| f.0);
-        for (i, h) in filtered.iter_mut().enumerate() {
+        // La corrección es local: cada ancla arregla su entorno y no mueve el resto de la pista.
+        let reach = (opts.anchor_reach_m / ds).max(1.0);
+        let fade = |fix: (usize, f64), i: usize| fix.1 * (1.0 - (fix.0.abs_diff(i) as f64 / reach)).max(0.0);
+        let mut corr = vec![0.0; n];
+        for (i, c) in corr.iter_mut().enumerate() {
             let next = fixes.partition_point(|f| f.0 < i);
-            let corr = match (next.checked_sub(1).map(|k| fixes[k]), fixes.get(next).copied()) {
-                (Some(a), Some(b)) if b.0 > a.0 => a.1 + (b.1 - a.1) * (i - a.0) as f64 / (b.0 - a.0) as f64,
-                (Some(a), _) => a.1,
-                (None, Some(b)) => b.1,
-                (None, None) => 0.0,
+            *c = match (next.checked_sub(1).map(|k| fixes[k]), fixes.get(next).copied()) {
+                (Some(a), Some(b)) if b.0 > a.0 && (b.0 - a.0) as f64 <= 2.0 * reach => {
+                    a.1 + (b.1 - a.1) * (i - a.0) as f64 / (b.0 - a.0) as f64
+                }
+                (a, b) => a.map_or(0.0, |a| fade(a, i)) + b.map_or(0.0, |b| fade(b, i)),
             };
-            *h += corr;
+        }
+        // Suavizada como el perfil, para que el cambio de pendiente en cada ancla no sea un quiebre.
+        for (i, c) in smooth(&corr, ds, opts.smooth_sigma_m).into_iter().enumerate() {
+            filtered[i] += c;
+            anchored[i] = corr[i] != 0.0;
         }
         filtered = limit_grade(&filtered, ds, opts.max_grade);
         diags.push(Diagnostic::new(
@@ -299,7 +313,7 @@ pub fn profile(samples: &[CenterSample], dem: &Dem, frame: &LocalFrame, opts: &E
     let min_run = (opts.warn_length_m / ds).ceil() as usize;
     let mut i = 0;
     while i < samples.len() {
-        let dev = |k: usize| raw[k].map(|h| (h - filtered[k]).abs()).unwrap_or(0.0);
+        let dev = |k: usize| if anchored[k] { 0.0 } else { raw[k].map(|h| (h - filtered[k]).abs()).unwrap_or(0.0) };
         if dev(i) <= opts.warn_deviation_m {
             i += 1;
             continue;

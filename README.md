@@ -179,7 +179,8 @@ filtrada desde Copernicus GLO-30 y un estado (`VALID`, `DEGRADED`, `UNSUPPORTED`
 ```bash
 cargo run -p track-compiler --release -- track data/graphs/lima-costa-verde.json \
   --dem data/raw/Copernicus_DSM_COG_10_S13_00_W078_00_DEM.tif \
-  --from -12.1003572,-77.0694077 --to -12.1599165,-77.0252561 \
+  --from -12.100321,-77.069759 --to -12.1596,-77.0256 --respect-oneway \
+  --anchor -12.109,-77.057,6 --anchor -12.113,-77.051,6 \
   --id costa-verde-sprint --name "Costa Verde · Circuito de Playas" \
   --out assets/tracks/costa-verde-sprint.json --profile perfil.csv
 ```
@@ -198,17 +199,27 @@ varía el terreno a lo ancho. Ábrelo en una planilla y grafícalo para ver dón
   suaviza para no tener escalones.
 - **Elevación:** percentil bajo a lo ancho de la calzada, puentes y túneles interpolados entre sus extremos,
   mediana móvil de 120 m, pendiente máxima del 14 % y suavizado.
-- **Anclas:** `--anchor lat,lon,altura` (repetible) fija la altura de la vía donde la conoces; la corrección se
-  reparte a lo largo de la pista.
+- **Anclas:** `--anchor lat,lon,altura` (repetible) fija la altura de la vía donde la conoces. La corrección es
+  local: se desvanece a 400 m del ancla, y dos anclas a menos de 800 m se unen en línea recta. Quedan registradas
+  en `source.elevationAnchors` de la pista.
+- **Sentido de las calles:** si el recorrido va contra el sentido de una calle de un solo sentido, la pista lleva
+  el aviso `against-oneway`. En una vía de calzadas separadas eso suele significar que va por la calzada del otro
+  lado, que puede ir a otra altura. Usa `--respect-oneway`.
 
 ### Lo que aprendimos
 
-- **First Drivable pasa:** el piloto automático recorre los 8,9 km en 3 min 14 s, hasta 184 km/h, con un golpe
-  vertical máximo de 0,10 m/s, sin ruedas en el aire ni contacto con muros (`sim-core/tests/first_drivable.rs`).
+- **First Drivable pasa:** el piloto automático recorre los 8,9 km en 3 min 14 s, hasta 182 km/h, con un golpe
+  vertical máximo de 0,08 m/s, sin ruedas en el aire ni contacto con muros (`sim-core/tests/first_drivable.rs`).
 - **El modelo de elevación es el punto débil.** GLO-30 es un modelo de *superficie* (incluye edificios y árboles),
-  difumina el acantilado en unos 100 m y se tomó entre 2011 y 2015. En una vía que corre a nivel del mar marca
-  lomas de hasta 41 m (cerca del km 2). Por eso la pista queda `DEGRADED`, con avisos en cada tramo con pared al
-  costado. Para el producto hará falta un modelo de *terreno* (sin edificios) o anclas puestas a mano.
+  difumina el acantilado en unos 100 m y se tomó entre 2011 y 2015. Junto al acantilado mezcla la vía con la
+  ladera, y por eso la pista queda `DEGRADED`, con avisos en cada tramo con pared al costado. Para el producto hará
+  falta un modelo de *terreno* (sin edificios) o anclas puestas a mano.
+- **La loma de 41 m del km 2 era, sobre todo, la calzada equivocada.** La primera versión iba de norte a sur por
+  la calzada que va de sur a norte, que en el km 2 sube por la ladera. Con `--respect-oneway` la pista va por la
+  calzada de abajo. Lo confirmamos en Google Maps 3D: cerca de -12.109,-77.057 una calzada sube y la otra sigue
+  abajo, y en -12.113,-77.051 las dos están al mismo nivel. Ahí quedaba una loma de 20 m que el modelo sacaba de la
+  ladera, así que pusimos dos anclas a 6 m (el nivel de los tramos planos vecinos). La pista sube 49 m en total en
+  lugar de 111 m, y su altura va de 3 a 15 m.
 - **OSM de Lima casi no etiqueta anchos:** el 100 % del ancho de esta pista es estimado.
 
 ### Criterios de salida de S2
@@ -216,10 +227,14 @@ varía el terreno a lo ancho. Ábrelo en una planilla y grafícalo para ver dón
 - [x] Un tramo real conducible de punta a punta sin saltos ni huecos (prueba automática).
 - [x] Puentes y túneles con altura interpolada; estado y diagnósticos en la pista.
 - [ ] Manejarlo a mano con el perfil calibrado y confirmar que se siente bien.
-- [ ] Revisar las lomas del perfil y, si la vía es plana donde el modelo dice que no, fijar anclas.
+- [x] Revisar las lomas del perfil y, si la vía es plana donde el modelo dice que no, fijar anclas (km 2).
 
 Cuando cambies el compilador, regenera la pista con el comando de arriba: la prueba
-`committed_asset_is_up_to_date` falla si `assets/tracks/costa-verde-sprint.json` quedó desactualizada.
+`committed_asset_is_up_to_date` la reconstruye con los puntos, opciones y anclas que trae en `source` y falla si
+`assets/tracks/costa-verde-sprint.json` quedó desactualizada.
+
+Para depurar un tramo: `--example near` lista las calles cerca de un punto y marca las del recorrido, y
+`--example edgeprof` muestra la dirección y la altura del modelo a lo largo de unas calles.
 
 ## Decisiones tomadas en S0
 

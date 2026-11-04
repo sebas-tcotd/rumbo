@@ -1,6 +1,6 @@
 //! Pruebas de S2: modelo de elevación, perfil filtrado, eje y generación de la pista.
 use track_compiler::dem::Dem;
-use track_compiler::elevation::{filter, ElevationOptions};
+use track_compiler::elevation::{filter, Anchor, ElevationOptions};
 use track_compiler::graph::{BuildOptions, RoadGraph};
 use track_compiler::osm::Extract;
 use track_compiler::routing::{route, RouteOptions};
@@ -60,12 +60,35 @@ fn filter_rejects_short_spikes_and_limits_grade() {
     assert!((g[0] - 5.0).abs() < 0.5 && (g[799] - 35.0).abs() < 0.5, "conserva los niveles de los extremos");
 }
 
-fn costa_verde() -> (RoadGraph, track_compiler::routing::ResolvedRoute, Dem) {
+/// Receta de la pista de `assets/`: se lee de su propio bloque `source`, así la prueba
+/// reconstruye exactamente lo que se generó (puntos, opciones de ruta y anclas).
+fn recipe() -> (Vec<GeoPoint>, RouteOptions, TrackOptions) {
+    let a: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(ASSET).unwrap()).unwrap();
+    let src = &a["source"];
+    let pts: Vec<GeoPoint> = serde_json::from_value(src["route"]["waypoints"].clone()).unwrap();
+    let path = &src["route"]["resolvedPath"];
+    let opts = RouteOptions {
+        respect_oneway: path["respectOneway"].as_bool().unwrap(),
+        closed: src["route"]["closed"].as_bool().unwrap(),
+        max_turn_deg: path["maxTurnDeg"].as_f64().unwrap(),
+        turn_cost_m: path["turnCostM"].as_f64().unwrap(),
+    };
+    let mut t = TrackOptions::new(a["id"].as_str().unwrap(), a["name"].as_str().unwrap());
+    for x in src["elevationAnchors"].as_array().unwrap() {
+        t.elevation.anchors.push(Anchor {
+            at: GeoPoint::new(x["lat"].as_f64().unwrap(), x["lon"].as_f64().unwrap()),
+            height_m: x["heightM"].as_f64().unwrap(),
+        });
+    }
+    (pts, opts, t)
+}
+
+fn costa_verde() -> (RoadGraph, track_compiler::routing::ResolvedRoute, Dem, TrackOptions) {
     let ex = Extract::from_overpass_json(&std::fs::read_to_string(OSM).unwrap()).unwrap();
     let g = RoadGraph::build(&ex, &BuildOptions { region: "lima-costa-verde".into(), origin: None }).unwrap();
-    let pts = [GeoPoint::new(-12.1003572, -77.0694077), GeoPoint::new(-12.1599165, -77.0252561)];
-    let r = route(&g, &pts, RouteOptions::default()).unwrap();
-    (g, r, Dem::from_path(DEM).unwrap())
+    let (pts, opts, t) = recipe();
+    let r = route(&g, &pts, opts).unwrap();
+    (g, r, Dem::from_path(DEM).unwrap(), t)
 }
 
 #[test]
@@ -73,8 +96,9 @@ fn generated_track_is_smooth_and_consistent() {
     if !have_data() {
         return;
     }
-    let (g, r, dem) = costa_verde();
-    let t = generate(&g, &r, &dem, &TrackOptions::new("costa-verde-sprint", "Costa Verde · Circuito de Playas")).unwrap();
+    let (g, r, dem, recipe) = costa_verde();
+    let t = generate(&g, &r, &dem, &recipe).unwrap();
+    assert!(t.diagnostics.iter().all(|d| d.code != "against-oneway"), "la pista va contra el sentido de alguna calle");
     let spacing: Vec<f64> = t.samples.windows(2).map(|w| w[1].s - w[0].s).collect();
     assert!(spacing.iter().all(|d| (d - 2.0).abs() < 0.6), "paso irregular");
     assert!((t.samples.last().unwrap().s - r.length_m).abs() / r.length_m < 0.02, "el suavizado acortó o alargó demasiado el recorrido");
@@ -82,13 +106,20 @@ fn generated_track_is_smooth_and_consistent() {
     assert!(rate < 6.0, "quiebre de {rate:.1}°/m en el eje");
     assert!(t.profile.max_grade <= 0.14 + 1e-9);
     assert!(t.samples.iter().all(|c| (7.0..=16.0).contains(&c.width)));
-    // Una ancla corrige la altura donde se pone y la pendiente sigue acotada.
+    // Una ancla corrige la altura donde se pone, la pendiente sigue acotada y el efecto es
+    // local: más allá de su alcance la pista no cambia.
     let mut opts = TrackOptions::new("x", "x");
-    let at = g.frame.en_to_geo(t.samples[1000].en);
-    opts.elevation.anchors.push(track_compiler::elevation::Anchor { at, height_m: 7.0 });
+    let base = generate(&g, &r, &dem, &opts).unwrap();
+    let at = g.frame.en_to_geo(t.samples[3000].en);
+    let want = base.profile.filtered[3000] - 8.0;
+    opts.elevation.anchors.push(Anchor { at, height_m: want });
     let a = generate(&g, &r, &dem, &opts).unwrap();
-    assert!((a.profile.filtered[1000] - 7.0).abs() < 0.5, "ancla no aplicada: {}", a.profile.filtered[1000]);
+    assert!((a.profile.filtered[3000] - want).abs() < 0.5, "ancla no aplicada: {} en vez de {want}", a.profile.filtered[3000]);
     assert!(a.profile.max_grade <= 0.14 + 1e-9);
+    let reach = (opts.elevation.anchor_reach_m / 2.0) as usize + 60; // + margen del suavizado y la pendiente
+    for i in (0..3000 - reach).chain(3000 + reach..a.samples.len()) {
+        assert!((a.profile.filtered[i] - base.profile.filtered[i]).abs() < 1e-9, "el ancla movió la muestra {i}");
+    }
 }
 
 /// La pista de `assets/` debe ser exactamente la que produce el compilador actual.
@@ -98,8 +129,8 @@ fn committed_asset_is_up_to_date() {
     if !have_data() || !std::path::Path::new(ASSET).exists() {
         return;
     }
-    let (g, r, dem) = costa_verde();
-    let t = generate(&g, &r, &dem, &TrackOptions::new("costa-verde-sprint", "Costa Verde · Circuito de Playas")).unwrap();
+    let (g, r, dem, recipe) = costa_verde();
+    let t = generate(&g, &r, &dem, &recipe).unwrap();
     let committed: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(ASSET).unwrap()).unwrap();
     assert_eq!(committed, t.json, "assets/tracks/costa-verde-sprint.json está desactualizada: regénerala");
 }

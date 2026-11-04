@@ -98,6 +98,20 @@ pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &Dem, opts: &TrackOptions
             degree[if fwd { e.to } else { e.from }] >= 3
         })
         .count();
+    // Contra el sentido: en una vía de calzadas separadas suele significar que el recorrido
+    // va por la calzada del otro lado, que puede ir a otra altura (Costa Verde, km 2).
+    let wrong_way: f64 =
+        steps.iter().filter(|(i, fwd)| !g.edges[*i].oneway.allows(*fwd)).map(|(i, _)| g.edges[*i].length_m).sum();
+    if wrong_way > 0.0 {
+        diags.push(Diagnostic::new(
+            Severity::Warning,
+            "against-oneway",
+            format!(
+                "{wrong_way:.0} m del recorrido van contra el sentido de calles de un sentido; si la vía tiene \
+                 calzadas separadas, probablemente vas por la del otro lado (usa --respect-oneway)"
+            ),
+        ));
+    }
     if junctions > 0 {
         diags.push(Diagnostic::new(
             Severity::Info,
@@ -177,6 +191,12 @@ pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &Dem, opts: &TrackOptions
             "origin": { "lat": round(origin.lat, 7), "lon": round(origin.lon, 7) },
             "axes": "x = este, y = altura (m), z = -norte; metros desde el origen",
             "route": r.descriptor_route(),
+            "elevationAnchors": opts
+                .elevation
+                .anchors
+                .iter()
+                .map(|a| json!({ "lat": a.at.lat, "lon": a.at.lon, "heightM": a.height_m }))
+                .collect::<Vec<_>>(),
             "attribution": "© colaboradores de OpenStreetMap (ODbL) · Copernicus DEM GLO-30 © DLR e.V. 2010-2014 y © Airbus Defence and Space GmbH 2014-2018, provisto bajo COPERNICUS por la Unión Europea y la ESA",
         },
     });
