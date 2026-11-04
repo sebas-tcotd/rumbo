@@ -93,9 +93,9 @@ cargo test -p sim-core --release
 Incluyen:
 
 - **Determinismo:** mismas entradas dan el mismo hash; una entrada alterada se detecta en el siguiente control (cada 600 ticks).
-- **Replay dorado:** `crates/sim-core/tests/golden/autopilot-test-loop.json` se reproduce bit a bit.
-  Regenéralo con `UPDATE_GOLDEN=1 cargo test -p sim-core --release golden` cuando cambie la física
-  (y sube `PHYSICS_VERSION` en `sim-core/src/lib.rs`).
+- **Replays dorados:** los 8 de `crates/sim-core/tests/golden/` (ver [S4](#s4--determinismo)) se reproducen
+  bit a bit. Regenéralos con `UPDATE_GOLDEN=1 cargo test -p sim-core --release --test golden` cuando cambie la
+  física (y sube `PHYSICS_VERSION` en `sim-core/src/lib.rs`).
 - **Casos adversos:** choques a fondo, volante al tope y resets repetidos; el estado nunca deja de ser finito.
 - **Prueba de manejo automática:** el piloto automático da varias vueltas; falla ante golpes verticales,
   ruedas en el aire o contacto con el muro.
@@ -109,7 +109,7 @@ cd apps/web
 npm run verify-golden
 ```
 
-Corre el mismo replay dorado con el binario WASM en Node. Si coincide, nativo y WASM son deterministas entre sí.
+Corre los replays dorados con el binario WASM en Node. Si coincide, nativo y WASM son deterministas entre sí.
 En el navegador, **Sesión → Verificar esta sesión** re-simula todo lo que manejaste y compara hashes.
 
 `cargo run -p sim-core --release --example drift_entry` compara frenar en curva contra derrapar con freno de mano.
@@ -349,6 +349,5 @@ deja ver para lo que falta:
 
 ## Pendiente para S0
 
-- Verificar nativo contra WASM en tu máquina (`npm run verify-golden`) y en Chrome, Firefox y Safari.
 - Medir 60 Hz con subpasos contra 120 Hz y 240 Hz, como pide el documento de arquitectura.
 - Calibrar el perfil con teclado y con mando hasta que la respuesta a la pregunta de S0 sea clara.
