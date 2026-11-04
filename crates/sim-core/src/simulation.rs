@@ -44,6 +44,9 @@ pub struct Simulation {
     timer: LapTimer,
     tick: u64,
     near_idx: usize,
+    /// Última muestra donde el auto estuvo sobre la pista; **R** vuelve ahí y no al punto
+    /// más cercano, que podría estar más adelante en el circuito (atajo).
+    last_good_idx: usize,
     s: f32,
     invalid: bool,
     seed: u64,
@@ -111,6 +114,7 @@ impl Simulation {
             timer: LapTimer::default(),
             tick: 0,
             near_idx: spawn_idx,
+            last_good_idx: spawn_idx,
             s,
             invalid: false,
             seed,
@@ -158,11 +162,18 @@ impl Simulation {
         self.near_idx = self.track.nearest_near(pos, self.near_idx, 12);
         // En una red (S3) el auto puede irse por una calle lateral y volver a la pista por
         // otro lado: si quedó lejos de la ventana, se busca en toda la pista.
+        let mut jumped = false;
         if self.track.network {
             let smp = &self.track.samples[self.near_idx];
             if (smp.pos - pos).length() > smp.width * 0.5 + 6.0 {
                 self.near_idx = self.track.nearest_global(pos);
+                jumped = true;
             }
+        }
+        // Sobre la pista: a no más de 3 m del borde de la calzada, siguiendo el avance normal.
+        let smp = &self.track.samples[self.near_idx];
+        if !jumped && (smp.pos - pos).length() <= smp.width * 0.5 + 3.0 {
+            self.last_good_idx = self.near_idx;
         }
         let new_s = self.track.project_s(pos, self.near_idx);
         self.tick += 1;
@@ -193,14 +204,15 @@ impl Simulation {
         let (p, r) = Self::pose_at(&self.track, idx);
         self.vehicle.place(&mut self.world, p, r);
         self.near_idx = idx;
+        self.last_good_idx = idx;
         self.s = self.track.project_s(p, idx);
         self.timer.restart();
     }
 
-    /// Recoloca el auto en el centro de la pista más cercana, mirando hacia adelante.
+    /// Recoloca el auto en el centro de la pista, mirando hacia adelante, en el último punto
+    /// donde estuvo sobre ella: salirse nunca acerca a la meta.
     pub fn reset_to_track(&mut self) {
-        let pos = self.world.bodies[self.vehicle.body].translation();
-        let idx = if is_finite3(pos) { self.track.nearest_global(pos) } else { self.near_idx };
+        let idx = self.last_good_idx;
         let (p, r) = Self::pose_at(&self.track, idx);
         self.vehicle.place(&mut self.world, p, r);
         self.near_idx = idx;

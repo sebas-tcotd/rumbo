@@ -82,6 +82,18 @@ impl Lab {
         .to_string()
     }
 
+    /// Barreras de carrera para el render (JSON): [{ line: [[x,y,z], ...], arrow: ±1 }].
+    pub fn barriers_json(&self) -> String {
+        let b: Vec<_> = self
+            .sim
+            .track()
+            .barriers
+            .iter()
+            .map(|b| serde_json::json!({ "line": b.line.iter().map(|p| [p.x, p.y, p.z]).collect::<Vec<_>>(), "arrow": b.arrow }))
+            .collect();
+        serde_json::Value::Array(b).to_string()
+    }
+
     pub fn checkpoints(&self) -> Vec<f32> {
         self.sim.track().checkpoints.clone()
     }

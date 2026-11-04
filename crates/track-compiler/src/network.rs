@@ -83,6 +83,9 @@ pub struct Network {
     pub triangles: Vec<([u32; 3], u8)>,
     /// Muros: polilíneas con la zona conducible a la izquierda.
     pub walls: Vec<Vec<[f64; 2]>>,
+    /// Barreras de carrera: cierran cada calle lateral en su boca (de fachada a fachada), con
+    /// la zona conducible a la izquierda. Se dibujan con flechas hacia donde sigue la carrera.
+    pub barriers: Vec<Barrier>,
     pub junctions: Vec<Junction>,
     pub diagnostics: Vec<Diagnostic>,
     /// Largo total de calle conducible (m), sin contar los cruces.
@@ -91,6 +94,13 @@ pub struct Network {
     /// eje de cada calle y, en los cruces donde dobla, un arco paralelo a la esquina.
     /// Cerrada, a paso de 1 m, empezando junto al primer punto del recorrido.
     pub reference: Vec<RefPoint>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Barrier {
+    pub line: Vec<[f64; 2]>,
+    /// +1: las flechas apuntan del primer punto al último; -1: al revés.
+    pub arrow: f64,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -606,6 +616,25 @@ pub fn build(g: &RoadGraph, r: &ResolvedRoute, opts: &NetworkOptions) -> Result<
     net.vertices = mb.vertices;
     net.triangles = mb.triangles;
     net.reference = reference(g, r, &corridors, &geoms, &index, opts)?;
+
+    // Barreras de carrera en la boca de cada calle lateral. Las flechas siguen el sentido en
+    // que el circuito sale de ese cruce.
+    for jg in geoms.values() {
+        for (k, a) in jg.arms.iter().enumerate() {
+            if corridors[a.corridor].on_route {
+                continue;
+            }
+            let m = jg.mouths[k];
+            let line = vec![m[3], m[0]];
+            let mid = mul(add(m[3], m[0]), 0.5);
+            let nr = net.reference.len();
+            let q = (0..nr).min_by(|&x, &y| len(sub(net.reference[x].en, mid)).total_cmp(&len(sub(net.reference[y].en, mid)))).unwrap();
+            let ahead = net.reference[(q + 12) % nr].en;
+            let heading = unit(sub(ahead, net.reference[q].en));
+            let arrow = if dot(heading, sub(line[1], line[0])) >= 0.0 { 1.0 } else { -1.0 };
+            net.barriers.push(Barrier { line, arrow });
+        }
+    }
 
     // 6. Diagnósticos.
     let count = |s: Status| net.junctions.iter().filter(|j| j.status == s).count();

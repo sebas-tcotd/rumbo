@@ -53,6 +53,23 @@ pub struct NetworkDef {
     pub surfaces: Vec<u8>,
     /// Muros: polilíneas a nivel de la calzada, con la zona conducible a la izquierda.
     pub walls: Vec<Vec<[f32; 3]>>,
+    /// Barreras de carrera que cierran las calles laterales (sólidas como un muro).
+    #[serde(default)]
+    pub barriers: Vec<BarrierDef>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BarrierDef {
+    pub line: Vec<[f32; 3]>,
+    /// +1: las flechas apuntan del primer punto al último; -1: al revés.
+    pub arrow: f32,
+}
+
+/// Barrera compilada: puntos a nivel de la calzada y sentido de las flechas (solo render).
+#[derive(Clone, Debug)]
+pub struct Barrier {
+    pub line: Vec<Vec3>,
+    pub arrow: f32,
 }
 
 fn default_spacing() -> f32 {
@@ -178,6 +195,8 @@ pub struct CompiledTrack {
     pub hash: u64,
     /// La superficie viene de una red compilada (S3) y no de la cinta.
     pub network: bool,
+    /// Barreras de carrera (su colisión ya está en `wall_boxes`).
+    pub barriers: Vec<Barrier>,
 }
 
 const KERB_W: f32 = 1.0;
@@ -501,6 +520,15 @@ impl TrackDef {
                     h.f32(v[0]).f32(v[1]).f32(v[2]);
                 }
             }
+            if !net.barriers.is_empty() {
+                h.str("barriers");
+                for b in &net.barriers {
+                    h.u32(b.line.len() as u32).f32(b.arrow);
+                    for v in &b.line {
+                        h.f32(v[0]).f32(v[1]).f32(v[2]);
+                    }
+                }
+            }
         }
 
         Ok(CompiledTrack {
@@ -520,6 +548,12 @@ impl TrackDef {
             ground_y,
             hash: h.finish(),
             network: self.network.is_some(),
+            barriers: self
+                .network
+                .iter()
+                .flat_map(|n| n.barriers.iter())
+                .map(|b| Barrier { line: b.line.iter().map(|p| Vec3::new(p[0], p[1], p[2])).collect(), arrow: b.arrow })
+                .collect(),
         })
     }
 }
@@ -586,6 +620,14 @@ fn build_network(
         for seg in w.windows(2) {
             let (a, b) = (Vec3::new(seg[0][0], seg[0][1], seg[0][2]), Vec3::new(seg[1][0], seg[1][1], seg[1][2]));
             wall_segment(a, b, ground_y, walls, wall_boxes);
+        }
+    }
+    // Barreras: misma colisión que un muro; el render las dibuja aparte, con flechas.
+    let mut hidden = MeshPart::default();
+    for b in &net.barriers {
+        for seg in b.line.windows(2) {
+            let (a, c) = (Vec3::new(seg[0][0], seg[0][1], seg[0][2]), Vec3::new(seg[1][0], seg[1][1], seg[1][2]));
+            wall_segment(a, c, ground_y, &mut hidden, wall_boxes);
         }
     }
     // Línea de salida o meta pintada sobre la calzada (solo render).

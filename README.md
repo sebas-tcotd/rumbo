@@ -211,8 +211,8 @@ varía el terreno a lo ancho. Ábrelo en una planilla y grafícalo para ver dón
 
 ### Lo que aprendimos
 
-- **First Drivable pasa:** el piloto automático recorre los 8,9 km en 3 min 37 s, hasta 181 km/h, con un golpe
-  vertical máximo de 0,06 m/s (desde S3 frena antes de las curvas cortas, por eso tarda más), sin ruedas en el aire ni contacto con muros (`sim-core/tests/first_drivable.rs`).
+- **First Drivable pasa:** el piloto automático recorre los 8,9 km en 3 min 27 s, hasta 182 km/h, con un golpe
+  vertical máximo de 0,06 m/s (desde S3 frena más en las curvas cortas y más tarde en todas), sin ruedas en el aire ni contacto con muros (`sim-core/tests/first_drivable.rs`).
 - **El modelo de elevación es el punto débil.** GLO-30 es un modelo de *superficie* (incluye edificios y árboles),
   difumina el acantilado en unos 100 m y se tomó entre 2011 y 2015. Junto al acantilado mezcla la vía con la
   ladera, y por eso la pista queda `DEGRADED`, con avisos en cada tramo con pared al costado. Para el producto hará
@@ -258,8 +258,10 @@ cargo run -p track-compiler --release -- track data/graphs/lima-san-borja.json \
   --id san-borja-las-artes --name "San Borja · Las Artes Norte" --out assets/tracks/san-borja-las-artes.json
 ```
 
-En el laboratorio: **Sesión → Pista activa** o `?pista=san-borja-las-artes`. Las calles laterales se pueden
-manejar; **R** devuelve el auto al circuito. Cortar camino por Milet anula la vuelta (se salta un checkpoint).
+En el laboratorio: **Sesión → Pista activa** o `?pista=san-borja-las-artes`. Las calles laterales se ven
+pero están cerradas con barreras de carrera, como en los NFS clásicos: franjas blancas y negras con flechas
+naranjas que apuntan hacia donde sigue la carrera. **R** devuelve el auto al último punto donde estuvo sobre
+el circuito (no al más cercano, que podría estar más adelante: eso sería un atajo).
 
 ### Cómo se arma la red (`--network`)
 
@@ -275,13 +277,16 @@ manejar; **R** devuelve el auto al circuito. Cortar camino por Milet anula la vu
   a distinto nivel, ángulos de menos de 30° o dos cruces tan cerca que sus áreas se superponen).
 - **Altura:** un campo 2D en lugar del perfil a lo largo del eje, para que dos calles den la misma altura en
   el mismo punto: percentil 20 del modelo en 24 m a la redonda (quita edificios) y suavizado de 16 m.
+- **Barreras de carrera:** una en la boca de cada calle lateral, de fachada a fachada. Son sólidas como un
+  muro; las flechas siguen el sentido en que el circuito sale de ese cruce. Para el modo Exploración bastará
+  con no cargarlas.
 - **Línea de referencia** (cronómetro y piloto automático): el eje de cada calle y, donde el circuito dobla,
   un arco paralelo a la esquina (radio de esquina + medio ancho). `sim-core` arma la superficie y los muros
   directamente desde la red (`network` en la pista); la cinta ya no se usa para eso.
 
 ### Lo que aprendimos
 
-- **Los 7 cruces salen `VALID` y el piloto automático da vueltas de 36,8 s** sin tocar muros, sin ruedas en el
+- **Los 7 cruces salen `VALID` y el piloto automático da vueltas de 28,2 s** sin tocar muros, sin ruedas en el
   aire y con un golpe vertical máximo de 0,02 m/s (`sim-core/tests/junctions.rs`). Las pruebas del compilador
   comprueban que la superficie no tiene huecos (todo borde suelto está cubierto por un muro), que la línea de
   referencia va siempre sobre la calzada y que la pista de `assets/` está al día (`track-compiler/tests/s3.rs`).
@@ -291,7 +296,9 @@ manejar; **R** devuelve el auto al circuito. Cortar camino por Milet anula la vu
   - *Doblar:* el eje suavizado corta las esquinas. Hizo falta una línea de referencia con arcos reales.
   - *El piloto automático:* medía la curvatura en ±12 m y entraba demasiado rápido a una esquina de 8 m de
     radio; y al mirar lejos cortaba por dentro hasta chocar con la esquina del edificio. Ahora usa también la
-    curvatura en ±4 m y acorta la mirada en curvas cerradas.
+    curvatura en ±4 m y acorta la mirada en curvas cerradas. Además frena como un piloto: calcula cuánto
+    necesita para llegar a la velocidad de cada curva y frena tarde y fuerte, en vez de ir soltando desde lejos
+    (las vueltas bajaron de 36,8 a 28,2 s).
 - **La altura 1D de S2 no sirve en una red:** cada calle tendría su propio perfil y no coincidirían en el
   cruce. El campo 2D resuelve San Borja, pero no sirve en un acantilado ni para dos niveles.
 

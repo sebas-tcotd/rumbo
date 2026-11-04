@@ -194,6 +194,7 @@ ctx.onmessage = async (ev: MessageEvent<ToWorker>) => {
           schema: JSON.parse(profile_schema()),
           meshes: { drivable: mesh(l, 'drivable'), walls: mesh(l, 'walls'), decals: mesh(l, 'decals') },
           centerline: l.centerline(),
+          barriers: JSON.parse(l.barriers_json()),
           groundY: l.ground_y(),
           trackLength: l.track_length(),
           checkpoints: Array.from(l.checkpoints()),

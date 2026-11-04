@@ -154,6 +154,10 @@ pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &Dem, opts: &TrackOptions
             "triangles": net.triangles.iter().map(|(t, _)| json!(t)).collect::<Vec<_>>(),
             "surfaces": net.triangles.iter().map(|(_, s)| *s).collect::<Vec<_>>(),
             "walls": net.walls.iter().map(|w| w.iter().map(|&p| xyz(p)).collect::<Vec<_>>()).collect::<Vec<_>>(),
+            "barriers": net.barriers.iter().map(|b| json!({
+                "line": b.line.iter().map(|&p| xyz(p)).collect::<Vec<_>>(),
+                "arrow": b.arrow,
+            })).collect::<Vec<_>>(),
         });
         junctions_json = json!(net
             .junctions

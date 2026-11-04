@@ -71,6 +71,8 @@ fn junctions_are_found_and_classified() {
     });
     assert_eq!(kinds.get("T"), Some(&5), "{kinds:?}");
     assert_eq!(kinds.get("cruce"), Some(&2), "{kinds:?}");
+    // Una barrera de carrera por calle lateral (incluida Milet, cerrada en sus dos extremos).
+    assert_eq!(net.barriers.len(), 9);
     assert!(net.junctions.iter().all(|j| j.status == Status::Valid), "{:?}", net.junctions.iter().map(|j| (&j.kind, j.status, &j.reason)).collect::<Vec<_>>());
     // Los dos cruces que eligió el usuario: Monet × Rousseau (T) y Milet × Rousseau (cruce).
     let at = |lat: f64, lon: f64| {
