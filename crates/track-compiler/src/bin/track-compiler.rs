@@ -4,13 +4,18 @@
 //!   track-compiler route  <grafo.json> --from lat,lon --to lat,lon [--via lat,lon]... [--closed]
 //!                         [--respect-oneway] [--max-turn <grados>] [--turn-cost <metros>]
 //!                         [--geojson <archivo>] [--descriptor <archivo>]
+//!   track-compiler track  <grafo.json> --dem <modelo.tif> --from lat,lon --to lat,lon [--via lat,lon]...
+//!                         --id <id> [--name <nombre>] --out <pista.json> [--profile <perfil.csv>] [--geojson <archivo>]
 //!   track-compiler stats  <grafo.json>
 
 use std::process::ExitCode;
 use track_compiler::export::{graph_geojson, route_geojson};
 use track_compiler::graph::{BuildOptions, RoadGraph};
 use track_compiler::osm::Extract;
-use track_compiler::routing::{route, RouteOptions};
+use track_compiler::dem::Dem;
+use track_compiler::elevation::Anchor;
+use track_compiler::routing::{route, ResolvedRoute, RouteOptions};
+use track_compiler::trackgen::{generate, profile_csv, TrackOptions};
 use track_compiler::{GeoPoint, Severity};
 
 const USAGE: &str = "uso:
@@ -18,6 +23,10 @@ const USAGE: &str = "uso:
   track-compiler route  <grafo.json> --from lat,lon --to lat,lon [--via lat,lon]... [--closed] [--respect-oneway]
                         [--max-turn <grados, 135>] [--turn-cost <metros por giro de 90°, 20>]
                         [--geojson <archivo>] [--descriptor <archivo>]
+  track-compiler track  <grafo.json> --dem <modelo.tif> --from lat,lon --to lat,lon [--via lat,lon]...
+                        --id <id> [--name <nombre>] --out <pista.json> [--profile <perfil.csv>] [--geojson <archivo>]
+                        [--anchor lat,lon,altura]...   altura conocida de la vía en un punto, en metros
+                        (y las mismas opciones de ruteo que route)
   track-compiler stats  <grafo.json>";
 
 struct Args {
@@ -106,6 +115,27 @@ fn stats(g: &RoadGraph) {
     print_diagnostics(g);
 }
 
+fn route_from_args(args: &Args, g: &RoadGraph) -> Result<(ResolvedRoute, RouteOptions), String> {
+    let from = GeoPoint::parse(args.get("from").ok_or("falta --from")?)?;
+    let to = GeoPoint::parse(args.get("to").ok_or("falta --to")?)?;
+    let mut pts = vec![from];
+    for v in args.all("via") {
+        pts.push(GeoPoint::parse(v)?);
+    }
+    pts.push(to);
+    let num = |k: &str, d: f64| -> Result<f64, String> {
+        args.get(k).map_or(Ok(d), |v| v.parse::<f64>().map_err(|_| format!("--{k} debe ser un número")))
+    };
+    let base = RouteOptions::default();
+    let opts = RouteOptions {
+        respect_oneway: args.has("respect-oneway"),
+        closed: args.has("closed"),
+        max_turn_deg: num("max-turn", base.max_turn_deg)?,
+        turn_cost_m: num("turn-cost", base.turn_cost_m)?,
+    };
+    Ok((route(g, &pts, opts)?, opts))
+}
+
 fn run(raw: Vec<String>) -> Result<(), String> {
     let args = Args::parse(&raw);
     let cmd = args.positional.first().map(String::as_str).ok_or(USAGE)?;
@@ -129,24 +159,7 @@ fn run(raw: Vec<String>) -> Result<(), String> {
         "route" => {
             let input = args.positional.get(1).ok_or(USAGE)?;
             let g = RoadGraph::from_json(&read(input)?)?;
-            let from = GeoPoint::parse(args.get("from").ok_or("falta --from")?)?;
-            let to = GeoPoint::parse(args.get("to").ok_or("falta --to")?)?;
-            let mut pts = vec![from];
-            for v in args.all("via") {
-                pts.push(GeoPoint::parse(v)?);
-            }
-            pts.push(to);
-            let num = |k: &str, d: f64| -> Result<f64, String> {
-                args.get(k).map_or(Ok(d), |v| v.parse::<f64>().map_err(|_| format!("--{k} debe ser un número")))
-            };
-            let base = RouteOptions::default();
-            let opts = RouteOptions {
-                respect_oneway: args.has("respect-oneway"),
-                closed: args.has("closed"),
-                max_turn_deg: num("max-turn", base.max_turn_deg)?,
-                turn_cost_m: num("turn-cost", base.turn_cost_m)?,
-            };
-            let r = route(&g, &pts, opts)?;
+            let (r, opts) = route_from_args(&args, &g)?;
             println!(
                 "ruta de {:.0} m en {} tramos ({}){}",
                 r.length_m,
@@ -179,6 +192,51 @@ fn run(raw: Vec<String>) -> Result<(), String> {
             if let Some(path) = args.get("descriptor") {
                 write(path, &descriptor, true)?;
                 println!("fragmento de descriptor en {path}");
+            }
+            Ok(())
+        }
+        "track" => {
+            let input = args.positional.get(1).ok_or(USAGE)?;
+            let g = RoadGraph::from_json(&read(input)?)?;
+            let dem = Dem::from_path(args.get("dem").ok_or("falta --dem")?)?;
+            let id = args.get("id").ok_or("falta --id")?;
+            let out = args.get("out").ok_or("falta --out")?;
+            let (r, _) = route_from_args(&args, &g)?;
+            let mut opts = TrackOptions::new(id, args.get("name").unwrap_or(id));
+            for a in args.all("anchor") {
+                let parts: Vec<&str> = a.split(',').collect();
+                if parts.len() != 3 {
+                    return Err(format!("--anchor espera lat,lon,altura y recibió \"{a}\""));
+                }
+                let at = GeoPoint::parse(&format!("{},{}", parts[0], parts[1]))?;
+                let height_m = parts[2].trim().parse::<f64>().map_err(|_| format!("altura inválida en --anchor {a}"))?;
+                opts.elevation.anchors.push(Anchor { at, height_m });
+            }
+            let t = generate(&g, &r, &dem, &opts)?;
+            write(out, &t.json, true)?;
+            let st = &t.json["stats"];
+            println!("pista {id} · {}", t.status.as_str());
+            println!(
+                "  {} m · sube {} m en total · pendiente máxima {} % · altura entre {} y {} m",
+                st["lengthM"], st["climbM"], st["maxGradePct"], st["minElevationM"], st["maxElevationM"]
+            );
+            for d in &t.diagnostics {
+                let sev = match d.severity {
+                    Severity::Info => "info",
+                    Severity::Warning => "aviso",
+                    Severity::Error => "error",
+                };
+                let at = d.at.map(|p| format!(" (en {:.5},{:.5})", p.lat, p.lon)).unwrap_or_default();
+                println!("  [{sev}] {}{at}", d.message);
+            }
+            println!("pista escrita en {out}");
+            if let Some(path) = args.get("profile") {
+                std::fs::write(path, profile_csv(&t)).map_err(|e| format!("no se pudo escribir {path}: {e}"))?;
+                println!("perfil de elevación en {path}");
+            }
+            if let Some(path) = args.get("geojson") {
+                write(path, &route_geojson(&r), false)?;
+                println!("GeoJSON de la ruta en {path}");
             }
             Ok(())
         }
