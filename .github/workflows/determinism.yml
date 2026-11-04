@@ -16,7 +16,7 @@ jobs:
     name: Pruebas nativas
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --release --workspace
@@ -25,7 +25,7 @@ jobs:
     name: Compilar WASM y verificar en Node
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -34,18 +34,18 @@ jobs:
         with:
           tool: wasm-pack
       - run: wasm-pack build crates/sim-wasm --target web --release --out-dir pkg
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - run: npm ci
         working-directory: ci/determinism
       - run: node run.mjs --browser node --out results
         working-directory: ci/determinism
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: sim-wasm-pkg
           path: crates/sim-wasm/pkg
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: results-node
@@ -64,12 +64,12 @@ jobs:
           - { browser: webkit, os: macos-latest }
           - { browser: safari, os: macos-latest }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
         with:
           name: sim-wasm-pkg
           path: crates/sim-wasm/pkg
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - run: npm ci
@@ -81,7 +81,7 @@ jobs:
         run: sudo safaridriver --enable
       - run: node run.mjs --browser ${{ matrix.browser }} --out results
         working-directory: ci/determinism
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: results-${{ matrix.browser }}
@@ -93,12 +93,12 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
         with:
           pattern: results-*
           path: all-results
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - run: node ci/determinism/summary.mjs all-results | tee -a "$GITHUB_STEP_SUMMARY"

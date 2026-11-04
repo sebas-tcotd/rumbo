@@ -26,7 +26,7 @@ async function runNode() {
   await init({ module_or_path: readFileSync(join(pkg, 'sim_wasm_bg.wasm')) });
   const results = cases.map((c) => {
     const t0 = performance.now();
-    const rep = JSON.parse(verify_replay(readFileSync(join(root, c.track)), readFileSync(join(root, c.replay), 'utf8')));
+    const rep = JSON.parse(verify_replay(readFileSync(join(root, c.track), 'utf8'), readFileSync(join(root, c.replay), 'utf8')));
     return {
       case: c.name, ok: rep.ok, message: rep.message, ticks: rep.ticks, expected: c.expected,
       actual: rep.actualFinal, firstMismatch: rep.firstMismatchTick ?? null, ms: Math.round(performance.now() - t0),
