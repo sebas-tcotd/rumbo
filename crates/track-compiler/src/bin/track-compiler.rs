@@ -2,7 +2,8 @@
 //!
 //!   track-compiler ingest <overpass.json> --region <id> --out <grafo.json> [--geojson <archivo>] [--origin lat,lon]
 //!   track-compiler route  <grafo.json> --from lat,lon --to lat,lon [--via lat,lon]... [--closed]
-//!                         [--respect-oneway] [--geojson <archivo>] [--descriptor <archivo>]
+//!                         [--respect-oneway] [--max-turn <grados>] [--turn-cost <metros>]
+//!                         [--geojson <archivo>] [--descriptor <archivo>]
 //!   track-compiler stats  <grafo.json>
 
 use std::process::ExitCode;
@@ -15,6 +16,7 @@ use track_compiler::{GeoPoint, Severity};
 const USAGE: &str = "uso:
   track-compiler ingest <overpass.json> --region <id> --out <grafo.json> [--geojson <archivo>] [--origin lat,lon]
   track-compiler route  <grafo.json> --from lat,lon --to lat,lon [--via lat,lon]... [--closed] [--respect-oneway]
+                        [--max-turn <grados, 135>] [--turn-cost <metros por giro de 90°, 20>]
                         [--geojson <archivo>] [--descriptor <archivo>]
   track-compiler stats  <grafo.json>";
 
@@ -134,7 +136,16 @@ fn run(raw: Vec<String>) -> Result<(), String> {
                 pts.push(GeoPoint::parse(v)?);
             }
             pts.push(to);
-            let opts = RouteOptions { respect_oneway: args.has("respect-oneway"), closed: args.has("closed") };
+            let num = |k: &str, d: f64| -> Result<f64, String> {
+                args.get(k).map_or(Ok(d), |v| v.parse::<f64>().map_err(|_| format!("--{k} debe ser un número")))
+            };
+            let base = RouteOptions::default();
+            let opts = RouteOptions {
+                respect_oneway: args.has("respect-oneway"),
+                closed: args.has("closed"),
+                max_turn_deg: num("max-turn", base.max_turn_deg)?,
+                turn_cost_m: num("turn-cost", base.turn_cost_m)?,
+            };
             let r = route(&g, &pts, opts)?;
             println!(
                 "ruta de {:.0} m en {} tramos ({}){}",
@@ -142,6 +153,14 @@ fn run(raw: Vec<String>) -> Result<(), String> {
                 r.legs.iter().map(|l| l.steps.len()).sum::<usize>(),
                 if opts.respect_oneway { "respetando sentidos" } else { "sin respetar sentidos" },
                 if opts.closed { ", circuito cerrado" } else { "" }
+            );
+            let turns = r.junction_turns(&g);
+            let sharp = turns.iter().filter(|t| **t > 90.0).count();
+            println!(
+                "  giro más cerrado en un cruce: {:.0}° (máximo permitido {:.0}°) · {} giros de más de 90°",
+                turns.iter().copied().fold(0.0, f64::max),
+                opts.max_turn_deg,
+                sharp
             );
             for (i, l) in r.legs.iter().enumerate() {
                 println!(
