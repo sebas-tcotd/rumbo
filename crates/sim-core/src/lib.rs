@@ -26,10 +26,10 @@ pub use track::{CompiledTrack, TrackDef};
 
 /// Versión de la simulación. Cambia cuando cambia cualquier cosa que altere el resultado
 /// de un replay (física, asistencias, orden de pasos). Los replays guardan esta versión.
-pub const PHYSICS_VERSION: &str = "0.2.0";
+pub const PHYSICS_VERSION: &str = "0.3.0";
 
 /// Versión del mini compilador de pistas de S0.
-pub const COMPILER_VERSION: &str = "0.1.0";
+pub const COMPILER_VERSION: &str = "0.2.0";
 
 /// Frecuencia de simulación por defecto (decisión a validar en S0).
 pub const TICK_HZ: u32 = 120;

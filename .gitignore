@@ -4,3 +4,5 @@ dist/
 crates/sim-wasm/pkg/
 *.log
 .DS_Store
+data/graphs/*.json
+data/graphs/*.geojson

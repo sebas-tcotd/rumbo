@@ -28,6 +28,8 @@ pub const STATE_FIELDS: &[&str] = &[
 pub const STATE_LEN: usize = STATE_FIELDS.len();
 
 const SPAWN_BEHIND: isize = 8;
+/// Sprint: distancia del inicio de la pista a la grilla (la salida está más adelante).
+const SPAWN_OPEN_M: f32 = 8.0;
 /// Marca de los colisionadores de muro (los rayos de rueda los ignoran).
 pub const USER_WALL: u128 = 1;
 const SPAWN_HEIGHT: f32 = 0.62;
@@ -92,7 +94,7 @@ impl Simulation {
             .build();
         world.insert_collider(floor, Some(ground_body));
 
-        let spawn_idx = (track.samples.len() as isize - SPAWN_BEHIND).rem_euclid(track.samples.len() as isize) as usize;
+        let spawn_idx = Self::spawn_index(&track);
         let (pos, rot) = Self::pose_at(&track, spawn_idx);
         let vehicle = Vehicle::spawn(&mut world, &profile, pos, rot);
         // Construye la estructura de consultas antes del primer raycast.
@@ -117,6 +119,15 @@ impl Simulation {
         })
     }
 
+    /// Circuito: unos metros detrás de la meta. Sprint: al principio, antes de la salida.
+    fn spawn_index(track: &CompiledTrack) -> usize {
+        if track.closed {
+            (track.samples.len() as isize - SPAWN_BEHIND).rem_euclid(track.samples.len() as isize) as usize
+        } else {
+            ((SPAWN_OPEN_M / track.spacing).round() as usize).min(track.samples.len() - 1)
+        }
+    }
+
     fn pose_at(track: &CompiledTrack, idx: usize) -> (Vec3, Quat) {
         let smp = track.samples[idx];
         let up = smp.up;
@@ -129,7 +140,9 @@ impl Simulation {
     /// Avanza exactamente un tick con la entrada dada.
     pub fn step(&mut self, input: InputFrame) {
         self.recorder.push(input);
-        if input.reset() {
+        if input.restart() {
+            self.restart();
+        } else if input.reset() {
             self.reset_to_track();
         }
         let dt = self.world.integration_parameters.dt;
@@ -164,6 +177,16 @@ impl Simulation {
             && q.y.is_finite()
             && q.z.is_finite()
             && q.w.is_finite()
+    }
+
+    /// Vuelve a la grilla de salida en reposo y descarta el intento en curso.
+    pub fn restart(&mut self) {
+        let idx = Self::spawn_index(&self.track);
+        let (p, r) = Self::pose_at(&self.track, idx);
+        self.vehicle.place(&mut self.world, p, r);
+        self.near_idx = idx;
+        self.s = self.track.project_s(p, idx);
+        self.timer.restart();
     }
 
     /// Recoloca el auto en el centro de la pista más cercana, mirando hacia adelante.

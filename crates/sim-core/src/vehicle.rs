@@ -58,6 +58,9 @@ pub struct Vehicle {
     handbrake_time: f32,
     prev_v_heading: f32,
     pub compression: [f32; 4],
+    /// Falso justo después de recolocar el auto: el primer tick no usa velocidad de
+    /// compresión (la compresión "salta" de 0 a la de reposo y el amortiguador lo lanzaría).
+    compression_valid: bool,
     pub contact: [bool; 4],
     pub touching_wall: bool,
     pub telemetry: Telemetry,
@@ -116,6 +119,7 @@ impl Vehicle {
             handbrake_time: 10.0,
             prev_v_heading: 0.0,
             compression: [0.0; 4],
+            compression_valid: false,
             contact: [false; 4],
             touching_wall: false,
             telemetry: Telemetry::default(),
@@ -136,6 +140,7 @@ impl Vehicle {
         self.drift_time = 0.0;
         self.prev_beta = 0.0;
         self.compression = [0.0; 4];
+        self.compression_valid = false;
     }
 
     /// Calcula y aplica todas las fuerzas del tick. Rapier integra en `world.step()`.
@@ -265,7 +270,7 @@ impl Vehicle {
                 Some((handle, inter)) => {
                     let t = inter.time_of_impact;
                     let comp = (max_len - t).clamp(0.0, p.suspension_rest_m);
-                    let comp_vel = (comp - self.compression[i]) / dt;
+                    let comp_vel = if self.compression_valid { (comp - self.compression[i]) / dt } else { 0.0 };
                     let mut f = p.spring_n_per_m * comp + p.damper_n_s_per_m * comp_vel;
                     // Tope de suspensión: evita que el chasis toque el piso en compresiones fuertes.
                     let bump = comp - p.suspension_rest_m * 0.9;
@@ -449,6 +454,7 @@ impl Vehicle {
         }
         rb.add_torque(torque, true);
 
+        self.compression_valid = true;
         self.prev_beta = beta;
         self.prev_brake = brake;
         self.prev_handbrake = handbrake;
@@ -471,5 +477,6 @@ impl Vehicle {
         for c in self.compression {
             h.f32(c);
         }
+        h.u32(self.compression_valid as u32);
     }
 }
