@@ -34,15 +34,15 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: wasm-pack@0.15.1
-      - run: wasm-pack build crates/sim-wasm --target web --release --out-dir pkg
+      # No `version:`: pnpm/action-setup reads it from `packageManager`. Corepack is not used.
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
-          # packageManager says pnpm, which arrives in story 0.2; npm installs per folder until then.
-          package-manager-cache: false
+          cache: pnpm
       - run: rustc --version && cargo --version && node --version && wasm-pack --version
-      - run: npm ci
-        working-directory: ci/determinism
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run build --filter @rumbo/sim-wasm
       - run: node run.mjs --browser node --out results
         working-directory: ci/determinism
       - uses: actions/upload-artifact@v5
@@ -73,15 +73,16 @@ jobs:
         with:
           name: sim-wasm-pkg
           path: crates/sim-wasm/pkg
+      # No `version:`: pnpm/action-setup reads it from `packageManager`. Corepack is not used.
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
-          # packageManager says pnpm, which arrives in story 0.2; npm installs per folder until then.
-          package-manager-cache: false
-      - run: npm ci
-        working-directory: ci/determinism
+          cache: pnpm
+      # pkg/ comes from the artifact above and is not rebuilt; the link to @rumbo/sim-wasm builds nothing.
+      - run: pnpm install --frozen-lockfile --filter rumbo-determinism
       - if: matrix.browser != 'safari'
-        run: npx playwright install --with-deps ${{ matrix.browser }}
+        run: pnpm exec playwright install --with-deps ${{ matrix.browser }}
         working-directory: ci/determinism
       - if: matrix.browser == 'safari'
         run: sudo safaridriver --enable
@@ -104,9 +105,10 @@ jobs:
         with:
           pattern: results-*
           path: all-results
+      # No install here: pnpm is set up only because setup-node caches by `packageManager`.
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
-          # packageManager says pnpm, which arrives in story 0.2; npm installs per folder until then.
-          package-manager-cache: false
+          cache: pnpm
       - run: node ci/determinism/summary.mjs all-results | tee -a "$GITHUB_STEP_SUMMARY"

@@ -21,12 +21,13 @@ jobs:
       - uses: actions/checkout@v5
       # Installs exactly the toolchain in rust-toolchain.toml (cargo metadata needs it).
       - run: rustup toolchain install
+      # No `version:`: pnpm/action-setup reads it from `packageManager`. Corepack is not used.
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
-          # packageManager says pnpm, which arrives in story 0.2; npm installs per folder until then.
-          package-manager-cache: false
+          cache: pnpm
       - run: rustc --version && cargo --version && node --version
+      - run: pnpm install --frozen-lockfile
       - run: node ci/exact-versions/check.mjs
-      # A bare directory is not a valid `node --test` argument in Node 24; the glob is.
-      - run: node --test "ci/exact-versions/*.test.mjs"
+      - run: pnpm --filter exact-versions test
