@@ -16,7 +16,7 @@ jobs:
     name: Pruebas nativas
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # Installs exactly the toolchain in rust-toolchain.toml.
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
@@ -27,7 +27,7 @@ jobs:
     name: Compilar WASM y verificar en Node
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # Installs exactly the toolchain in rust-toolchain.toml (wasm32 target included).
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
@@ -68,7 +68,7 @@ jobs:
           - { browser: webkit, os: macos-latest }
           - { browser: safari, os: macos-latest }
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v5
         with:
           name: sim-wasm-pkg
@@ -100,7 +100,7 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v5
         with:
           pattern: results-*
