@@ -5,6 +5,10 @@ on:
   push:
   pull_request:
 
+# The checks only read the repo; keep the GITHUB_TOKEN read-only.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
