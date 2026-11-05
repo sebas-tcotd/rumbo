@@ -8,12 +8,14 @@ import { fileURLToPath } from 'node:url';
 import {
   checkCargoMetadata,
   checkPackageJson,
+  checkPnpmCatalog,
   checkRepo,
   checkWorkspaceDependencies,
   findPackageJsons,
   isAllowedCargoDep,
   isExactCargoReq,
   isExactNpmSpec,
+  parsePnpmCatalog,
   parseWorkspaceDependencies,
 } from './check.mjs';
 
@@ -193,8 +195,72 @@ describe('fixtures (intentional violations)', () => {
   it('excludes the fixtures dir when asked to', () => {
     const all = findPackageJsons(here);
     const filtered = findPackageJsons(here, [path.join(here, 'fixtures')]);
-    assert.equal(all.length, 4);
-    assert.equal(filtered.length, 0);
+    // The folder's own package.json (the exact-versions workspace package) is not a fixture.
+    assert.equal(all.length, 5);
+    assert.deepEqual(filtered, [path.join(here, 'package.json')]);
+  });
+});
+
+describe('pnpm catalog', () => {
+  const clean = `packages:
+  - apps/*
+
+minimumReleaseAge: 10080 # minutes
+catalog:
+  '@types/react': 19.3.0 # scoped key
+  "react": "19.3.1"
+  three: 0.187.0
+
+other:
+  foo: ^1.0.0
+`;
+  it('passes on a clean catalog and ignores other top-level keys', () => {
+    assert.deepEqual(checkPnpmCatalog(clean, 'pnpm-workspace.yaml'), []);
+    assert.deepEqual(
+      parsePnpmCatalog(clean).map((e) => [e.name, e.spec]),
+      [['@types/react', '19.3.0'], ['react', '19.3.1'], ['three', '0.187.0']],
+    );
+  });
+  for (const bad of ['^1.0.0', '~1.3.0', 'latest', '1.x', '>=1.0.0']) {
+    it(`fails on ${bad} in the default catalog`, () => {
+      const v = checkPnpmCatalog(`catalog:\n  foo: ${bad}\n`, 'w.yaml');
+      assert.equal(v.length, 1);
+      assert.equal(v[0].version, bad);
+      assert.equal(v[0].dependency, 'foo (catalog)');
+    });
+  }
+  it('checks named catalogs', () => {
+    const yaml = 'catalogs:\n  legacy:\n    foo: 1.0.0\n    bar: ^2.0.0\n  next:\n    baz: 3.0.0\n';
+    const v = checkPnpmCatalog(yaml, 'w.yaml');
+    assert.equal(v.length, 1);
+    assert.equal(v[0].dependency, 'bar (catalog:legacy)');
+  });
+  it('fails closed on lines it cannot read', () => {
+    const bad = [
+      'catalog:\n  foo:\n    version: 1.0.0\n',
+      'catalog:\n  - foo\n',
+      'catalog: { foo: 1.0.0 }\n',
+      'catalogs:\n  foo: 1.0.0\n',
+    ];
+    for (const yaml of bad) {
+      const v = checkPnpmCatalog(yaml, 'w.yaml');
+      assert.ok(v.length >= 1 && v.every((x) => /unparsed/.test(x.version)), yaml);
+    }
+  });
+  it('checks a quoted top-level catalog key', () => {
+    const v = checkPnpmCatalog('"catalog":\n  foo: ^1.0.0\n\'catalogs\':\n  a:\n    bar: ~2.0.0\n', 'w.yaml');
+    assert.deepEqual(v.map((x) => x.dependency), ['foo (catalog)', 'bar (catalog:a)']);
+  });
+  it('accepts an empty catalog', () => {
+    assert.deepEqual(checkPnpmCatalog('catalog: {}\npackages: []\n', 'w.yaml'), []);
+  });
+  it('checkRepo reads pnpm-workspace.yaml when present', () => {
+    const { violations } = checkRepo(fixture('catalog-caret'), { cargoMetadata: noCargo });
+    assert.equal(violations.length, 1);
+    assert.equal(violations[0].file, 'pnpm-workspace.yaml');
+  });
+  it('still accepts "catalog:" in a package.json', () => {
+    assert.deepEqual(checkPackageJson({ dependencies: { react: 'catalog:', vite: 'catalog:legacy' } }, 'p.json'), []);
   });
 });
 

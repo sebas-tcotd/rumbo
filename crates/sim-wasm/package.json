@@ -1,0 +1,13 @@
+{
+  "name": "@rumbo/sim-wasm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "wasm-pack build . --target web --release --out-dir pkg"
+  },
+  "exports": {
+    ".": { "types": "./pkg/sim_wasm.d.ts", "default": "./pkg/sim_wasm.js" },
+    "./sim_wasm_bg.wasm": "./pkg/sim_wasm_bg.wasm"
+  }
+}

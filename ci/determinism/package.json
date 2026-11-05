@@ -4,14 +4,18 @@
   "type": "module",
   "description": "S4: re-simula los replays dorados con el WASM en Node, Chromium, Firefox, WebKit y Safari.",
   "scripts": {
+    "test": "node run.mjs --browser node",
     "node": "node run.mjs --browser node",
     "chromium": "node run.mjs --browser chromium",
     "firefox": "node run.mjs --browser firefox",
     "webkit": "node run.mjs --browser webkit",
     "safari": "node run.mjs --browser safari"
   },
+  "dependencies": {
+    "@rumbo/sim-wasm": "workspace:*"
+  },
   "devDependencies": {
-    "playwright": "1.64.1",
-    "selenium-webdriver": "4.52.0"
+    "playwright": "catalog:",
+    "selenium-webdriver": "catalog:"
   }
 }

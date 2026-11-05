@@ -2,7 +2,7 @@
 // mismos hashes de control en cada entorno.
 //
 // Uso: node run.mjs --browser node|chromium|firefox|webkit|safari [--out dir]
-// Requiere el WASM compilado en crates/sim-wasm/pkg (npm run wasm en apps/web).
+// Requiere el WASM compilado en crates/sim-wasm/pkg (pnpm turbo run build --filter @rumbo/sim-wasm).
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';

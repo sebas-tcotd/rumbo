@@ -3,6 +3,8 @@
 //
 // npm:   every package.json in the repo (dependencies, devDependencies, optionalDependencies).
 //        Exact = full semver `x.y.z` (optional prerelease/build), `workspace:*` or `catalog:`.
+//        The `catalog:` / `catalogs:` maps of pnpm-workspace.yaml must be exact too (a line the
+//        minimal parser cannot read is a violation: the check fails closed).
 //        peerDependencies and engines are ranges by nature and are not checked.
 //        Skipped while walking: hidden directories (`.git`, `.github`, `.claude`, ...) and any
 //        directory named node_modules, target, pkg or dist, at any depth.
@@ -134,6 +136,69 @@ export function checkWorkspaceDependencies(toml, file) {
     }));
 }
 
+
+/**
+ * Minimal line-based reader of the `catalog:` and `catalogs:<name>:` maps of a
+ * pnpm-workspace.yaml. Handles `key: value` (keys and values bare or quoted, trailing
+ * comments allowed) and, under `catalogs:`, one level of named maps. Returns
+ * `[{ name, spec, catalog, unparsed? }]`. A line inside those maps that is not
+ * `key: value` (flow maps, multi-line values, a missing value) comes back as
+ * `{ unparsed: true }` so the caller fails closed instead of skipping it.
+ */
+export function parsePnpmCatalog(yaml) {
+  const entries = [];
+  let section = null; // 'catalog' | 'catalogs' | null
+  let named = null; // current name under `catalogs:`
+  for (const raw of yaml.split(/\r?\n/)) {
+    const noComment = raw.replace(/(^|\s)#.*$/, '');
+    if (!noComment.trim()) continue;
+    const indent = noComment.length - noComment.trimStart().length;
+    const line = noComment.trim();
+    if (indent === 0) {
+      const top = line.match(/^(["']?)(catalogs?)\1\s*:\s*(.*)$/);
+      section = top ? top[2] : null;
+      named = null;
+      if (top && top[3] && top[3] !== '{}') {
+        entries.push({ name: line, catalog: top[2], unparsed: true });
+      }
+      continue;
+    }
+    if (!section) continue;
+    const kv = line.match(/^("[^"]+"|'[^']+'|[^\s:'"][^\s:]*)\s*:\s*(.*)$/);
+    if (!kv) {
+      entries.push({ name: line, catalog: named ?? section, unparsed: true });
+      continue;
+    }
+    const key = unquote(kv[1]);
+    const value = kv[2].trim();
+    if (section === 'catalogs' && value === '') {
+      named = key;
+      continue;
+    }
+    if (value === '') {
+      entries.push({ name: line, catalog: named ?? section, unparsed: true });
+      continue;
+    }
+    if (section === 'catalogs' && named === null) {
+      entries.push({ name: line, catalog: section, unparsed: true });
+      continue;
+    }
+    entries.push({ name: key, spec: unquote(value), catalog: section === 'catalogs' ? named : 'default' });
+  }
+  return entries;
+}
+
+/** Returns the violations in the `catalog`/`catalogs` maps of a pnpm-workspace.yaml. */
+export function checkPnpmCatalog(yaml, file) {
+  return parsePnpmCatalog(yaml)
+    .filter((e) => e.unparsed || !isExactNpmSpec(e.spec) || e.spec === 'workspace:*' || e.spec.startsWith('catalog:'))
+    .map((e) => ({
+      file,
+      dependency: `${e.name} (catalog${e.catalog === 'default' ? '' : `:${e.catalog}`})`,
+      version: e.unparsed ? 'unparsed line: write it as `name: x.y.z`' : e.spec,
+    }));
+}
+
 /** Finds every package.json under `root`, skipping build/vendor dirs and `excludedPaths`. */
 export function findPackageJsons(root, excludedPaths = []) {
   const excluded = excludedPaths.map((p) => path.resolve(p));
@@ -161,6 +226,13 @@ export function checkRepo(root, { excludedPaths = [], cargoMetadata } = {}) {
   for (const file of packageJsons) {
     const pkg = JSON.parse(readFileSync(file, 'utf8'));
     violations.push(...checkPackageJson(pkg, path.relative(root, file)));
+  }
+
+  const workspaceYaml = path.join(root, 'pnpm-workspace.yaml');
+  try {
+    violations.push(...checkPnpmCatalog(readFileSync(workspaceYaml, 'utf8'), 'pnpm-workspace.yaml'));
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
   }
 
   let cargoMembers = 0;

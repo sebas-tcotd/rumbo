@@ -12,7 +12,7 @@ import init, {
   tick_hz,
   vehicle_geometry,
   verify_replay,
-} from '@sim-wasm';
+} from '@rumbo/sim-wasm';
 import {
   FLAG_HANDBRAKE,
   FLAG_RESET,
