@@ -1,0 +1,55 @@
+packages:
+  - apps/*
+  - crates/sim-wasm
+  - ci/*
+
+# Supply chain (AR23). pnpm 11 reads these from here, not from .npmrc.
+# 7 days, in minutes. Setting it explicitly also makes minimumReleaseAgeStrict true.
+minimumReleaseAge: 10080
+# Default in pnpm 11, kept explicit: install fails on unreviewed install scripts.
+strictDepBuilds: true
+allowBuilds: {}
+# Empty on purpose: no package in the tree has install scripts (checked 2026-11-05).
+# Add one `name: true|false` line per package that does, each with its reason.
+
+
+# Exact pins carried over from story 0.1 that were published less than 7 days before this
+# migration (2026-11-05). One bump per PR, so they are not lowered here; each entry is an
+# exact version, never a bare name, and can be dropped once the pin is older than the window.
+minimumReleaseAgeExclude:
+  - '@biomejs/biome@2.6.5'
+  - '@biomejs/cli-android-arm64@2.6.5'
+  - '@biomejs/cli-android-x64@2.6.5'
+  - '@biomejs/cli-darwin-arm64@2.6.5'
+  - '@biomejs/cli-darwin-x64@2.6.5'
+  - '@biomejs/cli-linux-arm64-musl@2.6.5'
+  - '@biomejs/cli-linux-arm64@2.6.5'
+  - '@biomejs/cli-linux-x64-musl@2.6.5'
+  - '@biomejs/cli-linux-x64@2.6.5'
+  - '@biomejs/cli-win32-arm64@2.6.5'
+  - '@biomejs/cli-win32-x64@2.6.5'
+  - '@types/three@0.187.0'
+  - '@vitejs/plugin-react@6.2.1'
+  - 'three@0.187.0'
+
+# Exact versions only (checked by ci/exact-versions).
+catalog:
+  '@biomejs/biome': 2.6.5
+  '@gltf-transform/cli': 4.5.0
+  '@tailwindcss/vite': 4.3.4
+  '@types/react': 19.3.0
+  '@types/react-dom': 19.3.0
+  '@types/three': 0.187.0
+  '@vitejs/plugin-react': 6.2.1
+  i18next: 26.7.2
+  playwright: 1.64.1
+  react: 19.3.1
+  react-dom: 19.3.1
+  react-i18next: 17.0.21
+  selenium-webdriver: 4.52.0
+  tailwindcss: 4.3.4
+  three: 0.187.0
+  turbo: 2.11.10
+  typescript: 7.0.2
+  vite: 8.3.5
+  wrangler: 4.158.0
