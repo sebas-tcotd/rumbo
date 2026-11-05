@@ -4,9 +4,13 @@
 // npm:   every package.json in the repo (dependencies, devDependencies, optionalDependencies).
 //        Exact = full semver `x.y.z` (optional prerelease/build), `workspace:*` or `catalog:`.
 //        peerDependencies and engines are ranges by nature and are not checked.
+//        Skipped while walking: hidden directories (`.git`, `.github`, `.claude`, ...) and any
+//        directory named node_modules, target, pkg or dist, at any depth.
 // Cargo: every workspace member (via `cargo metadata --no-deps`) plus the root
 //        `[workspace.dependencies]` table, which also holds pins nobody consumes yet.
 //        Exact = `=x.y.z`. A dependency with only a `path` (no version) is allowed.
+//        A `[workspace.dependencies]` line the minimal parser cannot read (dotted keys,
+//        multi-line inline tables) is reported as a violation: the check fails closed.
 //
 // Pure Node, no npm dependencies. Run from anywhere: `node ci/exact-versions/check.mjs`.
 
@@ -70,12 +74,15 @@ export function checkCargoMetadata(metadata, root) {
   return violations;
 }
 
-const unquote = (s) => s.trim().replace(/^"(.*)"$/, '$1');
+const unquote = (s) => s.trim().replace(/^"(.*)"$|^'(.*)'$/, '$1$2');
 
 /**
  * Minimal line-based reader of the `[workspace.dependencies]` table of a Cargo.toml.
  * Handles `name = "ver"`, `name = { version = "ver", ... }` (one line) and
- * `[workspace.dependencies.name]` sub-tables. Returns `[{ name, req, path }]`.
+ * `[workspace.dependencies.name]` sub-tables. Returns `[{ name, req, path, unparsed? }]`.
+ * A line directly in the table that is not `key = value` (a dotted key such as
+ * `foo.version = "1"`, or the continuation of a multi-line inline table) comes back as
+ * `{ name: <line>, unparsed: true }` so the caller fails closed instead of skipping it.
  */
 export function parseWorkspaceDependencies(toml) {
   const deps = [];
@@ -95,8 +102,11 @@ export function parseWorkspaceDependencies(toml) {
       continue;
     }
     if (!section) continue;
-    const kv = line.match(/^("[^"]+"|[\w-]+)\s*=\s*(.+)$/);
-    if (!kv) continue;
+    const kv = line.match(/^("[^"]+"|'[^']+'|[\w-]+)\s*=\s*(.+)$/);
+    if (!kv) {
+      if (section === 'table') deps.push({ name: line, req: undefined, path: undefined, unparsed: true });
+      continue;
+    }
     const key = unquote(kv[1]);
     const value = kv[2].trim();
     if (section === 'table') {
@@ -116,8 +126,12 @@ export function parseWorkspaceDependencies(toml) {
 /** Returns the violations in the root `[workspace.dependencies]` table. */
 export function checkWorkspaceDependencies(toml, file) {
   return parseWorkspaceDependencies(toml)
-    .filter((dep) => !isAllowedCargoDep(dep))
-    .map((dep) => ({ file, dependency: `${dep.name} (workspace.dependencies)`, version: String(dep.req) }));
+    .filter((dep) => dep.unparsed || !isAllowedCargoDep(dep))
+    .map((dep) => ({
+      file,
+      dependency: `${dep.name} (workspace.dependencies)`,
+      version: dep.unparsed ? 'unparsed line: write it as `name = "=x.y.z"` or a one-line inline table' : String(dep.req),
+    }));
 }
 
 /** Finds every package.json under `root`, skipping build/vendor dirs and `excludedPaths`. */

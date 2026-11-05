@@ -1,4 +1,4 @@
-// Tests for the exact-version check: `node --test ci/exact-versions/`.
+// Tests for the exact-version check: `node --test "ci/exact-versions/*.test.mjs"`.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
@@ -149,6 +149,27 @@ opt-level = 3
   });
   it('handles CRLF line endings', () => {
     assert.equal(parseWorkspaceDependencies(toml.replace(/\n/g, '\r\n')).length, 6);
+  });
+  it('reads single-quoted keys and values', () => {
+    const deps = parseWorkspaceDependencies("[workspace.dependencies]\n'foo' = '=1.2.3'\n'bar' = '^2'\n");
+    assert.deepEqual(
+      deps.map((d) => `${d.name}=${d.req}`),
+      ['foo==1.2.3', 'bar=^2'],
+    );
+    assert.deepEqual(
+      checkWorkspaceDependencies("[workspace.dependencies]\n'bar' = '^2'\n", 'Cargo.toml').map((v) => v.version),
+      ['^2'],
+    );
+  });
+  it('fails closed on lines it cannot parse (dotted keys, multi-line inline tables)', () => {
+    const violations = checkWorkspaceDependencies(
+      '[workspace.dependencies]\nfoo.version = "=1.0.0"\nbar = { version = "=1.0.0", features = [\n  "x",\n] }\n',
+      'Cargo.toml',
+    );
+    const names = violations.map((v) => v.dependency);
+    assert.ok(names.includes('foo.version = "=1.0.0" (workspace.dependencies)'));
+    assert.ok(names.includes('"x", (workspace.dependencies)'));
+    assert.ok(violations.every((v) => v.version.length > 0));
   });
 });
 
