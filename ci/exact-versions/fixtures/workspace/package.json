@@ -1,0 +1,8 @@
+{
+  "name": "fixture-workspace",
+  "private": true,
+  "dependencies": {
+    "@rumbo/sim-wasm": "workspace:*",
+    "three": "catalog:"
+  }
+}
