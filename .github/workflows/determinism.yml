@@ -38,6 +38,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
+          # packageManager says pnpm, which arrives in story 0.2; npm installs per folder until then.
+          package-manager-cache: false
       - run: rustc --version && cargo --version && node --version && wasm-pack --version
       - run: npm ci
         working-directory: ci/determinism
@@ -74,6 +76,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
+          # packageManager says pnpm, which arrives in story 0.2; npm installs per folder until then.
+          package-manager-cache: false
       - run: npm ci
         working-directory: ci/determinism
       - if: matrix.browser != 'safari'
@@ -103,4 +107,6 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
+          # packageManager says pnpm, which arrives in story 0.2; npm installs per folder until then.
+          package-manager-cache: false
       - run: node ci/determinism/summary.mjs all-results | tee -a "$GITHUB_STEP_SUMMARY"
