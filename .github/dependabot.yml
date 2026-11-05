@@ -11,24 +11,16 @@ updates:
     schedule:
       interval: weekly
 
+  # One entry at the root: Dependabot reads pnpm-lock.yaml and the workspace from there.
   # `increase` rewrites the exact pin in package.json instead of widening it to a range.
+  # `cooldown` keeps it from proposing versions younger than pnpm's minimumReleaseAge (7 days).
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
     versioning-strategy: increase
-
-  - package-ecosystem: npm
-    directory: /apps/web
-    schedule:
-      interval: weekly
-    versioning-strategy: increase
-
-  - package-ecosystem: npm
-    directory: /ci/determinism
-    schedule:
-      interval: weekly
-    versioning-strategy: increase
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: github-actions
     directory: /
