@@ -1,0 +1,36 @@
+# Dependabot: one bump per PR (no `groups`) and never auto-merged. No workflow in this repo
+# may run `gh pr merge --auto` or auto-merge via `dependabot/fetch-metadata`.
+#
+# Bumping rapier3d, wasm-bindgen or any crate that sim-core depends on can change the
+# simulation: it needs a `physics:` commit and regenerated golden replays, so that
+# Dependabot PR is never merged as is.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+
+  # `increase` rewrites the exact pin in package.json instead of widening it to a range.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    versioning-strategy: increase
+
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule:
+      interval: weekly
+    versioning-strategy: increase
+
+  - package-ecosystem: npm
+    directory: /ci/determinism
+    schedule:
+      interval: weekly
+    versioning-strategy: increase
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

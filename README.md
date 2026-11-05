@@ -20,9 +20,48 @@ pasan al desarrollo formal con BMAD.
 
 ## Requisitos
 
-- Rust estable con el target de WebAssembly: `rustup target add wasm32-unknown-unknown`
-- [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/): `cargo install wasm-pack`
-- Node 20 o superior
+Cada herramienta que toca el build tiene versión exacta, la misma en local y en CI.
+
+- **Rust:** solo hace falta [rustup](https://rustup.rs/). La versión (1.98.1), el target
+  `wasm32-unknown-unknown` y los componentes `rustfmt` y `clippy` salen de `rust-toolchain.toml`;
+  `rustup toolchain install` en la raíz los instala (o se instalan solos con el primer `cargo`).
+- **Node 24:** la versión exacta está en `.nvmrc` (`nvm use` / `fnm use`; con Volta,
+  `volta install node@$(cat .nvmrc)`).
+- **wasm-pack 0.15.1** exacto: `cargo install wasm-pack --version 0.15.1 --locked`. Va de la mano de
+  `wasm-bindgen` 0.2.130 (wasm-pack descarga el `wasm-bindgen-cli` que coincide con `Cargo.lock`).
+- **pnpm 11** (`packageManager` en el `package.json` raíz) se usará cuando llegue el workspace; por ahora
+  se instala con `npm` dentro de cada carpeta, como abajo.
+
+Las dependencias directas de npm y de Cargo van en versión exacta (`x.y.z` / `=x.y.z`), y
+`node ci/exact-versions/check.mjs` falla en CI si alguna usa un rango. Dependabot propone una subida por
+PR y nada se mergea solo.
+
+## Navegadores soportados
+
+En escritorio (móvil y táctil quedan fuera del MVP):
+
+| Navegador | Versión mínima |
+|---|---|
+| Chrome / Edge | **103** |
+| Firefox | **114** |
+| Safari | **16.4** |
+
+Cada mínimo lo fija la API más nueva que el juego necesita (datos de
+[MDN browser-compat-data](https://github.com/mdn/browser-compat-data) 8.1.8, consultados el 2026-11-05):
+
+| API | Chrome / Edge | Firefox | Safari | Fija el mínimo de |
+|---|---|---|---|---|
+| WebGL 2 | 56 / 79 | 51 | 15 | — |
+| `CompressionStream` / `DecompressionStream` con `'deflate-raw'` | **103** | 113 | **16.4** | Chrome/Edge, Safari |
+| CSP `'wasm-unsafe-eval'` | 97 | 102 | 16 | — |
+| Workers de módulo (`new Worker(url, { type: 'module' })`) | 80 | **114** | 15 | Firefox |
+| Gamepad API | 21 / 12 | 29 | 10.1 | — (opcional: sin mando se juega con teclado) |
+
+- El juego detecta **funciones, no el user agent**: si falta una de las APIs obligatorias muestra una
+  pantalla de navegador no soportado en vez de fallar a medias (llega con la historia 0.8).
+- WebGPU es opcional: se usa si está disponible y, si no, el render cae a WebGL 2.
+- En las versiones actuales de cada navegador se verifica el determinismo en CI (Chromium, Firefox, WebKit
+  y Safari real; ver [S4](#s4--determinismo)).
 
 ## Arrancar
 

@@ -6,10 +6,10 @@ license.workspace = true
 description = "Compilador de circuitos desde geografía real (S1: OSM, grafo y ruteo; S2: elevación y pista)"
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", features = ["float_roundtrip"] }
-libm = "0.2"
-tiff = "0.11"
+serde.workspace = true
+serde_json.workspace = true
+libm.workspace = true
+tiff.workspace = true
 
 [[bin]]
 name = "track-compiler"

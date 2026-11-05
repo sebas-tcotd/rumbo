@@ -1,0 +1,32 @@
+# Repo-wide checks. Story 0.9 completes this workflow (Biome, tsc -b, clippy, parity, goldens).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# The checks only read the repo; keep the GITHUB_TOKEN read-only.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-versions:
+    name: Exact versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # Installs exactly the toolchain in rust-toolchain.toml (cargo metadata needs it).
+      - run: rustup toolchain install
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          # packageManager says pnpm, which arrives in story 0.2; npm installs per folder until then.
+          package-manager-cache: false
+      - run: rustc --version && cargo --version && node --version
+      - run: node ci/exact-versions/check.mjs
+      # A bare directory is not a valid `node --test` argument in Node 24; the glob is.
+      - run: node --test "ci/exact-versions/*.test.mjs"

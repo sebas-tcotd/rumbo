@@ -1,0 +1,19 @@
+{
+  "name": "rumbo",
+  "private": true,
+  "//": "Exact pins for AR1 tools whose package arrives in a later story; story 0.2 moves them to a pnpm catalog. Do not npm install at the root.",
+  "engines": {
+    "node": ">=24.22.2 <25"
+  },
+  "packageManager": "pnpm@11.28.11",
+  "devDependencies": {
+    "@biomejs/biome": "2.6.5",
+    "@gltf-transform/cli": "4.5.0",
+    "@tailwindcss/vite": "4.3.4",
+    "i18next": "26.7.2",
+    "react-i18next": "17.0.21",
+    "tailwindcss": "4.3.4",
+    "turbo": "2.11.10",
+    "wrangler": "4.158.0"
+  }
+}

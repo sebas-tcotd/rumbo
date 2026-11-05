@@ -9,5 +9,5 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 sim-core = { path = "../sim-core" }
-wasm-bindgen = "0.2"
-serde_json = { version = "1", features = ["float_roundtrip"] }  # igual en nativo y WASM
+wasm-bindgen.workspace = true
+serde_json.workspace = true  # igual en nativo y WASM

@@ -1,0 +1,16 @@
+{
+  "name": "fixture-clean",
+  "private": true,
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "dependencies": {
+    "left-pad": "1.3.0"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2-rc.1"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  }
+}
