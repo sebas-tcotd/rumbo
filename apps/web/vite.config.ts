@@ -8,8 +8,6 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      // Paquete generado por wasm-pack (npm run wasm).
-      '@sim-wasm': fileURLToPath(new URL('../../crates/sim-wasm/pkg/sim_wasm.js', import.meta.url)),
       '@assets': fileURLToPath(new URL('../../assets', import.meta.url)),
     },
   },

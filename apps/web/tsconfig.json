@@ -14,7 +14,6 @@
     "resolveJsonModule": true,
     "types": ["vite/client"],
     "paths": {
-      "@sim-wasm": ["../../crates/sim-wasm/pkg/sim_wasm.d.ts"],
       "@assets/*": ["../../assets/*"]
     }
   },
