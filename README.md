@@ -29,8 +29,8 @@ Cada herramienta que toca el build tiene versión exacta, la misma en local y en
   `volta install node@$(cat .nvmrc)`).
 - **wasm-pack 0.15.1** exacto: `cargo install wasm-pack --version 0.15.1 --locked`. Va de la mano de
   `wasm-bindgen` 0.2.130 (wasm-pack descarga el `wasm-bindgen-cli` que coincide con `Cargo.lock`).
-- **pnpm 11** (`packageManager` en el `package.json` raíz) se usará cuando llegue el workspace; por ahora
-  se instala con `npm` dentro de cada carpeta, como abajo.
+- **pnpm 11.28.11** exacto (`packageManager` en el `package.json` raíz): instálalo con el instalador oficial o
+  `pnpm self-update 11.28.11`. No usamos Corepack.
 
 Las dependencias directas de npm y de Cargo van en versión exacta (`x.y.z` / `=x.y.z`), y
 `node ci/exact-versions/check.mjs` falla en CI si alguna usa un rango. Dependabot propone una subida por
@@ -66,12 +66,11 @@ Cada mínimo lo fija la API más nueva que el juego necesita (datos de
 ## Arrancar
 
 ```bash
-cd apps/web
-npm install
-npm run dev        # compila el WASM en release y abre Vite
+pnpm install
+pnpm turbo run build                 # compila el WASM (cacheado por Turbo) y la app
+pnpm turbo run test                  # cargo test --release --workspace + dorados en Node + exact-versions
+pnpm --filter race-lab-web dev       # compila el WASM si hace falta y abre Vite
 ```
-
-Si solo cambiaste código de TypeScript, `npm run dev:web` arranca sin recompilar el WASM.
 
 ## Qué hay
 
@@ -94,7 +93,6 @@ apps/web/     Vite + React + three.js (WebGPU, con WebGL 2 de respaldo)
 assets/
   tracks/test-loop.json       Pista de control: recta, horquilla, eses y curva de derrape
   profiles/hatch-arcade.json  Perfil por defecto
-scripts/verify-golden.mjs     Verifica los replays dorados con el WASM en Node
 ```
 
 ## Controles
@@ -149,8 +147,7 @@ Incluyen:
 ### Nativo contra WASM
 
 ```bash
-cd apps/web
-npm run verify-golden
+pnpm turbo run test --filter rumbo-determinism
 ```
 
 Corre los replays dorados con el binario WASM en Node. Si coincide, nativo y WASM son deterministas entre sí.
@@ -392,8 +389,9 @@ Los adversos son una secuencia pseudoaleatoria fija: a fondo contra muros y barr
 freno de mano, resets y reinicios.
 
 ```bash
-cd apps/web && npm run wasm          # compila el WASM
-cd ../../ci/determinism && npm ci
+pnpm install
+pnpm turbo run build --filter @rumbo/sim-wasm    # compila el WASM
+cd ci/determinism
 node run.mjs --browser node          # o chromium, firefox, webkit (Playwright), safari (safaridriver)
 ```
 
