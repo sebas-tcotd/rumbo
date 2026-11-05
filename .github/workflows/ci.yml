@@ -23,7 +23,7 @@ jobs:
       - run: rustup toolchain install
       # No `version:`: pnpm/action-setup reads it from `packageManager`. Corepack is not used.
       - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
