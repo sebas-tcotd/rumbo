@@ -155,11 +155,11 @@ export function parsePnpmCatalog(yaml) {
     const indent = noComment.length - noComment.trimStart().length;
     const line = noComment.trim();
     if (indent === 0) {
-      const top = line.match(/^(catalogs?)\s*:\s*(.*)$/);
-      section = top ? top[1] : null;
+      const top = line.match(/^(["']?)(catalogs?)\1\s*:\s*(.*)$/);
+      section = top ? top[2] : null;
       named = null;
-      if (top && top[2] && top[2] !== '{}') {
-        entries.push({ name: line, catalog: top[1], unparsed: true });
+      if (top && top[3] && top[3] !== '{}') {
+        entries.push({ name: line, catalog: top[2], unparsed: true });
       }
       continue;
     }

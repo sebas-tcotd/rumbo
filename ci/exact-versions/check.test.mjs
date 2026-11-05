@@ -247,6 +247,10 @@ other:
       assert.ok(v.length >= 1 && v.every((x) => /unparsed/.test(x.version)), yaml);
     }
   });
+  it('checks a quoted top-level catalog key', () => {
+    const v = checkPnpmCatalog('"catalog":\n  foo: ^1.0.0\n\'catalogs\':\n  a:\n    bar: ~2.0.0\n', 'w.yaml');
+    assert.deepEqual(v.map((x) => x.dependency), ['foo (catalog)', 'bar (catalog:a)']);
+  });
   it('accepts an empty catalog', () => {
     assert.deepEqual(checkPnpmCatalog('catalog: {}\npackages: []\n', 'w.yaml'), []);
   });
