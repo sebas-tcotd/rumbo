@@ -17,8 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      # Installs exactly the toolchain in rust-toolchain.toml.
+      - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
+      - run: rustc --version && cargo --version
       - run: cargo test --release --workspace
 
   wasm:
@@ -26,17 +28,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
+      # Installs exactly the toolchain in rust-toolchain.toml (wasm32 target included).
+      - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
-          tool: wasm-pack
+          tool: wasm-pack@0.15.1
       - run: wasm-pack build crates/sim-wasm --target web --release --out-dir pkg
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc
+      - run: rustc --version && cargo --version && node --version && wasm-pack --version
       - run: npm ci
         working-directory: ci/determinism
       - run: node run.mjs --browser node --out results
@@ -71,7 +73,7 @@ jobs:
           path: crates/sim-wasm/pkg
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc
       - run: npm ci
         working-directory: ci/determinism
       - if: matrix.browser != 'safari'
@@ -100,5 +102,5 @@ jobs:
           path: all-results
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc
       - run: node ci/determinism/summary.mjs all-results | tee -a "$GITHUB_STEP_SUMMARY"
