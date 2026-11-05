@@ -11,7 +11,7 @@
     "@gltf-transform/cli": "4.5.0",
     "@tailwindcss/vite": "4.3.4",
     "i18next": "26.7.2",
-    "react-i18next": "17.0.21",
+    "react-i18next": "17.1.11",
     "tailwindcss": "4.3.4",
     "turbo": "2.11.10",
     "wrangler": "4.158.0"
