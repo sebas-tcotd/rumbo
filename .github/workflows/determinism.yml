@@ -45,11 +45,11 @@ jobs:
       - run: pnpm turbo run build --filter @rumbo/sim-wasm
       - run: node run.mjs --browser node --out results
         working-directory: ci/determinism
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: sim-wasm-pkg
           path: crates/sim-wasm/pkg
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: results-node
@@ -88,7 +88,7 @@ jobs:
         run: sudo safaridriver --enable
       - run: node run.mjs --browser ${{ matrix.browser }} --out results
         working-directory: ci/determinism
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: results-${{ matrix.browser }}
