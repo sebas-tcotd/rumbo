@@ -168,7 +168,7 @@ pub fn default_profile() -> String {
 pub fn verify_replay(track_json: &str, replay_json: &str) -> Result<String, JsValue> {
     let track = TrackDef::from_json(track_json).map_err(js_err)?;
     let manifest = ReplayManifest::from_json(replay_json).map_err(js_err)?;
-    let report = manifest.verify(&track).map_err(js_err)?;
+    let report = sim_core::verify_replay(&manifest, &track).map_err(js_err)?;
     serde_json::to_string(&report).map_err(|e| js_err(e.to_string()))
 }
 

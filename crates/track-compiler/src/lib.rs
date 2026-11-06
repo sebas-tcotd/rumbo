@@ -34,4 +34,4 @@ pub use geo::{GeoPoint, LocalFrame};
 pub use graph::{RoadGraph, BuildOptions};
 pub use routing::{ResolvedRoute, RouteOptions};
 
-pub const COMPILER_VERSION: &str = "0.2.0";
+pub use track_format::version::COMPILER_VERSION;

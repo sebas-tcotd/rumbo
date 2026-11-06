@@ -107,7 +107,7 @@ fn golden_replays_match() {
         }
         let manifest = ReplayManifest::from_json(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(manifest.track_id, case.track);
-        let report = manifest.verify(&track(case.track)).unwrap();
+        let report = sim_core::verify_replay(&manifest, &track(case.track)).unwrap();
         assert!(
             report.ok,
             "{}.{}: {} (esperado {}, obtenido {})",

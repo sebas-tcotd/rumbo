@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+track-format.workspace = true
 rapier3d.workspace = true  # exact version + enhanced-determinism, see root Cargo.toml
 libm.workspace = true
 serde.workspace = true

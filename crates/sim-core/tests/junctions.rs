@@ -17,7 +17,7 @@ fn track() -> TrackDef {
 fn network_compiles_into_surface_and_walls() {
     let def = track();
     let net = def.network.as_ref().expect("la pista trae su red");
-    let t = def.compile().unwrap();
+    let t = sim_core::compile_track(&def).unwrap();
     assert!(t.closed && t.network);
     assert_eq!(t.drivable.indices.len(), net.triangles.len() * 3);
     assert!(t.wall_boxes.len() > 100, "{} muros", t.wall_boxes.len());

@@ -6,6 +6,7 @@ license.workspace = true
 description = "Compilador de circuitos desde geografía real (S1: OSM, grafo y ruteo; S2: elevación y pista)"
 
 [dependencies]
+track-format.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 libm.workspace = true

@@ -15,7 +15,7 @@ fn track() -> TrackDef {
 
 #[test]
 fn costa_verde_compiles() {
-    let t = track().compile().unwrap();
+    let t = sim_core::compile_track(&track()).unwrap();
     assert!(!t.closed);
     assert!(t.length > 8000.0, "longitud {}", t.length);
     assert!(t.samples.iter().all(|s| s.pos.x.is_finite() && s.pos.y.is_finite() && s.pos.z.is_finite()));

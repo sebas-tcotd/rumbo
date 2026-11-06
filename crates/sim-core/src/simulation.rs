@@ -65,7 +65,7 @@ pub struct StateView {
 
 impl Simulation {
     pub fn new(track_def: &TrackDef, profile_file: &ProfileFile, seed: u64) -> Result<Self, String> {
-        let track = track_def.compile()?;
+        let track = crate::track::compile_track(track_def)?;
         let profile = profile_file.params.clamped();
         let mut world = PhysicsWorld::new();
         world.integration_parameters.dt = 1.0 / TICK_HZ as f32;
@@ -266,7 +266,7 @@ impl Simulation {
     pub fn state_hash(&self) -> u64 {
         let rb = &self.world.bodies[self.vehicle.body];
         let mut h = Fnv64::new();
-        h.str("sim-state/1").u64(self.tick);
+        h.str_u32_len("sim-state/1").u64(self.tick);
         let t = rb.translation();
         let q = *rb.rotation();
         let v = rb.linvel();

@@ -25,7 +25,7 @@ fn s_track() -> TrackDef {
 
 #[test]
 fn open_track_compiles_with_lines_inside_the_ends() {
-    let t = s_track().compile().unwrap();
+    let t = sim_core::compile_track(&s_track()).unwrap();
     assert!(!t.closed);
     assert!(t.length > 650.0 && t.length < 900.0, "longitud {}", t.length);
     assert_eq!(t.checkpoints.len(), 3, "salida, intermedio y llegada: {:?}", t.checkpoints);
@@ -109,6 +109,6 @@ fn sprint_replays_exactly() {
         }
         sim.step(i);
     }
-    let report = sim.replay().verify(&s_track()).unwrap();
+    let report = sim_core::verify_replay(&sim.replay(), &s_track()).unwrap();
     assert!(report.ok, "{}", report.message);
 }
