@@ -18,7 +18,7 @@ jobs:
     name: Exact versions
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # Installs exactly the toolchain in rust-toolchain.toml (cargo metadata needs it).
       - run: rustup toolchain install
       # No `version:`: pnpm/action-setup reads it from `packageManager`. Corepack is not used.
