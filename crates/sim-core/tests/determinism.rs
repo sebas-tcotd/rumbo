@@ -23,7 +23,7 @@ fn scripted_session_replays_exactly() {
     let manifest = s.replay();
     let json = serde_json::to_string(&manifest).unwrap();
     let back = ReplayManifest::from_json(&json).unwrap();
-    let report = back.verify(&track()).unwrap();
+    let report = sim_core::verify_replay(&back, &track()).unwrap();
     assert!(report.ok, "{}", report.message);
     assert_eq!(report.actual_final, manifest.final_state_hash);
 }
@@ -44,7 +44,7 @@ fn tampered_input_is_detected_at_its_check() {
             break;
         }
     }
-    let report = manifest.verify(&track()).unwrap();
+    let report = sim_core::verify_replay(&manifest, &track()).unwrap();
     assert!(!report.ok);
     assert_eq!(report.first_mismatch_tick, Some(1200), "debería divergir en el primer control tras el cambio");
 }
@@ -55,7 +55,7 @@ fn tampered_profile_is_rejected() {
     run_autopilot(&mut s, HZ * 5);
     let mut manifest = s.replay();
     manifest.profile.params.rear_grip += 0.05;
-    let report = manifest.verify(&track()).unwrap();
+    let report = sim_core::verify_replay(&manifest, &track()).unwrap();
     assert!(!report.ok);
 }
 

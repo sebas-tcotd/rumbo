@@ -79,9 +79,9 @@ crates/
   sim-core/   Simulación determinista, sin nada de navegador
     src/track.rs       Mini compilador de pistas: eje, coordenada s, superficies, mallas, muros
     src/vehicle.rs     Auto: suspensión por raycast, neumáticos arcade, capa de asistencias
-    src/profile.rs     Parámetros de manejo con unidades (una sola definición: struct + esquema del panel)
+    src/profile.rs     Reexports del perfil compartido en track-format/domain/profile.rs
     src/race.rs        Vueltas y checkpoints sobre la coordenada s
-    src/replay.rs      Grabación RLE de entradas, manifest y verificación
+    src/replay.rs      Grabación RLE y verificación; DTO en track-format/domain/replay.rs
     src/simulation.rs  Sesión completa y hash canónico del estado
     src/autopilot.rs   Piloto automático (prueba de manejo automática y replays de referencia)
     tests/             Determinismo, replays dorados, casos adversos y pruebas de manejo
@@ -94,6 +94,39 @@ assets/
   tracks/test-loop.json       Pista de control: recta, horquilla, eses y curva de derrape
   profiles/hatch-arcade.json  Perfil por defecto
 ```
+
+## Kernel compartido
+
+`track-format` contiene los DTO de pista, replay v1, entrada y perfil, sin dependencias de
+simulación ni I/O. `sim-core` conserva los reexports de datos; las operaciones de runtime
+son `sim_core::compile_track(&TrackDef)` y `sim_core::verify_replay(&ReplayManifest, &TrackDef)`.
+
+FNV-1a tiene un solo acumulador, con texto prefijado por `u32` para simulación y por `u64`
+para compilador. Se preservan los hashes legados. La API nueva `codec::{encode, decode}` usa
+`RTF\0` + versión `u16` little-endian + postcard 1.1.3; el consumidor debe conocer el tipo DTO.
+`hash::content_hash` identifica bytes con los primeros 16 bytes de BLAKE3 (32 dígitos hex).
+El sobre binario es independiente de los lectores JSON y rechaza versiones desconocidas y bytes sobrantes.
+
+`rng::Pcg32` implementa XSH-RR 64/32: siembra de referencia, `initstate=seed`,
+`initseq=id`; ids estables: bots=1, start=2, rules=3 (63 bits). Los streams se crean por separado
+con `for_subsystem`; consumir uno no avanza los demás. Todavía no se conectan al tick.
+El RNG de decoración sigue separado. El replay legado conserva 120 Hz y las versiones existentes.
+
+`NetworkDef` conserva vértices 3D y su pertenencia a triángulos: admite alturas distintas sobre
+el mismo (x,z). Esto prepara los datos; la conducción por pasos a desnivel queda pendiente de D11.
+
+Controles del kernel (incluidos casos negativos de capas y serde):
+
+```bash
+node ci/track-format/check.mjs
+node --test ci/track-format/check.test.mjs
+cargo test --release -p track-format
+cargo check -p track-format --target wasm32-unknown-unknown
+cargo clippy -p track-format --all-targets -- -D warnings
+```
+
+La prueba `per_tick` compara huellas de todos los ticks de los ocho replays con las capturadas
+antes de la extracción en `18649c3`, además de los controles y hashes finales dorados.
 
 ## Controles
 
@@ -137,7 +170,7 @@ Incluyen:
 - **Determinismo:** mismas entradas dan el mismo hash; una entrada alterada se detecta en el siguiente control (cada 600 ticks).
 - **Replays dorados:** los 8 de `crates/sim-core/tests/golden/` (ver [S4](#s4--determinismo)) se reproducen
   bit a bit. Regenéralos con `UPDATE_GOLDEN=1 cargo test -p sim-core --release --test golden` cuando cambie la
-  física (y sube `PHYSICS_VERSION` en `sim-core/src/lib.rs`).
+  física (y sube `PHYSICS_VERSION` en `track-format/src/version.rs`).
 - **Casos adversos:** choques a fondo, volante al tope y resets repetidos; el estado nunca deja de ser finito.
 - **Prueba de manejo automática:** el piloto automático da varias vueltas; falla ante golpes verticales,
   ruedas en el aire o contacto con el muro.

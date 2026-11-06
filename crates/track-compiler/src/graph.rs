@@ -512,13 +512,13 @@ impl RoadGraph {
     /// Hash canónico del contenido (no incluye diagnósticos ni el propio hash).
     pub fn compute_hash(&self) -> String {
         let mut h = Fnv64::default();
-        h.str(GRAPH_FORMAT).str(&self.compiler_version).str(&self.region);
+        h.str_u64_len(GRAPH_FORMAT).str_u64_len(&self.compiler_version).str_u64_len(&self.region);
         h.f64(self.frame.origin.lat).f64(self.frame.origin.lon);
         for v in &self.vertices {
             h.i64(v.osm_id).f64(v.lat).f64(v.lon);
         }
         for e in &self.edges {
-            h.str(&e.id).u64(e.from as u64).u64(e.to as u64).str(e.class.as_str());
+            h.str_u64_len(&e.id).u64(e.from as u64).u64(e.to as u64).str_u64_len(e.class.as_str());
             h.u64(match e.oneway {
                 Oneway::Both => 0,
                 Oneway::Forward => 1,

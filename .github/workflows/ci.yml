@@ -31,3 +31,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: node ci/exact-versions/check.mjs
       - run: pnpm --filter exact-versions test
+      - run: node ci/track-format/check.mjs
+      - run: node --test ci/track-format/check.test.mjs

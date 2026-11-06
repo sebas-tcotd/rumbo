@@ -24,12 +24,6 @@ pub use replay::{ReplayManifest, VerifyReport};
 pub use simulation::{Simulation, StateView, STATE_LEN};
 pub use track::{CompiledTrack, TrackDef};
 
-/// Versión de la simulación. Cambia cuando cambia cualquier cosa que altere el resultado
-/// de un replay (física, asistencias, orden de pasos). Los replays guardan esta versión.
-pub const PHYSICS_VERSION: &str = "0.4.0";
-
-/// Versión del mini compilador de pistas de S0.
-pub const COMPILER_VERSION: &str = "0.2.0";
-
-/// Frecuencia de simulación por defecto (decisión a validar en S0).
-pub const TICK_HZ: u32 = 120;
+pub use replay::verify_replay;
+pub use track::compile_track;
+pub use track_format::version::{COMPILER_VERSION, PHYSICS_VERSION, TICK_HZ};
