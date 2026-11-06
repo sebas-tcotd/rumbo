@@ -35,7 +35,7 @@ minimumReleaseAgeExclude:
 # Exact versions only (checked by ci/exact-versions).
 catalog:
   '@biomejs/biome': 2.6.5
-  '@gltf-transform/cli': 4.5.0
+  '@gltf-transform/cli': 4.5.1
   '@tailwindcss/vite': 4.3.4
   '@types/react': 19.3.0
   '@types/react-dom': 19.3.0
