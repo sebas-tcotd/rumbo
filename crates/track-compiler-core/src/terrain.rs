@@ -9,7 +9,7 @@
 //! suavizado gaussiano. Sirve para terreno sin acantilados, como San Borja; la Costa Verde
 //! sigue usando el perfil a lo largo del eje de S2.
 
-use crate::dem::Dem;
+use crate::ports::ElevationSource;
 use crate::geo::LocalFrame;
 
 #[derive(Clone, Copy, Debug)]
@@ -42,7 +42,7 @@ pub struct HeightField {
 
 impl HeightField {
     /// Campo que cubre la caja `[min, max]` (este, norte) con margen.
-    pub fn build(dem: &Dem, frame: &LocalFrame, min: [f64; 2], max: [f64; 2], opts: &TerrainOptions) -> Result<Self, String> {
+    pub fn build(dem: &dyn ElevationSource, frame: &LocalFrame, min: [f64; 2], max: [f64; 2], opts: &TerrainOptions) -> Result<Self, String> {
         let margin = opts.radius_m + 3.0 * opts.sigma_m + opts.step_m;
         let (e0, n0) = (min[0] - margin, min[1] - margin);
         let w = ((max[0] - min[0] + 2.0 * margin) / opts.step_m).ceil() as usize + 1;

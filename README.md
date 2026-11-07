@@ -192,12 +192,12 @@ derrape, choque y piloto automático), útil al tocar la física.
 
 ## S1 · Datos geográficos
 
-El crate `crates/track-compiler` lleva la red vial real hasta un recorrido resuelto, que es la entrada de S2.
+El CLI `compiler-cli` lee Overpass y GeoTIFF y escribe los archivos. El núcleo puro `crates/track-compiler-core` lleva la red vial real hasta un recorrido resuelto, que es la entrada de S2.
 
 ```
 data/queries/lima-costa-verde.overpassql   Consulta: Miraflores, Barranco, parte de San Isidro y la Costa Verde
 scripts/fetch-osm.mjs                      Descarga el extracto y lo archiva con fecha en data/raw/
-crates/track-compiler/src/
+crates/track-compiler-core/src/
   osm.rs          Lectura de Overpass JSON
   geo.rs          WGS84 → plano tangente ENU en metros (f64, libm)
   graph.rs        Grafo dirigido: se parte solo en nodos compartidos; atributos y anchos estimados
@@ -206,6 +206,8 @@ crates/track-compiler/src/
   export.rs       GeoJSON (orden [lon, lat]) del grafo y de la ruta
 ```
 
+El núcleo comparte las identidades de `track-format` y usa serde, serde_json y libm para el cálculo en memoria. TIFF y los archivos pertenecen a `compiler-cli`. CI compila el núcleo para wasm32 y comprueba dependencias normales y de build. El CLI puede usar el simulador en pruebas. CI rechaza dependencias normales o de build que lo conecten con el simulador, Rapier o los bindings del navegador. El detector de tokens Rust no expande macros.
+
 ### Cerrar S1 con datos reales
 
 ```bash
@@ -213,15 +215,15 @@ crates/track-compiler/src/
 node scripts/fetch-osm.mjs
 
 # 2. Construir el grafo y su GeoJSON
-cargo run -p track-compiler --release -- ingest data/raw/lima-costa-verde-AAAA-MM-DD.overpass.json \
+cargo run -p compiler-cli --release -- ingest data/raw/lima-costa-verde-AAAA-MM-DD.overpass.json \
   --region lima-costa-verde --out data/graphs/lima-costa-verde.json --geojson data/graphs/lima-costa-verde.geojson
 
 # 3. Rutear entre dos puntos (lat,lon; cópialos con clic derecho en openstreetmap.org)
-cargo run -p track-compiler --release -- route data/graphs/lima-costa-verde.json \
+cargo run -p compiler-cli --release -- route data/graphs/lima-costa-verde.json \
   --from LAT,LON --to LAT,LON --geojson ruta.geojson --descriptor ruta.descriptor.json
 
 # 4. Pruebas sobre el extracto real (se activan solas si hay un archivo en data/raw/)
-cargo test -p track-compiler --release
+cargo test -p compiler-cli -p track-compiler-core --release
 ```
 
 Para verificar contra el mapa, arrastra los `.geojson` a [geojson.io](https://geojson.io): el grafo debería calzar
@@ -248,11 +250,11 @@ Algunas notas:
 
 ## S2 · Primer tramo real
 
-`track-compiler track` convierte una ruta en una pista de `sim-core`: eje suavizado, ancho por calle, elevación
+`rumbo-compiler track` convierte una ruta en una pista de `sim-core`: eje suavizado, ancho por calle, elevación
 filtrada desde Copernicus GLO-30 y un estado (`VALID`, `DEGRADED`, `UNSUPPORTED`) con diagnósticos localizados.
 
 ```bash
-cargo run -p track-compiler --release -- track data/graphs/lima-costa-verde.json \
+cargo run -p compiler-cli --release -- track data/graphs/lima-costa-verde.json \
   --dem data/raw/Copernicus_DSM_COG_10_S13_00_W078_00_DEM.tif \
   --from -12.100321,-77.069759 --to -12.1596,-77.0256 --respect-oneway \
   --anchor -12.109,-77.057,6 --anchor -12.113,-77.051,6 \
@@ -323,9 +325,9 @@ Milet × Rousseau (cuatro brazos).
 
 ```bash
 node scripts/fetch-osm.mjs data/queries/lima-san-borja.overpassql lima-san-borja
-cargo run -p track-compiler --release -- ingest data/raw/lima-san-borja-2026-11-04.overpass.json \
+cargo run -p compiler-cli --release -- ingest data/raw/lima-san-borja-2026-11-04.overpass.json \
   --region lima-san-borja --out data/graphs/lima-san-borja.json
-cargo run -p track-compiler --release -- track data/graphs/lima-san-borja.json \
+cargo run -p compiler-cli --release -- track data/graphs/lima-san-borja.json \
   --dem data/raw/Copernicus_DSM_COG_10_S13_00_W077_00_DEM.tif \
   --from -12.091213,-76.991260 --via -12.090062,-76.991880 --via -12.090982,-76.992709 \
   --via -12.091398,-76.991666 --to -12.091213,-76.991260 --closed --network \
@@ -363,7 +365,7 @@ el circuito (no al más cercano, que podría estar más adelante: eso sería un 
 - **Los 7 cruces salen `VALID` y el piloto automático da vueltas de 28,2 s** sin tocar muros, sin ruedas en el
   aire y con un golpe vertical máximo de 0,02 m/s (`sim-core/tests/junctions.rs`). Las pruebas del compilador
   comprueban que la superficie no tiene huecos (todo borde suelto está cubierto por un muro), que la línea de
-  referencia va siempre sobre la calzada y que la pista de `assets/` está al día (`track-compiler/tests/s3.rs`).
+  referencia va siempre sobre la calzada y que la pista de `assets/` está al día (`compiler-cli/tests/s3.rs`).
 - **Lo difícil no fue el polígono del cruce**, que salió casi a la primera, sino tres cosas alrededor:
   - *Costuras:* las veredas de las esquinas agregaban vértices sobre el cordón que la calzada no tenía. No se
     ve, pero la malla queda abierta; se resolvió triangulando en cremallera, sin vértices nuevos.

@@ -1,11 +1,11 @@
 //! Pruebas de S2: modelo de elevación, perfil filtrado, eje y generación de la pista.
-use track_compiler::dem::Dem;
-use track_compiler::elevation::{filter, Anchor, ElevationOptions};
-use track_compiler::graph::{BuildOptions, RoadGraph};
-use track_compiler::osm::Extract;
-use track_compiler::routing::{route, RouteOptions};
-use track_compiler::trackgen::{generate, TrackOptions};
-use track_compiler::GeoPoint;
+use track_compiler_core::dem::Dem;
+use track_compiler_core::elevation::{filter, Anchor, ElevationOptions};
+use track_compiler_core::graph::{BuildOptions, RoadGraph};
+use track_compiler_core::osm::Extract;
+use track_compiler_core::routing::{route, RouteOptions};
+use track_compiler_core::trackgen::{generate, TrackOptions};
+use track_compiler_core::GeoPoint;
 
 const DEM: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/raw/Copernicus_DSM_COG_10_S13_00_W078_00_DEM.tif");
 const OSM: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/raw/lima-costa-verde-2026-11-04.overpass.json");
@@ -24,7 +24,7 @@ fn dem_reads_known_heights() {
     if !have_data() {
         return;
     }
-    let dem = Dem::from_path(DEM).unwrap();
+    let dem = compiler_cli::adapters::geotiff::from_path(DEM).unwrap();
     assert_eq!((dem.width, dem.height), (3600, 3600));
     let near = |lat, lon, h: f64, tol: f64| {
         let v = dem.height(GeoPoint::new(lat, lon)).unwrap();
@@ -83,12 +83,12 @@ fn recipe() -> (Vec<GeoPoint>, RouteOptions, TrackOptions) {
     (pts, opts, t)
 }
 
-fn costa_verde() -> (RoadGraph, track_compiler::routing::ResolvedRoute, Dem, TrackOptions) {
+fn costa_verde() -> (RoadGraph, track_compiler_core::routing::ResolvedRoute, Dem, TrackOptions) {
     let ex = Extract::from_overpass_json(&std::fs::read_to_string(OSM).unwrap()).unwrap();
     let g = RoadGraph::build(&ex, &BuildOptions { region: "lima-costa-verde".into(), origin: None }).unwrap();
     let (pts, opts, t) = recipe();
     let r = route(&g, &pts, opts).unwrap();
-    (g, r, Dem::from_path(DEM).unwrap(), t)
+    (g, r, compiler_cli::adapters::geotiff::from_path(DEM).unwrap(), t)
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn generated_track_is_smooth_and_consistent() {
     let spacing: Vec<f64> = t.samples.windows(2).map(|w| w[1].s - w[0].s).collect();
     assert!(spacing.iter().all(|d| (d - 2.0).abs() < 0.6), "paso irregular");
     assert!((t.samples.last().unwrap().s - r.length_m).abs() / r.length_m < 0.02, "el suavizado acortó o alargó demasiado el recorrido");
-    let rate = track_compiler::centerline::max_turn_rate_deg_per_m(&t.samples);
+    let rate = track_compiler_core::centerline::max_turn_rate_deg_per_m(&t.samples);
     assert!(rate < 6.0, "quiebre de {rate:.1}°/m en el eje");
     assert!(t.profile.max_grade <= 0.14 + 1e-9);
     assert!(t.samples.iter().all(|c| (7.0..=16.0).contains(&c.width)));
@@ -142,5 +142,7 @@ fn committed_asset_is_up_to_date() {
     let (g, r, dem, recipe) = costa_verde();
     let t = generate(&g, &r, &dem, &recipe).unwrap();
     let committed: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(ASSET).unwrap()).unwrap();
+    let definition = sim_core::TrackDef::from_json(&t.json.to_string()).unwrap();
+    assert_eq!(sim_core::compile_track(&definition).unwrap().hash, 0x438fcda7191f2309);
     assert_eq!(committed, t.json, "assets/tracks/costa-verde-sprint.json está desactualizada: regénerala");
 }

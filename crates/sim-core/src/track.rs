@@ -100,16 +100,15 @@ impl MeshPart {
 
     pub fn vertices(&self) -> Vec<Vec3> {
         self.positions
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|c| Vec3::new(c[0], c[1], c[2]))
             .collect()
     }
 
     pub fn triangles(&self) -> Vec<[u32; 3]> {
-        self.indices
-            .chunks_exact(3)
-            .map(|c| [c[0], c[1], c[2]])
-            .collect()
+        self.indices.as_chunks::<3>().0.to_vec()
     }
 
     /// Superficie de un triángulo (todos sus vértices comparten etiqueta).

@@ -1,8 +1,8 @@
 //! Depuración: aristas cercanas a un punto, marcando las que usa una ruta.
-//! Uso: cargo run -p track-compiler --release --example near -- <grafo.json> <punto lat,lon> <radio m> <desde lat,lon> <hasta lat,lon>
-use track_compiler::graph::RoadGraph;
-use track_compiler::routing::{route, RouteOptions};
-use track_compiler::GeoPoint;
+//! Uso: cargo run -p compiler-cli --release --example near -- <grafo.json> <punto lat,lon> <radio m> <desde lat,lon> <hasta lat,lon>
+use track_compiler_core::graph::RoadGraph;
+use track_compiler_core::routing::{route, RouteOptions};
+use track_compiler_core::GeoPoint;
 fn main() {
     let a: Vec<String> = std::env::args().collect();
     let g = RoadGraph::from_json(&std::fs::read_to_string(&a[1]).unwrap()).unwrap();

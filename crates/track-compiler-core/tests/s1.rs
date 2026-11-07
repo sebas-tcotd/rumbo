@@ -1,10 +1,10 @@
 //! Pruebas de S1: proyección, grafo y ruteo sobre el fixture sintético.
-use track_compiler::export::{graph_geojson, route_geojson};
-use track_compiler::geo::{curvature_radii, haversine_m};
-use track_compiler::graph::{BuildOptions, Oneway, RoadGraph};
-use track_compiler::osm::Extract;
-use track_compiler::routing::{route, RouteOptions};
-use track_compiler::{GeoPoint, LocalFrame, Severity};
+use track_compiler_core::export::{graph_geojson, route_geojson};
+use track_compiler_core::geo::{curvature_radii, haversine_m};
+use track_compiler_core::graph::{BuildOptions, Oneway, RoadGraph};
+use track_compiler_core::osm::Extract;
+use track_compiler_core::routing::{route, RouteOptions};
+use track_compiler_core::{GeoPoint, LocalFrame, Severity};
 
 // Misma conversión aproximada que generar_fixture.py.
 const LAT0: f64 = -12.12;
@@ -14,7 +14,7 @@ fn geo(e: f64, n: f64) -> GeoPoint {
 }
 
 fn graph() -> RoadGraph {
-    let ex = Extract::from_overpass_json(include_str!("fixtures/mini-grid.overpass.json")).unwrap();
+    let ex = Extract::from_overpass_json(include_str!("../../compiler-cli/tests/fixtures/mini-grid.overpass.json")).unwrap();
     RoadGraph::build(&ex, &BuildOptions { region: "fixture".into(), origin: Some(GeoPoint::new(LAT0, LON0)) }).unwrap()
 }
 
@@ -273,7 +273,7 @@ fn no_u_turn_at_an_intermediate_waypoint() {
 
 #[test]
 fn turn_angle_is_symmetric_and_bounded() {
-    use track_compiler::routing::turn_angle_deg;
+    use track_compiler_core::routing::turn_angle_deg;
     assert!((turn_angle_deg([1.0, 0.0], [1.0, 0.0])).abs() < 1e-9);
     assert!((turn_angle_deg([1.0, 0.0], [0.0, 1.0]) - 90.0).abs() < 1e-9);
     assert!((turn_angle_deg([1.0, 0.0], [0.0, -1.0]) - 90.0).abs() < 1e-9);

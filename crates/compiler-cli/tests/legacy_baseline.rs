@@ -1,6 +1,5 @@
 //! Expected identities captured from main 18649c3 before sharing FNV.
-use track_compiler::{
-    dem::Dem,
+use track_compiler_core::{
     graph::{BuildOptions, RoadGraph},
     hash::Fnv64,
     osm::Extract,
@@ -37,6 +36,6 @@ fn hashes_match_pre_extraction_baseline() {
         "/../../data/raw/Copernicus_DSM_COG_10_S13_00_W078_00_DEM.tif"
     );
     if std::path::Path::new(p).exists() {
-        assert_eq!(Dem::from_path(p).unwrap().hash, "f99b95c07027ea2a");
+        assert_eq!(compiler_cli::adapters::geotiff::from_path(p).unwrap().hash, "f99b95c07027ea2a");
     }
 }

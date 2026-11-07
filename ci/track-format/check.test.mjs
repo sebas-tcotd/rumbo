@@ -56,3 +56,58 @@ for (const source of [
 ]) {
   test(`allows safe Rust syntax: ${source}`, () => checkSource(source));
 }
+
+test('compiler permits legacy JSON attributes and rejects runtime imports', () => {
+  checkSource('#[serde(skip_serializing_if = "Option::is_none")]', 'compiler', false);
+  for (const source of ['use std::{fs};', 'use std::{fmt, net as sockets};', 'use std::time;', 'use std as platform;']) {
+    assert.throws(() => checkSource(source, 'compiler', false), /forbidden/);
+  }
+});
+
+for (const source of [
+  'std::io::stdin().read_line(&mut String::new())',
+  'std::io::stdout()',
+  'std::io::stderr()',
+  'std::process::Command::new("cat").arg("data.json").output()',
+  'use std::io as streams; streams::stdin()',
+  'use std::process::Command as Runner;',
+  'use std::{fmt, io::{stdin as input}};',
+  'use {std::{process::{Command}}};',
+  'use std /* comment */ :: r#io :: stdin;',
+  'use std::{io};',
+  'use std::io::*;',
+  'use std::process::*;',
+]) {
+  test(`compiler rejects external IO: ${source}`, () => {
+    assert.throws(() => checkSource(source, 'compiler', false), /forbidden kernel runtime/);
+  });
+}
+
+test('compiler IO policy ignores literals and permits pure code', () => {
+  checkSource('// std::io::stdin()\nlet description = "std::process::Command";', 'compiler', false);
+  checkSource('use std::{fmt::Display, error::Error};', 'compiler', false);
+  // Keep the existing kernel policy independent from the compiler policy.
+  checkSource('use std::io::Cursor;');
+});
+
+test('compiler rejects normal and build dependencies on runtime crates', () => {
+  for (const kind of ['build', null]) {
+    for (const name of ['sim-core', 'tiff', 'compiler-cli']) {
+      const metadata = graph('build');
+      metadata.packages[0].name = 'track-compiler-core';
+      metadata.packages[1].name = name;
+      metadata.resolve.nodes[0].deps[0].dep_kinds[0].kind = kind;
+      assert.throws(() => checkDependencies(metadata, 'track-compiler-core'), /forbidden/);
+    }
+  }
+});
+
+test('CLI isolates simulation in dev dependencies', () => {
+  const metadata = graph('dev');
+  metadata.packages[0].name = 'compiler-cli';
+  checkDependencies(metadata, 'compiler-cli');
+  for (const kind of [null, 'build']) {
+    metadata.resolve.nodes[0].deps[0].dep_kinds = [{ kind }];
+    assert.throws(() => checkDependencies(metadata, 'compiler-cli'), /forbidden/);
+  }
+});

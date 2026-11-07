@@ -1,35 +1,36 @@
 //! CLI de S1.
 //!
-//!   track-compiler ingest <overpass.json> --region <id> --out <grafo.json> [--geojson <archivo>] [--origin lat,lon]
-//!   track-compiler route  <grafo.json> --from lat,lon --to lat,lon [--via lat,lon]... [--closed]
+//!   rumbo-compiler ingest <overpass.json> --region <id> --out <grafo.json> [--geojson <archivo>] [--origin lat,lon]
+//!   rumbo-compiler route  <grafo.json> --from lat,lon --to lat,lon [--via lat,lon]... [--closed]
 //!                         [--respect-oneway] [--max-turn <grados>] [--turn-cost <metros>]
 //!                         [--geojson <archivo>] [--descriptor <archivo>]
-//!   track-compiler track  <grafo.json> --dem <modelo.tif> --from lat,lon --to lat,lon [--via lat,lon]...
+//!   rumbo-compiler track  <grafo.json> --dem <modelo.tif> --from lat,lon --to lat,lon [--via lat,lon]...
 //!                         --id <id> [--name <nombre>] --out <pista.json> [--profile <perfil.csv>] [--geojson <archivo>]
 //!                         [--anchor lat,lon,altura]... [--network]
-//!   track-compiler stats  <grafo.json>
+//!   rumbo-compiler stats  <grafo.json>
 
 use std::process::ExitCode;
-use track_compiler::export::{graph_geojson, route_geojson};
-use track_compiler::graph::{BuildOptions, RoadGraph};
-use track_compiler::osm::Extract;
-use track_compiler::dem::Dem;
-use track_compiler::elevation::Anchor;
-use track_compiler::routing::{route, ResolvedRoute, RouteOptions};
-use track_compiler::trackgen::{generate, profile_csv, TrackOptions};
-use track_compiler::{GeoPoint, Severity};
+use track_compiler_core::export::{graph_geojson, route_geojson};
+use track_compiler_core::graph::{BuildOptions, RoadGraph};
+use compiler_cli::adapters::{fs::{read, write, FileZoneWriter}, geotiff, overpass::OverpassFile};
+use track_compiler_core::ports::{OsmSource, ZoneWriter};
+
+use track_compiler_core::elevation::Anchor;
+use track_compiler_core::routing::{route, ResolvedRoute, RouteOptions};
+use track_compiler_core::trackgen::{generate, profile_csv, TrackOptions};
+use track_compiler_core::{GeoPoint, Severity};
 
 const USAGE: &str = "uso:
-  track-compiler ingest <overpass.json> --region <id> --out <grafo.json> [--geojson <archivo>] [--origin lat,lon]
-  track-compiler route  <grafo.json> --from lat,lon --to lat,lon [--via lat,lon]... [--closed] [--respect-oneway]
+  rumbo-compiler ingest <overpass.json> --region <id> --out <grafo.json> [--geojson <archivo>] [--origin lat,lon]
+  rumbo-compiler route  <grafo.json> --from lat,lon --to lat,lon [--via lat,lon]... [--closed] [--respect-oneway]
                         [--max-turn <grados, 135>] [--turn-cost <metros por giro de 90°, 20>]
                         [--geojson <archivo>] [--descriptor <archivo>]
-  track-compiler track  <grafo.json> --dem <modelo.tif> --from lat,lon --to lat,lon [--via lat,lon]...
+  rumbo-compiler track  <grafo.json> --dem <modelo.tif> --from lat,lon --to lat,lon [--via lat,lon]...
                         --id <id> [--name <nombre>] --out <pista.json> [--profile <perfil.csv>] [--geojson <archivo>]
                         [--anchor lat,lon,altura]...   altura conocida de la vía en un punto, en metros
                         [--network]   circuito urbano: cruces y calles laterales conducibles (S3, con --closed)
                         (y las mismas opciones de ruteo que route)
-  track-compiler stats  <grafo.json>";
+  rumbo-compiler stats  <grafo.json>";
 
 struct Args {
     positional: Vec<String>,
@@ -68,20 +69,6 @@ impl Args {
     }
 }
 
-fn read(path: &str) -> Result<String, String> {
-    std::fs::read_to_string(path).map_err(|e| format!("no se pudo leer {path}: {e}"))
-}
-
-fn write(path: &str, v: &serde_json::Value, pretty: bool) -> Result<(), String> {
-    if let Some(dir) = std::path::Path::new(path).parent() {
-        if !dir.as_os_str().is_empty() {
-            std::fs::create_dir_all(dir).map_err(|e| format!("no se pudo crear {}: {e}", dir.display()))?;
-        }
-    }
-    let s = if pretty { serde_json::to_string_pretty(v) } else { serde_json::to_string(v) }.map_err(|e| e.to_string())?;
-    std::fs::write(path, s).map_err(|e| format!("no se pudo escribir {path}: {e}"))
-}
-
 fn print_diagnostics(g: &RoadGraph) {
     for d in &g.diagnostics {
         let tag = match d.severity {
@@ -96,7 +83,7 @@ fn print_diagnostics(g: &RoadGraph) {
 
 fn stats(g: &RoadGraph) {
     let km = g.total_length_km();
-    let oneway = g.edges.iter().filter(|e| e.oneway != track_compiler::graph::Oneway::Both).count();
+    let oneway = g.edges.iter().filter(|e| e.oneway != track_compiler_core::graph::Oneway::Both).count();
     let bridges = g.edges.iter().filter(|e| e.bridge).count();
     let tunnels = g.edges.iter().filter(|e| e.tunnel).count();
     println!("región {} · grafo {} · compilador {}", g.region, g.hash, g.compiler_version);
@@ -147,7 +134,7 @@ fn run(raw: Vec<String>) -> Result<(), String> {
             let region = args.get("region").ok_or("falta --region")?;
             let out = args.get("out").ok_or("falta --out")?;
             let origin = args.get("origin").map(GeoPoint::parse).transpose()?;
-            let ex = Extract::from_overpass_json(&read(input)?)?;
+            let ex = OverpassFile.load(input)?;
             let g = RoadGraph::build(&ex, &BuildOptions { region: region.into(), origin })?;
             write(out, &serde_json::to_value(&g).map_err(|e| e.to_string())?, false)?;
             stats(&g);
@@ -200,13 +187,13 @@ fn run(raw: Vec<String>) -> Result<(), String> {
         "track" => {
             let input = args.positional.get(1).ok_or(USAGE)?;
             let g = RoadGraph::from_json(&read(input)?)?;
-            let dem = Dem::from_path(args.get("dem").ok_or("falta --dem")?)?;
+            let dem = geotiff::from_path(args.get("dem").ok_or("falta --dem")?)?;
             let id = args.get("id").ok_or("falta --id")?;
             let out = args.get("out").ok_or("falta --out")?;
             let (r, _) = route_from_args(&args, &g)?;
             let mut opts = TrackOptions::new(id, args.get("name").unwrap_or(id));
             if args.has("network") {
-                opts.network = Some(track_compiler::network::NetworkOptions::default());
+                opts.network = Some(track_compiler_core::network::NetworkOptions::default());
             }
             for a in args.all("anchor") {
                 let parts: Vec<&str> = a.split(',').collect();
@@ -218,7 +205,7 @@ fn run(raw: Vec<String>) -> Result<(), String> {
                 opts.elevation.anchors.push(Anchor { at, height_m });
             }
             let t = generate(&g, &r, &dem, &opts)?;
-            write(out, &t.json, true)?;
+            FileZoneWriter(out).publish(&t.json)?;
             let st = &t.json["stats"];
             println!("pista {id} · {}", t.status.as_str());
             println!(

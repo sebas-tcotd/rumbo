@@ -1,6 +1,6 @@
 //! Depuración: aristas que tocan unos vértices del grafo, con la dirección en que salen.
 //! Uso: --example vertex -- <grafo.json> <vértice> [<vértice> ...]
-use track_compiler::graph::RoadGraph;
+use track_compiler_core::graph::RoadGraph;
 fn main() {
     let a: Vec<String> = std::env::args().collect();
     let g = RoadGraph::from_json(&std::fs::read_to_string(&a[1]).unwrap()).unwrap();

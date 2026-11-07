@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/track-format", "crates/sim-core", "crates/sim-wasm", "crates/track-compiler"]
+members = ["crates/track-format", "crates/sim-core", "crates/sim-wasm", "crates/track-compiler-core", "crates/compiler-cli"]
 
 [workspace.package]
 edition = "2021"
