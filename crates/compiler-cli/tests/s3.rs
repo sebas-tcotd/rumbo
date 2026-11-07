@@ -1,12 +1,11 @@
 //! Pruebas de S3: red conducible con cruces (San Borja, sector Las Artes Norte).
 use std::collections::BTreeMap;
-use track_compiler::dem::Dem;
-use track_compiler::graph::{BuildOptions, RoadGraph};
-use track_compiler::network::{self, NetworkOptions, ASPHALT};
-use track_compiler::osm::Extract;
-use track_compiler::routing::{route, ResolvedRoute, RouteOptions};
-use track_compiler::trackgen::{generate, Status, TrackOptions};
-use track_compiler::GeoPoint;
+use track_compiler_core::graph::{BuildOptions, RoadGraph};
+use track_compiler_core::network::{self, NetworkOptions, ASPHALT};
+use track_compiler_core::osm::Extract;
+use track_compiler_core::routing::{route, ResolvedRoute, RouteOptions};
+use track_compiler_core::trackgen::{generate, Status, TrackOptions};
+use track_compiler_core::GeoPoint;
 
 const DEM: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/raw/Copernicus_DSM_COG_10_S13_00_W077_00_DEM.tif");
 const OSM: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/raw/lima-san-borja-2026-11-04.overpass.json");
@@ -161,7 +160,7 @@ fn generated_track_is_valid_and_gentle() {
     }
     let g = graph();
     let (_, _, opts) = recipe();
-    let t = generate(&g, &circuit(&g), &Dem::from_path(DEM).unwrap(), &opts).unwrap();
+    let t = generate(&g, &circuit(&g), &compiler_cli::adapters::geotiff::from_path(DEM).unwrap(), &opts).unwrap();
     assert_eq!(t.status, Status::Valid);
     assert!(t.profile.max_grade < 0.06, "San Borja es casi plano: pendiente {}", t.profile.max_grade);
     let n = &t.json["network"];
@@ -176,7 +175,9 @@ fn committed_asset_is_up_to_date() {
     }
     let g = graph();
     let (_, _, opts) = recipe();
-    let t = generate(&g, &circuit(&g), &Dem::from_path(DEM).unwrap(), &opts).unwrap();
+    let t = generate(&g, &circuit(&g), &compiler_cli::adapters::geotiff::from_path(DEM).unwrap(), &opts).unwrap();
     let committed: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(ASSET).unwrap()).unwrap();
+    let definition = sim_core::TrackDef::from_json(&t.json.to_string()).unwrap();
+    assert_eq!(sim_core::compile_track(&definition).unwrap().hash, 0xbfdf9ded9a1c3155);
     assert_eq!(committed, t.json, "assets/tracks/san-borja-las-artes.json está desactualizada: regénerala");
 }

@@ -5,22 +5,30 @@ import { pathToFileURL } from 'node:url';
 
 // Fail closed: every dependency reachable from the kernel must be approved.
 const allowed = new Set(['track-format', 'serde', 'serde_core', 'serde_derive', 'serde_json', 'itoa', 'memchr', 'zmij', 'proc-macro2', 'quote', 'syn', 'unicode-ident', 'postcard', 'embedded-io', 'cobs', 'thiserror', 'thiserror-impl', 'blake3', 'arrayref', 'arrayvec', 'cc', 'find-msvc-tools', 'shlex', 'cfg-if', 'constant_time_eq', 'cpufeatures', 'libc']);
-export function checkDependencies(metadata) {
+export function checkDependencies(metadata, rootPackage = 'track-format') {
   const packages = new Map(metadata.packages.map(p => [p.id, p]));
   const nodes = new Map(metadata.resolve.nodes.map(n => [n.id, n]));
-  const kernel = metadata.packages.find(p => p.name === 'track-format');
-  if (!kernel) throw new Error('track-format missing');
+  const kernel = metadata.packages.find(p => p.name === rootPackage);
+  const policy = rootPackage === 'track-compiler-core' ? new Set([...allowed, rootPackage, 'libm']) : allowed;
+  if (!kernel) throw new Error(rootPackage + ' missing');
+  const cli = rootPackage === 'compiler-cli';
+  const forbiddenCli = new Set(['sim-core', 'sim-wasm', 'rapier3d', 'wasm-bindgen', 'web-sys', 'js-sys']);
   const seen = new Set();
   function visit(id) {
     if (seen.has(id)) return;
     seen.add(id);
     const p = packages.get(id);
-    if (!p || !allowed.has(p.name)) throw new Error(`forbidden kernel dependency: ${p?.name ?? id}`);
+    if (!p || (cli ? forbiddenCli.has(p.name) : !policy.has(p.name))) throw new Error(`forbidden kernel dependency: ${p?.name ?? id}`);
     const n = nodes.get(id);
     if (!n) throw new Error(`missing resolution: ${id}`);
     for (const d of n.deps) {
       // Include build and normal edges; dev-only edges cannot hide production edges.
-      if (d.dep_kinds.some(k => k.kind !== 'dev')) visit(d.pkg);
+      if (!d.dep_kinds.some(k => k.kind !== 'dev')) continue;
+      if (rootPackage === 'track-compiler-core' && id === kernel.id &&
+          !['track-format', 'serde', 'serde_json', 'libm'].includes(packages.get(d.pkg)?.name)) {
+        throw new Error('forbidden direct compiler dependency: ' + d.pkg);
+      }
+      visit(d.pkg);
     }
   }
   visit(kernel.id);
@@ -82,12 +90,14 @@ function rustTokens(source) {
   return tokens;
 }
 
-export function checkSource(source, file = 'source') {
+export function checkSource(source, file = 'source', kernel = true) {
   const tokens = rustTokens(source);
   const forbiddenSerde = new Set(['flatten', 'skip_serializing_if']);
-  const forbiddenModules = new Set(['fs', 'net', 'time']);
+  // The compiler has no runtime I/O boundary. Reject whole modules so aliases
+  // and grouped imports cannot hide standard streams or subprocess access.
+  const forbiddenModules = new Set(kernel ? ['fs', 'net', 'time'] : ['fs', 'net', 'time', 'io', 'process']);
   for (let i = 0; i < tokens.length; i++) {
-    if (tokens[i] === 'serde' && tokens[i + 1] === '(') {
+    if (kernel && tokens[i] === 'serde' && tokens[i + 1] === '(') {
       let depth = 1;
       for (let j = i + 2; j < tokens.length && depth; j++) {
         if (tokens[j] === '(') depth++;
@@ -113,16 +123,19 @@ export function checkSource(source, file = 'source') {
     }
   }
 }
-function sources(dir) {
+function sources(dir, kernel = true) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
-    if (e.isDirectory()) sources(p);
-    else if (e.name.endsWith('.rs')) checkSource(readFileSync(p, 'utf8'), p);
+    if (e.isDirectory()) sources(p, kernel);
+    else if (e.name.endsWith('.rs')) checkSource(readFileSync(p, 'utf8'), p, kernel);
   }
 }
 export function check(root = resolve('.')) {
   const metadata = JSON.parse(execFileSync('cargo', ['metadata', '--format-version', '1', '--locked'], { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }));
   checkDependencies(metadata);
   sources(join(root, 'crates/track-format/src'));
+  checkDependencies(metadata, 'compiler-cli');
+  checkDependencies(metadata, 'track-compiler-core');
+  sources(join(root, 'crates/track-compiler-core/src'), false);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) { check(); console.log('track-format layers and serde: OK'); }

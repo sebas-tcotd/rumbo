@@ -1,6 +1,6 @@
 //! Depuración: aristas cuyo nombre contiene un texto, con extremos, grado de los vértices y atributos.
 //! Uso: --example streets -- <grafo.json> <texto> [<texto> ...]
-use track_compiler::graph::RoadGraph;
+use track_compiler_core::graph::RoadGraph;
 fn main() {
     let a: Vec<String> = std::env::args().collect();
     let g = RoadGraph::from_json(&std::fs::read_to_string(&a[1]).unwrap()).unwrap();

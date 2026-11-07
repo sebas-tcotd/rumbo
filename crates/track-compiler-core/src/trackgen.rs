@@ -9,7 +9,7 @@
 //! precisas en `f32`.
 
 use crate::centerline::{self, CenterSample, CenterlineOptions};
-use crate::dem::Dem;
+use crate::ports::ElevationSource;
 use crate::diagnostics::{Diagnostic, Severity};
 use crate::elevation::{self, ElevationOptions, Profile};
 use crate::graph::RoadGraph;
@@ -80,7 +80,7 @@ fn round(v: f64, digits: i32) -> f64 {
     (v * k).round() / k
 }
 
-pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &Dem, opts: &TrackOptions) -> Result<GeneratedTrack, String> {
+pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &dyn ElevationSource, opts: &TrackOptions) -> Result<GeneratedTrack, String> {
     let mut cl = opts.centerline;
     if let Some(n) = &opts.network {
         cl.min_width_m = n.min_width_m;
@@ -290,7 +290,7 @@ pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &Dem, opts: &TrackOptions
             "generator": format!("track-compiler {}", crate::COMPILER_VERSION),
             "graph": format!("{}@{}", g.region, g.hash),
             "osmBaseTimestamp": g.source.osm_base_timestamp,
-            "dem": { "product": "Copernicus GLO-30", "hash": dem.hash },
+            "dem": { "product": "Copernicus GLO-30", "hash": dem.identity() },
             "origin": { "lat": round(origin.lat, 7), "lon": round(origin.lon, 7) },
             "axes": "x = este, y = altura (m), z = -norte; metros desde el origen",
             "route": r.descriptor_route(),

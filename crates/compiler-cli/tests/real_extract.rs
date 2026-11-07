@@ -4,10 +4,10 @@
 //! `RUMBO_OSM` apunta a uno. Sin datos, avisan y pasan: los datos no viajan en CI.
 //! Descarga: `node scripts/fetch-osm.mjs`.
 use std::path::PathBuf;
-use track_compiler::graph::{BuildOptions, RoadGraph};
-use track_compiler::osm::Extract;
-use track_compiler::routing::{route, RouteOptions};
-use track_compiler::GeoPoint;
+use track_compiler_core::graph::{BuildOptions, RoadGraph};
+use track_compiler_core::osm::Extract;
+use track_compiler_core::routing::{route, RouteOptions};
+use track_compiler_core::GeoPoint;
 
 fn extract_path() -> Option<PathBuf> {
     if let Ok(p) = std::env::var("RUMBO_OSM") {

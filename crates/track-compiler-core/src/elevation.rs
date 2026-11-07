@@ -20,7 +20,7 @@
 //! o donde el perfil se aparta mucho de los datos: allí la altura es una estimación.
 
 use crate::centerline::CenterSample;
-use crate::dem::Dem;
+use crate::ports::ElevationSource;
 use crate::diagnostics::{Diagnostic, Severity};
 use crate::geo::LocalFrame;
 
@@ -175,7 +175,7 @@ fn percentile(v: &mut [f64], p: f64) -> f64 {
 }
 
 /// Muestra `n` alturas a lo ancho, entre `-reach` y `reach` metros del eje.
-fn across(dem: &Dem, frame: &LocalFrame, en: [f64; 2], right: [f64; 2], reach: f64, step: f64) -> Vec<f64> {
+fn across(dem: &dyn ElevationSource, frame: &LocalFrame, en: [f64; 2], right: [f64; 2], reach: f64, step: f64) -> Vec<f64> {
     let n = (reach / step).round() as i32;
     (-n..=n)
         .filter_map(|k| {
@@ -185,7 +185,7 @@ fn across(dem: &Dem, frame: &LocalFrame, en: [f64; 2], right: [f64; 2], reach: f
         .collect()
 }
 
-pub fn profile(samples: &[CenterSample], dem: &Dem, frame: &LocalFrame, opts: &ElevationOptions) -> Result<Profile, String> {
+pub fn profile(samples: &[CenterSample], dem: &dyn ElevationSource, frame: &LocalFrame, opts: &ElevationOptions) -> Result<Profile, String> {
     let mut diags = Vec::new();
     let mut outside = 0usize;
     let n = samples.len();

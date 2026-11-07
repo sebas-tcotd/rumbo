@@ -1,11 +1,10 @@
 //! Depuración: geometría y altura del DEM a lo largo de unas aristas.
 //! Uso: --example edgeprof -- <grafo.json> <dem.tif> <id> [<id> ...]
-use track_compiler::dem::Dem;
-use track_compiler::graph::RoadGraph;
+use track_compiler_core::graph::RoadGraph;
 fn main() {
     let a: Vec<String> = std::env::args().collect();
     let g = RoadGraph::from_json(&std::fs::read_to_string(&a[1]).unwrap()).unwrap();
-    let dem = Dem::from_path(&a[2]).unwrap();
+    let dem = compiler_cli::adapters::geotiff::from_path(&a[2]).unwrap();
     for id in &a[3..] {
         let e = g.edges.iter().find(|e| &e.id == id).unwrap();
         let p0 = g.frame.en_to_geo(e.en[0]);

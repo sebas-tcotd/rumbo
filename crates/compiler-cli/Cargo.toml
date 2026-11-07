@@ -1,21 +1,21 @@
 [package]
-name = "track-compiler"
+name = "compiler-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "Compilador de circuitos desde geografía real (S1: OSM, grafo y ruteo; S2: elevación y pista)"
 
 [dependencies]
-track-format.workspace = true
-serde.workspace = true
+track-compiler-core = { path = "../track-compiler-core" }
 serde_json.workspace = true
-libm.workspace = true
+
 tiff.workspace = true
 
 [[bin]]
-name = "track-compiler"
-path = "src/bin/track-compiler.rs"
+name = "rumbo-compiler"
+path = "src/bin/rumbo-compiler.rs"
 
 [dev-dependencies]
+libm.workspace = true
 # Solo para las pruebas: comprobar que la pista generada la acepta y la recorre el simulador.
 sim-core = { path = "../sim-core" }

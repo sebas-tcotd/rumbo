@@ -33,3 +33,5 @@ jobs:
       - run: pnpm --filter exact-versions test
       - run: node ci/track-format/check.mjs
       - run: node --test ci/track-format/check.test.mjs
+      - run: cargo build -p track-compiler-core --target wasm32-unknown-unknown --locked
+      - run: cargo test --release -p compiler-cli -p track-compiler-core --locked

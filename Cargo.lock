@@ -105,6 +105,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "compiler-cli"
+version = "0.1.0"
+dependencies = [
+ "libm",
+ "serde_json",
+ "sim-core",
+ "tiff",
+ "track-compiler-core",
+]
+
+[[package]]
 name = "constant_time_eq"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -780,14 +791,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "track-compiler"
+name = "track-compiler-core"
 version = "0.1.0"
 dependencies = [
  "libm",
  "serde",
  "serde_json",
- "sim-core",
- "tiff",
  "track-format",
 ]
 

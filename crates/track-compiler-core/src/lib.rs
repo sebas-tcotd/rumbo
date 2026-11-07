@@ -1,4 +1,4 @@
-//! track-compiler: compilador de circuitos desde geografía real.
+//! track-compiler-core: compilador de circuitos desde geografía real.
 //!
 //! S1 cubre la mitad "geográfica" del pipeline:
 //! ingesta de OSM (Overpass JSON) → proyección WGS84 → ENU local → grafo vial dirigido
@@ -25,6 +25,7 @@ pub mod graph;
 pub mod hash;
 pub mod network;
 pub mod osm;
+pub mod ports;
 pub mod routing;
 pub mod terrain;
 pub mod trackgen;
