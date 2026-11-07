@@ -81,7 +81,7 @@ fn input_wire_fixture_and_legacy_versions() {
     use track_format::version::*;
     assert_eq!(
         (PHYSICS_VERSION, COMPILER_VERSION, TICK_HZ, REPLAY_FORMAT),
-        ("0.4.0", "0.2.0", 120, "race-lab-replay/1")
+        ("0.5.0", "0.2.0", 120, "race-lab-replay/1")
     );
     let input = InputFrame {
         steer: 0,

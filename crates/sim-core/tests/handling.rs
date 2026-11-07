@@ -88,13 +88,14 @@ fn at_speed(profile: sim_core::ProfileFile, kmh: f32) -> sim_core::Simulation {
     s
 }
 
-/// Maniobra estándar: 10 ticks de `entry` con volante a fondo, luego acelerador sostenido 1 s.
+/// Maniobra estándar: 20 ticks de `entry` para superar la rampa de dirección,
+/// luego acelerador sostenido hasta completar 1 s.
 /// Devuelve (entró en derrape, ángulo máximo).
 fn maneuver(s: &mut sim_core::Simulation, entry: InputFrame) -> (bool, f32) {
     let mut max_slip = 0.0f32;
     let mut entered = false;
     for t in 0..HZ {
-        let i = if t < 10 { InputFrame { steer: 127, ..entry } } else { InputFrame { steer: 127, throttle: 255, ..Default::default() } };
+        let i = if t < 20 { InputFrame { steer: 127, ..entry } } else { InputFrame { steer: 127, throttle: 255, ..Default::default() } };
         s.step(i);
         let st = state(s);
         entered |= st[DRIFT] > 0.5;
@@ -118,6 +119,30 @@ fn handbrake_and_steer_starts_a_controlled_drift() {
     let (entered, max_slip) = maneuver(&mut s, InputFrame { flags: sim_core::input::FLAG_HANDBRAKE, ..Default::default() });
     assert!(entered, "el freno de mano no inició el derrape");
     assert!((15.0..40.0).contains(&max_slip), "ángulo de derrape fuera de rango: {max_slip:.1}°");
+}
+
+#[test]
+fn released_handbrake_does_not_trigger_delayed_drift() {
+    let mut s = at_speed(profile(), 110.0);
+    s.step(InputFrame { throttle: 255, flags: sim_core::input::FLAG_HANDBRAKE, ..Default::default() });
+    for _ in 0..40 {
+        s.step(InputFrame { throttle: 255, steer: 127, ..Default::default() });
+        assert!(!s.vehicle().drift, "un toque anterior no debe iniciar un derrape tardío");
+    }
+}
+
+#[test]
+fn drift_assist_releases_after_handbrake_release() {
+    let mut s = at_speed(profile(), 110.0);
+    for _ in 0..20 {
+        s.step(InputFrame { throttle: 255, steer: 127, flags: sim_core::input::FLAG_HANDBRAKE, ..Default::default() });
+    }
+    assert!(s.vehicle().drift);
+    for _ in 0..HZ {
+        s.step(InputFrame { throttle: 255, steer: -127, ..Default::default() });
+    }
+    assert!(!s.vehicle().drift, "el contravolante debe liberar la asistencia de derrape");
+    assert!(state(&s).iter().all(|v| v.is_finite()));
 }
 
 #[test]

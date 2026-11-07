@@ -1,6 +1,6 @@
 //! Shared legacy versions and the independently versioned binary envelope.
-/// Unchanged simulation contract.
-pub const PHYSICS_VERSION: &str = "0.4.0";
+/// Experimental handling contract; older replay hashes are incompatible.
+pub const PHYSICS_VERSION: &str = "0.5.0";
 /// Unchanged compiler contract.
 pub const COMPILER_VERSION: &str = "0.2.0";
 /// Inputs are recorded at every simulation tick.

@@ -48,7 +48,8 @@ export function Hud({ snap, ghostTicksAt, autopilot, paused }: Props) {
   if (!state || !I || !ready) return null;
   const s = state.curr;
   const hz = ready.tickHz;
-  const speed = Math.abs(s[I.speedKmh]);
+  // Rapier publica esta velocidad después de resolver las fuerzas y los contactos del tick.
+  const speed = Math.hypot(s[I.vx], s[I.vy], s[I.vz]) * 3.6;
   const slip = s[I.slipDeg];
   const drifting = s[I.drift] > 0.5;
   const started = s[I.nextCheckpoint] >= 1;

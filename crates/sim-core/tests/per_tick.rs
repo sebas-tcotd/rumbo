@@ -1,19 +1,19 @@
-//! Per-tick state trace fingerprints captured on main at 18649c3 before extraction.
+//! Per-tick state trace fingerprints for experimental physics 0.5.0.
 //! Hash every little-endian u64 state hash, including all ticks between replay checks.
 use sim_core::{InputFrame, ReplayManifest, Simulation, TrackDef};
 use std::{fs, path::PathBuf};
 #[test]
-fn all_golden_ticks_match_pre_extraction_baseline() {
+fn all_golden_ticks_match_handling_baseline() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     const EXPECTED: &[(&str, &str)] = &[
-        ("costa-verde-sprint.adversarial.json", "bafe64bdd7b3cb15"),
+        ("costa-verde-sprint.adversarial.json", "b38f5a8a1a371080"),
         ("costa-verde-sprint.autopilot.json", "1e25a9c60c0306ae"),
-        ("san-borja-las-artes.adversarial.json", "75b4e98aa3b47be3"),
+        ("san-borja-las-artes.adversarial.json", "710464ab07f20e41"),
         ("san-borja-las-artes.autopilot.json", "2ee00bdca1af0f3c"),
-        ("san-borja-las-artes.scripted.json", "1eb3054a6edb2df5"),
-        ("test-loop.adversarial.json", "16226ae5d51e35c6"),
+        ("san-borja-las-artes.scripted.json", "d539b24dfc054a60"),
+        ("test-loop.adversarial.json", "7cff1c5c613c2072"),
         ("test-loop.autopilot.json", "04fa2f51034dabdb"),
-        ("test-loop.scripted.json", "eacc58113dfd8513"),
+        ("test-loop.scripted.json", "a5d492d2d8eedb4e"),
     ];
     let mut files: Vec<_> = fs::read_dir(root.join("crates/sim-core/tests/golden"))
         .unwrap()

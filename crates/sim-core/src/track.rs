@@ -29,6 +29,15 @@ pub enum Surface {
 }
 
 impl Surface {
+    /// Calibración experimental: el arcén alcanza su pico a mayor deslizamiento.
+    pub fn slip_peak_multiplier(self) -> f32 {
+        match self {
+            Surface::Shoulder => 1.4,
+            Surface::KerbA | Surface::KerbB => 1.1,
+            _ => 1.0,
+        }
+    }
+
     pub fn grip(self) -> f32 {
         match self {
             Surface::Asphalt | Surface::StartLine => 1.0,

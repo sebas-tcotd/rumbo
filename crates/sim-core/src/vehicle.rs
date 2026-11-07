@@ -222,8 +222,8 @@ impl Vehicle {
         // Como en los NFS clásicos: freno + dirección es una frenada en curva normal;
         // freno de mano + dirección inicia el derrape. La entrada por toque de freno
         // queda como opción del perfil (`drift_brake_tap`).
-        // Se recuerda una pulsación de hasta 0,35 s: tolera que el jugador la haga un
-        // instante antes de que la rampa de dirección pase el umbral.
+        // El freno de mano requiere intención actual; el freno normal conserva
+        // su ventana opcional de entrada.
         if brake > 0.3 && self.prev_brake <= 0.3 {
             self.brake_time = 0.0;
         } else {
@@ -235,12 +235,12 @@ impl Vehicle {
             self.handbrake_time = (self.handbrake_time + dt).min(10.0);
         }
         let brake_tap = p.drift_brake_tap >= 0.5 && self.brake_time < 0.35;
-        let handbrake_pull = handbrake || self.handbrake_time < 0.35;
+        let steer_threshold = if handbrake { 0.4 } else { 0.55 };
         if !self.drift
             && speed_kmh > p.drift_entry_speed_kmh
-            && self.steer.abs() > 0.3
+            && self.steer.abs() > steer_threshold
             && v_fwd > 0.0
-            && (brake_tap || handbrake_pull)
+            && (brake_tap || handbrake)
         {
             self.drift = true;
             self.drift_dir = sign(self.steer);
@@ -249,7 +249,13 @@ impl Vehicle {
         if self.drift {
             self.drift_time += dt;
             let settled = self.drift_time > 0.3 && beta.abs() < p.drift_exit_angle_deg * DEG;
-            if settled || speed_kmh < p.drift_entry_speed_kmh * 0.6 || v_fwd <= 0.0 {
+            let counter_steering = self.steer * self.drift_dir < -0.2;
+            if settled
+                || (counter_steering && !handbrake && self.drift_time > 0.3)
+                || speed_kmh < p.drift_entry_speed_kmh * 0.6
+                || v_fwd <= 0.0
+                || (!handbrake && !brake_tap && self.drift_time > 0.5)
+            {
                 self.drift = false;
             }
         }
@@ -366,7 +372,7 @@ impl Vehicle {
             let roll_sign = (vl / 0.5).clamp(-1.0, 1.0);
             let mut fx = drive - brake_total * bias / axle_count.max(1.0) * roll_sign - vl * 12.0;
             if !front && handbrake {
-                fx -= p.brake_force_n * 0.2 * roll_sign;
+                fx -= p.brake_force_n * 0.8 * roll_sign;
             }
 
             // Agarre disponible.
@@ -388,7 +394,7 @@ impl Vehicle {
 
             // Lateral: curva lineal hasta el pico y meseta arcade al deslizar.
             let alpha = atan2(vt, vl.abs() + 0.5);
-            let a = alpha.abs() / (p.slip_peak_deg * DEG);
+            let a = alpha.abs() / (p.slip_peak_deg * DEG * h.surface.slip_peak_multiplier());
             let g = if a <= 1.0 {
                 a
             } else if a <= 3.0 {
@@ -420,8 +426,10 @@ impl Vehicle {
                 // y el ángulo converge sin oscilar.
                 let k = self.steer * self.drift_dir;
                 let mag = (p.drift_target_angle_deg * (0.55 + 0.45 * k)).max(p.drift_target_angle_deg * 0.1);
-                let beta_t = -self.drift_dir * mag * DEG;
-                let r_des = r_path + (beta_t - beta) * p.drift_angle_kp;
+                let recovering = !handbrake && self.steer * self.drift_dir < -0.2;
+                let beta_t = if recovering { 0.0 } else { -self.drift_dir * mag * DEG };
+                let recovery_gain = if recovering { 2.5 } else { 1.0 };
+                let r_des = r_path + (beta_t - beta) * p.drift_angle_kp * recovery_gain;
                 yaw_torque = p.drift_angle_kd * (r_des - r);
                 let vh = norm(v - up * v.dot(up));
                 rb.add_force(vh * (p.drift_speed_assist_n * throttle), true);

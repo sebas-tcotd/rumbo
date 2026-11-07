@@ -38,6 +38,7 @@ export class LabRenderer {
   readonly camera = new THREE.PerspectiveCamera(62, 1, 0.1, 2500);
   backend = 'iniciando';
   cameraMode: CameraMode = 'persecucion';
+  private referenceFov = 62; // FOV vertical de Rumbo a 16:9, en grados.
   showGhost = true;
 
   private container: HTMLElement;
@@ -54,7 +55,9 @@ export class LabRenderer {
   private lastFrame = performance.now();
   private camPos = new THREE.Vector3();
   private camLook = new THREE.Vector3();
+  private camAnchor = new THREE.Vector3();
   private camInit = false;
+  private camRoll = 0;
   /** Aceleración longitudinal suavizada (m/s²), para que la cámara reaccione al frenar. */
   private accelSmooth = 0;
   private tickHz = 120;
@@ -112,7 +115,21 @@ export class LabRenderer {
     const h = this.container.clientHeight || 1;
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
+    this.updateProjection();
+  }
+
+  private updateProjection() {
+    const chase = this.cameraMode !== 'aerea';
+    // eView de MW (Xbox 360): el ángulo horizontal permanece fijo al redimensionar.
+    const baseDeg = this.referenceFov * (16 / 9) / 1.1165;
+    // Limitar el vertical evita una proyección invertida en ventanas muy estrechas.
+    this.camera.fov = chase ? Math.min(170, baseDeg * 1.1165 / this.camera.aspect) : this.referenceFov;
     this.camera.updateProjectionMatrix();
+    if (chase) {
+      const halfHorizontal = THREE.MathUtils.degToRad(baseDeg * 1.015) / 2;
+      this.camera.projectionMatrix.elements[0] = 1 / Math.tan(halfHorizontal);
+      this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
+    }
   }
 
   // ── Construcción de la escena ──
@@ -535,6 +552,7 @@ export class LabRenderer {
   }
 
   private updateCamera(pos: THREE.Vector3, rot: THREE.Quaternion, s: Float32Array, I: StateIndex, dt: number) {
+    dt = THREE.MathUtils.clamp(dt, 0, 0.1);
     const fwd = tmpV2.set(0, 0, -1).applyQuaternion(rot);
     fwd.y = 0;
     fwd.normalize();
@@ -543,12 +561,13 @@ export class LabRenderer {
     const speed = vel.length();
     if (speed > 3) fwd.lerp(vel.normalize(), 0.4).normalize();
     const kmh = Math.abs(s[I.speedKmh]);
+    const speedFactor = THREE.MathUtils.clamp(kmh / 250, 0, 1);
 
-    let dist = 6.4 + kmh * 0.008;
+    let dist = 6.4 + speedFactor * 2.2;
     let height = 2.2;
     let look = 4;
     if (this.cameraMode === 'cercana') {
-      dist = 4.2 + kmh * 0.004;
+      dist = 4.2 + speedFactor * 1.25;
       height = 1.45;
       look = 6;
     } else if (this.cameraMode === 'aerea') {
@@ -557,20 +576,32 @@ export class LabRenderer {
       look = 8;
     }
     if (this.cameraMode !== 'aerea') {
+      look += speedFactor * 4;
       // Frenada: la cámara se acerca (más cuanto más brusca); aceleración: se aleja un poco.
       const braking = THREE.MathUtils.clamp(-this.accelSmooth / 11, 0, 1);
       const pulling = THREE.MathUtils.clamp(this.accelSmooth / 7, 0, 1);
-      dist *= 1 - 0.3 * braking + 0.07 * pulling;
+      dist *= 1 - 0.15 * braking + 0.025 * pulling;
       height *= 1 - 0.12 * braking;
     }
     const desired = pos.clone().addScaledVector(fwd, -dist).add(new THREE.Vector3(0, height, 0));
     const target = pos.clone().addScaledVector(fwd, look).add(new THREE.Vector3(0, 0.8, 0));
+    if (this.cameraMode !== 'aerea') {
+      target.y += s[I.throttle] * 0.3 - s[I.brake] * 0.5;
+    }
     if (!this.camInit) {
       this.camPos.copy(desired);
       this.camLook.copy(target);
       this.camInit = true;
+      this.camRoll = 0;
+    } else {
+      // Transportar el encuadre con el auto evita un retraso de velocidad / 4
+      // metros. El resorte suaviza el offset, no el desplazamiento de la carrera.
+      const displacement = pos.clone().sub(this.camAnchor);
+      this.camPos.add(displacement);
+      this.camLook.add(displacement);
     }
-    const k = 1 - Math.exp(-dt * 7);
+    this.camAnchor.copy(pos);
+    const k = 1 - Math.exp(-dt * 4);
     this.camPos.lerp(desired, k);
     this.camLook.lerp(target, 1 - Math.exp(-dt * 12));
     this.camera.position.copy(this.camPos);
@@ -582,10 +613,11 @@ export class LabRenderer {
       this.camera.position.x += Math.sin(t * 29 + 1.3) * amp;
     }
     this.camera.lookAt(this.camLook);
-    const fov = 60 + 16 * THREE.MathUtils.clamp(kmh / 220, 0, 1);
-    if (Math.abs(this.camera.fov - fov) > 0.05) {
-      this.camera.fov += (fov - this.camera.fov) * k;
-      this.camera.updateProjectionMatrix();
-    }
+    const targetRoll = this.cameraMode === 'aerea' ? 0 : THREE.MathUtils.clamp(-s[I.latG] * 0.025, -0.06, 0.06);
+    this.camRoll += (targetRoll - this.camRoll) * (1 - Math.exp(-dt * 5));
+    this.camera.rotateZ(this.camRoll);
+    const fov = this.cameraMode === 'aerea' ? 60 : 60 + 6 * speedFactor;
+    this.referenceFov += (fov - this.referenceFov) * k;
+    this.updateProjection();
   }
 }
