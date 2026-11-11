@@ -1,25 +1,26 @@
 {
-  "name": "race-lab-web",
+  "name": "@rumbo/web",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "predev": "pnpm -w exec turbo run build --filter=race-lab-web^...",
+    "predev": "pnpm -w exec turbo run build --filter=@rumbo/web^...",
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && vite build --mode lab",
+    "build:lab": "vite build --mode lab",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "react": "catalog:",
-    "react-dom": "catalog:",
-    "three": "catalog:",
     "@rumbo/contracts": "workspace:*",
-    "@rumbo/sim-worker": "workspace:*"
+    "@rumbo/devtools": "workspace:*",
+    "@rumbo/platform-web": "workspace:*",
+    "@rumbo/render-three": "workspace:*",
+    "@rumbo/sim-worker": "workspace:*",
+    "@rumbo/ui": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "@types/three": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:"

@@ -24,7 +24,8 @@
       "@assets/*": [
         "../../assets/*"
       ]
-    }
+    },
+    "allowImportingTsExtensions": true
   },
   "include": [
     "src"
@@ -35,6 +36,18 @@
     },
     {
       "path": "../../packages/sim-worker"
+    },
+    {
+      "path": "../../packages/render-three"
+    },
+    {
+      "path": "../../packages/platform-web"
+    },
+    {
+      "path": "../../packages/ui"
+    },
+    {
+      "path": "../../packages/devtools"
     }
   ]
 }

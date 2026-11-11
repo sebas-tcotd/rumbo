@@ -81,6 +81,8 @@ let recFrames = 0;
 let prevLap = 0;
 let prevLapTicks = 0;
 let prevBest = -1;
+/** False while the lap in progress was not recorded from its start (a seek lands mid-lap). */
+let recFromLapStart = true;
 
 function mesh(l: Lab, part: string): MeshData {
   return {
@@ -138,7 +140,11 @@ function publish() {
  * session untouched; traps and other errors still propagate to `fatal`.
  */
 function startSession(profileJson: string, showInitial: boolean) {
-  const next = new Lab(trackJson, profileJson, 1);
+  replaceLab(new Lab(trackJson, profileJson, 1), showInitial);
+}
+
+/** Install an already-built Lab as the live session and announce it. */
+function replaceLab(next: Lab, showInitial: boolean) {
   lab?.free();
   lab = next;
   hasState = false;
@@ -150,6 +156,7 @@ function startSession(profileJson: string, showInitial: boolean) {
   prevLap = 0;
   prevLapTicks = 0;
   prevBest = -1;
+  recFromLapStart = true;
   if (!paused) clock.start(performance.now());
   post({ type: 'session', hashes: { track: next.track_hash(), profile: next.profile_hash() } });
   if (paused && showInitial) {
@@ -206,10 +213,12 @@ function recordGhost(s: Float32Array) {
     // Empezó una vuelta nueva (completa, anulada o la primera).
     if (lap > prevLap) {
       const isBest = best !== prevBest;
-      const ghost = isBest ? rec.slice(0, recFrames * GHOST_STRIDE) : null;
+      // A partial recording would offset the ghost (frames are indexed from the lap start).
+      const ghost = isBest && recFromLapStart ? rec.slice(0, recFrames * GHOST_STRIDE) : null;
       post({ type: 'lap', ticks: s[I.lastLapTicks], best: isBest, ghost }, ghost ? [ghost.buffer] : []);
     }
     recFrames = 0;
+    recFromLapStart = true;
   }
   prevLap = lap;
   prevLapTicks = lapTicks;
@@ -231,6 +240,47 @@ function recordGhost(s: Float32Array) {
   rec[o + 6] = s[I.qw];
   rec[o + 7] = s[I.progressS];
   recFrames++;
+}
+
+/** Show the latest state while paused (no tick will publish it). */
+function publishPaused(l: Lab) {
+  capture(l);
+  lastAt = performance.timeOrigin + performance.now();
+  dirty = true;
+  publish();
+}
+
+/** AR28: move the car to lap distance `s`. Not recorded in the replay (the host marks the session). */
+function devTeleport(l: Lab, s: number) {
+  l.teleport(s);
+  // Both interpolation states are the new pose, so the renderer snaps instead of sweeping across the map.
+  hasState = false;
+  if (paused) publishPaused(l);
+}
+
+/**
+ * AR28: replace the session with a replay re-simulated up to `tick`, paused there. A rejected replay
+ * (thrown string) is reported like a failed verification and leaves the live session untouched.
+ */
+function devSeekReplay(json: string, tick: number) {
+  let next: Lab;
+  try {
+    next = Lab.from_replay(trackJson, json, tick);
+  } catch (cause) {
+    if (typeof cause !== 'string') throw cause;
+    post({ type: 'verifyError', code: 'INVALID_REPLAY', message: cause });
+    return;
+  }
+  paused = true;
+  clearTimeout(timer);
+  clock.stop();
+  replaceLab(next, true);
+  // The re-simulated session is mid-race: lap tracking starts from its current state (captured by
+  // replaceLab while paused), and a lap already under way never becomes the ghost.
+  prevLap = lastState[I.lap];
+  prevLapTicks = lastState[I.lapTicks];
+  prevBest = lastState[I.bestLapTicks];
+  recFromLapStart = lastState[I.nextCheckpoint] < 1; // timer not started: recording begins at the line
 }
 
 let failed = false;
@@ -415,6 +465,12 @@ ctx.onmessage = async (ev: MessageEvent<CommandMessage>) => {
             post({ type: 'commandError', operation: 'exportReplay', code: 'EXPORT_FAILED' });
           }
         }
+        break;
+      case 'devTeleport':
+        devTeleport(currentLab(), msg.s);
+        break;
+      case 'devSeekReplay':
+        devSeekReplay(msg.json, msg.tick);
         break;
       case 'verifyReplay': {
         const t0 = performance.now();

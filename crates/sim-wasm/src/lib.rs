@@ -30,6 +30,23 @@ impl Lab {
         Ok(Lab { sim, autopilot: Autopilot::default(), state: vec![0.0; STATE_LEN] })
     }
 
+    /// Dev tool (AR28): a session re-simulated from `replay_json` up to `tick`
+    /// (`sim_core::replay::resimulate_until`). Rejections are returned as strings, like `new`.
+    pub fn from_replay(track_json: &str, replay_json: &str, tick: f64) -> Result<Lab, JsValue> {
+        if !(tick.is_finite() && tick >= 0.0 && tick.fract() == 0.0) {
+            return Err(js_err(format!("tick inválido: {tick}")));
+        }
+        let track = TrackDef::from_json(track_json).map_err(js_err)?;
+        let manifest = ReplayManifest::from_json(replay_json).map_err(js_err)?;
+        let sim = sim_core::replay::resimulate_until(&manifest, &track, tick as u64).map_err(js_err)?;
+        Ok(Lab { sim, autopilot: Autopilot::default(), state: vec![0.0; STATE_LEN] })
+    }
+
+    /// Dev tool (AR28): moves the car to lap distance `s`. Not recorded in the replay.
+    pub fn teleport(&mut self, s: f32) {
+        self.sim.teleport_to_s(s);
+    }
+
     /// Avanza un tick con la entrada dada.
     pub fn step(&mut self, steer: i8, throttle: u8, brake: u8, flags: u8) {
         self.sim.step(InputFrame { steer, throttle, brake, flags });

@@ -32,6 +32,9 @@ minimumReleaseAgeExclude:
   - '@types/three@0.187.0'
   - '@vitejs/plugin-react@6.2.1'
   - 'three@0.187.0'
+  # Catalog pin from story 0.1, first installed by story 0.6 (2026-11-11) when it was 6 days old.
+  # Drop this entry once 2026-11-12 has passed.
+  - 'i18next@26.7.2'
 
 # Exact versions only (checked by ci/exact-versions).
 catalog:

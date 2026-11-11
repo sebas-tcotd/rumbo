@@ -10,6 +10,7 @@ import {
   STATE_BYTES,
   SNAPSHOT_VERSION,
   PROTOCOL_VERSION,
+  DEV_SEEK_MAX_TICKS,
   protocolDescriptor,
   validateSnapshotDescriptor,
   isCommand,
@@ -59,6 +60,8 @@ test('native Rust and TypeScript independently produce and reject parity fixture
       hash: hash_content(Uint8Array.from(envelope)),
       load: createCommand({ type: 'load', zone: null, race: null, track: 'track', profile: 'profile' }, 2),
       fatal: { ...base, ...createFatal('trap') },
+      devTeleport: createCommand({ type: 'devTeleport', s: 120.5 }, 2),
+      devSeekReplay: createCommand({ type: 'devSeekReplay', json: '{}', tick: DEV_SEEK_MAX_TICKS }, 2),
       header: {
         format: 'rumbo-replay/2',
         physicsVersion: '0.5.0',
@@ -89,6 +92,8 @@ test('native Rust and TypeScript independently produce and reject parity fixture
     for (const key of Object.keys(ts)) assert.notEqual(check({ ...ts, [key]: null }), 0, key);
     for (const [key, reader] of [
       ['load', isCommand],
+      ['devTeleport', isCommand],
+      ['devSeekReplay', isCommand],
       ['fatal', isResponse],
       ['header', isReplayHeader],
       ['link', isLinkHeader],
@@ -103,6 +108,11 @@ test('native Rust and TypeScript independently produce and reject parity fixture
           assert.equal(reader(bad), false, key + '.' + field);
         }
     }
+    // Dev command bounds: one tick past the shared limit, a non-finite s and an oversized replay are rejected.
+    assert.equal(isCommand({ ...native.devSeekReplay, tick: DEV_SEEK_MAX_TICKS + 1 }), false);
+    assert.equal(isCommand({ ...native.devSeekReplay, tick: 1.5 }), false);
+    assert.equal(isCommand({ ...native.devTeleport, s: Number.POSITIVE_INFINITY }), false);
+    assert.equal(isCommand({ ...native.devSeekReplay, json: 'x'.repeat(16 * 1024 * 1024 + 1) }), false);
   } finally {
     lab.free();
   }

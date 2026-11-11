@@ -1,0 +1,32 @@
+{
+  "lab": {
+    "loading": "Cargando la simulación…"
+  },
+  "hud": {
+    "idleCircuit": "Cruza la meta para empezar",
+    "idleSprintStart": "Cruza la salida para empezar",
+    "idleSprintFinished": "Llegada · T para otro intento",
+    "attempt": "Intento",
+    "lap": "Vuelta",
+    "lastLap": "Última",
+    "bestLap": "Mejor",
+    "ghost": "Fantasma",
+    "autopilot": "Piloto automático",
+    "paused": "En pausa",
+    "invalidPhysics": "La física produjo un valor inválido en esta sesión",
+    "speedUnit": "km/h",
+    "drift": "Derrape",
+    "slip": "Deslizamiento",
+    "slipGaugeLabel": "Ángulo de derrape {{angle}} grados"
+  },
+  "errors": {
+    "SIM_NOT_READY": "La simulación aún no está lista.",
+    "INVALID_PROFILE": "El perfil no es válido; se mantiene la sesión actual.",
+    "EXPORT_FAILED": "No se pudo exportar el replay.",
+    "UNSUPPORTED_OPERATION": "Operación no disponible todavía: {{operation}}"
+  },
+  "fatal": {
+    "title": "La simulación se detuvo.",
+    "reload": "Recarga la página para iniciar otra sesión."
+  }
+}

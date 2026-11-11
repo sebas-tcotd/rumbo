@@ -1,4 +1,6 @@
-import type { InputFrame, StateMsg, SimCommand } from './protocol.js';
+import type { InputFrame, ReadyMsg, SimCommand } from './protocol.js';
+import type { StateIndex } from './snapshot.js';
+import type { Settings } from './settings.js';
 
 /** Commands are scoped to one worker instance. Disposal terminates its pending requests. */
 export interface SimPort {
@@ -25,11 +27,44 @@ export interface LinkCodecPort {
   decodeChallenge(bytes: Uint8Array): Promise<CapabilityResult<Challenge>>;
   hashContent(bytes: Uint8Array): Promise<string>;
 }
+/** Body adapter. Hot path: no allocation, no Result, no React. */
 export interface RendererPort {
-  setState(snapshot: StateMsg): void;
+  /** Builds the scene once per ready (track, meshes, vehicle). */
+  build(ready: ReadyMsg, index: StateIndex): void;
+  /**
+   * Draws one display frame between two consecutive ticks. prev/curr are host-owned scratch valid only
+   * during the call: the renderer copies what it needs and keeps no reference. 0 ≤ alpha ≤ 1.
+   * Before the first snapshot the host passes all-zero arrays: draw the scene without posing the car.
+   */
+  frame(prev: Float32Array, curr: Float32Array, alpha: number): void;
+  /** Best-lap ghost poses (GHOST_STRIDE floats per tick), or null to hide it. */
+  setGhost(frames: Float32Array | null): void;
+  dispose(): void;
 }
+/** Polled once per display frame by the host loop. */
 export interface InputSourcePort {
   sample(): InputFrame;
+  /** Removes every listener the source installed. */
+  dispose(): void;
+}
+/** Outcome of a write that may fail without breaking the app. */
+export type SaveResult = { ok: true } | { ok: false; code: 'STORAGE_UNAVAILABLE' };
+/**
+ * Player settings persistence (AR19). The UI reads and saves settings only through this port, never
+ * through localStorage. load() never throws: missing, corrupt or unreadable data yields defaults.
+ */
+export interface SettingsStorePort {
+  load(): Settings;
+  save(next: Settings): SaveResult;
+}
+/** Debug overlays drawn by the renderer (AR28): centerline, checkpoints, collision boxes. */
+export type OverlayKind = 'axis' | 'checkpoints' | 'collision';
+/**
+ * Lab-only render controls, implemented by the renderer and injected into devtools, which never
+ * imports three. Overlays are built the first time they are switched on.
+ */
+export interface RenderDebugPort {
+  setOverlay(kind: OverlayKind, on: boolean): void;
 }
 export interface AudioPort {
   setVolume(volume: number): void;

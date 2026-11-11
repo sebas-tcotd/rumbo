@@ -2,7 +2,7 @@
 //!
 //! Se activan solas si hay un archivo `data/raw/*.overpass.json` (el más reciente) o si
 //! `RUMBO_OSM` apunta a uno. Sin datos, avisan y pasan: los datos no viajan en CI.
-//! Descarga: `node scripts/fetch-osm.mjs`.
+//! Descarga: `node tools/data-fetch/fetch-osm.mjs`.
 use std::path::PathBuf;
 use track_compiler_core::graph::{BuildOptions, RoadGraph};
 use track_compiler_core::osm::Extract;
@@ -25,7 +25,7 @@ fn extract_path() -> Option<PathBuf> {
 
 fn load() -> Option<(RoadGraph, String)> {
     let Some(path) = extract_path() else {
-        eprintln!("sin extracto real en data/raw: se omite (descárgalo con `node scripts/fetch-osm.mjs`)");
+        eprintln!("sin extracto real en data/raw: se omite (descárgalo con `node tools/data-fetch/fetch-osm.mjs`)");
         return None;
     };
     let text = std::fs::read_to_string(&path).expect("no se pudo leer el extracto");

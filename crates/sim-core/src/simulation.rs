@@ -219,6 +219,27 @@ impl Simulation {
         self.s = self.track.project_s(p, idx);
     }
 
+    /// Dev tool (AR28): places the car at rest on the centerline at lap distance `s` (wrapped on
+    /// circuits, clamped on sprints) and discards the current attempt, like `restart`.
+    ///
+    /// It is not an input, so the replay does not record it: a session that teleports no longer
+    /// reproduces and the host must treat it as altered. The normal tick is unchanged.
+    pub fn teleport_to_s(&mut self, s: f32) {
+        let n = self.track.samples.len();
+        let raw = if s.is_finite() { (s / self.track.spacing).round() as i64 } else { 0 };
+        let idx = if self.track.closed {
+            raw.rem_euclid(n as i64) as usize
+        } else {
+            raw.clamp(0, n as i64 - 1) as usize
+        };
+        let (p, r) = Self::pose_at(&self.track, idx);
+        self.vehicle.place(&mut self.world, p, r);
+        self.near_idx = idx;
+        self.last_good_idx = idx;
+        self.s = self.track.project_s(p, idx);
+        self.timer.restart();
+    }
+
     // ── Lectura ──
 
     pub fn tick(&self) -> u64 {

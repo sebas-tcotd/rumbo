@@ -12,20 +12,101 @@ const physicsVersion = /PHYSICS_VERSION: &str = "([^"]+)"/.exec(
   await readFile(new URL('../../crates/track-format/src/version.rs', import.meta.url), 'utf8'),
 )?.[1];
 assert.ok(physicsVersion, 'physics version not found');
-const config = {
+// The lab smoke drives the devtools panel, so it previews the lab build (dist-lab/, mode 'lab').
+// The publication build (dist/) gets its own minimal check below: it loads, drives, shows the HUD and
+// has no panel. Both builds come from `pnpm turbo run build`.
+const config = (mode) => ({
   root,
+  mode,
   configFile: root + '/vite.config.ts',
   server: { port: 0, host: '127.0.0.1' },
   preview: { port: 0, host: '127.0.0.1' },
-};
-const server = dev ? await createServer(config) : await preview(config);
+});
+const telemetry = (page, label) =>
+  page
+    .locator('dt')
+    .filter({ hasText: new RegExp('^' + label + '$') })
+    .locator('..')
+    .locator('dd')
+    .innerText();
+/** Waits until the telemetry value next to `label` satisfies `accept` (both run in the page). */
+const waitTelemetry = (page, label, accept, arg) =>
+  page.waitForFunction(
+    ([label, accept, arg]) => {
+      const dd = [...document.querySelectorAll('dt')].find((dt) => dt.textContent === label)?.nextElementSibling;
+      return dd ? new Function('value', 'arg', 'return ' + accept)(dd.textContent, arg) : false;
+    },
+    [label, accept, arg],
+  );
+
+/** AR28 on test-loop: record a golden, jump to the first mismatch of an altered replay, teleport. */
+async function devtoolsAr28(page) {
+  await page.getByRole('tab', { name: 'Depuración' }).click();
+  const golden = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Grabar dorado' }).click();
+  const file = await golden;
+  assert.equal(file.suggestedFilename(), 'test-loop.lab.json');
+  assert.equal(JSON.parse(await readFile(await file.path(), 'utf8')).format, 'race-lab-replay/1');
+
+  // A golden with one input run changed on purpose diverges; the lab re-simulates up to that tick.
+  const source = new URL('../../crates/sim-core/tests/golden/test-loop.scripted.json', import.meta.url);
+  const replay = JSON.parse(await readFile(source, 'utf8'));
+  const k = Math.floor(replay.inputs.length / 2);
+  replay.inputs[k][1] = (replay.inputs[k][1] ^ 0x7f) >>> 0;
+  await page.getByRole('tab', { name: 'Sesión' }).click();
+  await page
+    .locator('input[type=file]')
+    .setInputFiles({ name: 'altered.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(replay)) });
+  const seek = page.getByRole('button', { name: /^Ir al tick \d+$/ });
+  await seek.waitFor();
+  const tick = Number((await seek.innerText()).match(/\d+/)[0]);
+  assert.ok(tick > 0 && tick <= replay.ticks, String(tick));
+  await seek.click();
+  await page.getByText('Sesión alterada', { exact: false }).waitFor();
+  await page.locator('.badge', { hasText: 'En pausa' }).waitFor();
+  await page.getByRole('tab', { name: 'Telemetría' }).click();
+  await waitTelemetry(page, 'Tick', 'value === String(arg)', tick);
+
+  // Teleport: the car lands at s while paused, and an altered session cannot be recorded as a golden.
+  await page.getByRole('tab', { name: 'Depuración' }).click();
+  assert.equal(await page.getByRole('button', { name: 'Grabar dorado' }).isDisabled(), true);
+  await page.getByLabel(/Distancia s/).fill('200');
+  await page.getByRole('button', { name: 'Teletransportar' }).click();
+  await page.getByRole('tab', { name: 'Telemetría' }).click();
+  await waitTelemetry(page, 'Progreso', 'Math.abs(Number(value.split("/")[0]) - arg) < 5', 200);
+  assert.match(await telemetry(page, 'Progreso'), /^\d+ \/ \d+ m$/);
+  await page.keyboard.press('Escape');
+}
+
+const server = dev ? await createServer(config('development')) : await preview(config('lab'));
 if (dev) await server.listen();
+const publication = dev ? null : await preview(config('production'));
 let browser;
 try {
   browser = await chromium.launch();
   const page = await browser.newPage({ acceptDownloads: true });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (msg) => msg.type() === 'error' && errors.push(msg.text()));
+  // Window error events Playwright's pageerror misses (e.g. "ResizeObserver loop completed…").
+  await page.addInitScript(() => {
+    window.__windowErrors = [];
+    window.addEventListener('error', (e) => window.__windowErrors.push(e.message));
+  });
+  const windowErrors = async () => errors.push(...(await page.evaluate(() => window.__windowErrors)));
+  if (publication) {
+    await page.goto(publication.resolvedUrls.local[0] + '?pista=test-loop');
+    await page.locator('.hud .speed-unit').waitFor();
+    await page.keyboard.down('w');
+    await page.waitForFunction(() => Number(document.querySelector('.speed-value')?.textContent) > 5);
+    await page.keyboard.up('w');
+    // Let any lazily loaded chunk arrive before asserting it never mounted.
+    await page.waitForLoadState('networkidle');
+    assert.equal(await page.getByRole('tab').count(), 0, 'publication build has no lab panel');
+    assert.equal(await page.locator('.panel-toggle').count(), 0);
+    await windowErrors();
+    console.log('OK publication (dist/) test-loop');
+  }
   const base = server.resolvedUrls.local[0];
   for (const track of ['costa-verde-sprint', 'san-borja-las-artes', 'test-loop']) {
     await page.goto(base + '?pista=' + track);
@@ -90,11 +171,21 @@ try {
       await page.keyboard.press('Escape');
       await settle();
       assert.ok((await ticks()) > held);
+      await devtoolsAr28(page);
     }
-    console.log('OK', dev ? 'Vite dev' : 'production', track);
+    // AR28 overlays: switching each one on and off must not raise errors.
+    await page.getByRole('tab', { name: 'Depuración' }).click();
+    for (const name of ['Eje de la pista', 'Checkpoints', 'Cajas de colisión']) {
+      await page.getByLabel(name).check();
+      await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+      await page.getByLabel(name).uncheck();
+    }
+    await windowErrors();
+    console.log('OK', dev ? 'Vite dev' : 'lab build (dist-lab/)', track);
   }
   assert.deepEqual(errors, []);
 } finally {
   await browser?.close();
   await server.close();
+  await publication?.close();
 }

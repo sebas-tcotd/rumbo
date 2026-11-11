@@ -26,6 +26,18 @@
         "dist/**"
       ]
     },
+    "@rumbo/web#build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**",
+        "dist-lab/**"
+      ],
+      "env": [
+        "RUMBO_DEVTOOLS"
+      ]
+    },
     "@rumbo/sim-wasm#build": {
       "inputs": [
         "$TURBO_ROOT$/crates/**",

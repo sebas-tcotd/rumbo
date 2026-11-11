@@ -43,8 +43,11 @@ jobs:
       - run: rustc --version && cargo --version && node --version && wasm-pack --version
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo run build
-      - run: pnpm turbo run test --filter @rumbo/contracts --filter @rumbo/sim-worker --force
+      - run: pnpm turbo run test --filter "./packages/*" --force
       - run: pnpm exec biome lint packages
+      # Story 0.6, AC 7: devtools absent from the publication build (dist/), present in the lab build (dist-lab/).
+      - run: node --test ci/bundle/check-devtools.test.mjs
+      - run: node ci/bundle/check-devtools.mjs
       - run: pnpm --filter rumbo-determinism exec playwright install --with-deps chromium
       - run: node --test ci/determinism/worker-integration.test.mjs
       - run: node ci/determinism/lab-smoke.mjs

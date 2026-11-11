@@ -119,3 +119,45 @@ pub fn verify_replay(manifest: &ReplayManifest, track: &TrackDef) -> Result<Veri
         message,
     })
 }
+
+/// Upper bound of a dev re-simulation (30 min at 120 Hz), so a crafted file cannot hang the worker.
+pub const MAX_SEEK_TICKS: u64 = 30 * 60 * 120;
+
+/// Dev tool (AR28): re-simulates `manifest` from tick 0 up to `tick` and returns the live session there,
+/// so the lab can inspect the state at a verification's `first_mismatch_tick`. Steps through
+/// `Simulation::step`, so the returned session records the same inputs as the prefix of the replay.
+/// # Errors
+/// Same rejections as `verify_replay` for format, track, profile and physics version, plus a `tick`
+/// beyond the recorded inputs or beyond `MAX_SEEK_TICKS`. The bound is the inputs actually recorded,
+/// not the declared `ticks`, so the session returned is always exactly at `tick`.
+pub fn resimulate_until(manifest: &ReplayManifest, track: &TrackDef, tick: u64) -> Result<Simulation, String> {
+    if manifest.format != REPLAY_FORMAT {
+        return Err(format!("formato desconocido: {}", manifest.format));
+    }
+    let recorded: u64 = manifest.inputs.iter().map(|run| u64::from(run[0])).sum();
+    let max = recorded.min(MAX_SEEK_TICKS);
+    if tick > max {
+        return Err(format!("tick fuera del replay: {tick} (máximo {max})"));
+    }
+    if manifest.physics_version != crate::PHYSICS_VERSION {
+        return Err(format!("versión de física distinta: replay {}", manifest.physics_version));
+    }
+    let mut sim = Simulation::new(track, &manifest.profile, manifest.seed)?;
+    if sim.track_hash_hex() != manifest.track_hash {
+        return Err("la pista compilada no coincide con la del replay".into());
+    }
+    if sim.profile_hash_hex() != manifest.profile_hash {
+        return Err("el perfil no coincide con su hash".into());
+    }
+    'runs: for run in &manifest.inputs {
+        let input = InputFrame::unpack(run[1]);
+        for _ in 0..run[0] {
+            if sim.tick() >= tick {
+                break 'runs;
+            }
+            sim.step(input);
+        }
+    }
+    debug_assert_eq!(sim.tick(), tick, "the inputs cover `tick` (checked above)");
+    Ok(sim)
+}
