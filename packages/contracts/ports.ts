@@ -56,6 +56,15 @@ export interface SettingsStorePort {
   load(): Settings;
   save(next: Settings): SaveResult;
 }
+/** Debug overlays drawn by the renderer (AR28): centerline, checkpoints, collision boxes. */
+export type OverlayKind = 'axis' | 'checkpoints' | 'collision';
+/**
+ * Lab-only render controls, implemented by the renderer and injected into devtools, which never
+ * imports three. Overlays are built the first time they are switched on.
+ */
+export interface RenderDebugPort {
+  setOverlay(kind: OverlayKind, on: boolean): void;
+}
 export interface AudioPort {
   setVolume(volume: number): void;
 }

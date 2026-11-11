@@ -1,3 +1,4 @@
+import type { RenderDebugPort } from '@rumbo/contracts';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DevPanel } from './DevPanel.tsx';
@@ -24,6 +25,8 @@ export interface DevtoolsDeps {
   events: DevEvents;
   track: DevTrack;
   tracks: DevTrack[];
+  /** Renderer debug controls (overlays); devtools never imports the renderer. */
+  debug: RenderDebugPort;
 }
 
 /** Handle returned by {@link mountDevtools}. */
@@ -43,6 +46,7 @@ export function mountDevtools(targets: DevtoolsTargets, deps: DevtoolsDeps): Mou
         actions={deps.actions}
         track={deps.track}
         tracks={deps.tracks}
+        debug={deps.debug}
         toolbar={targets.toolbar}
       />
     </StrictMode>,

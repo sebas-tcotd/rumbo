@@ -79,7 +79,7 @@ function start(root: HTMLElement): () => void {
       if (disposed) return;
       devtools = mountDevtools(
         { panel: dom.panel, toolbar: dom.toolbar },
-        { store: session, actions: controller, events: controller, track, tracks: TRACKS },
+        { store: session, actions: controller, events: controller, track, tracks: TRACKS, debug: renderer },
       );
     });
   }

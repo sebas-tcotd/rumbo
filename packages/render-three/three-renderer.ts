@@ -1,10 +1,18 @@
 // Lab renderer. It only reads state and never writes into the simulation: anything visual that
 // would need physics goes into the track in sim-core, not here.
 
-import { GHOST_STRIDE, type ReadyMsg, type RendererPort, type StateIndex } from '@rumbo/contracts';
+import {
+  GHOST_STRIDE,
+  type OverlayKind,
+  type ReadyMsg,
+  type RenderDebugPort,
+  type RendererPort,
+  type StateIndex,
+} from '@rumbo/contracts';
 import * as THREE from 'three/webgpu';
 import { type CameraMode, ChaseCamera } from './camera/chase-camera.ts';
 import { buildCar, type CarRig, placeWheels, type WheelSetup } from './car/car-rig.ts';
+import { DebugOverlays } from './overlays/debug-overlays.ts';
 import { addBarriers } from './scene/barriers.ts';
 import { addLandmarks } from './scene/landmarks.ts';
 import { addLighting } from './scene/lighting.ts';
@@ -23,16 +31,17 @@ const SUN_OFFSET = new THREE.Vector3(-60, 140, 45);
 export type RenderBackend = 'iniciando' | 'WebGPU' | 'WebGL 2';
 
 /**
- * three.js (WebGPU with WebGL 2 fallback) implementation of RendererPort. It has no loop of its
+ * three.js (WebGPU with WebGL 2 fallback) implementation of RendererPort and RenderDebugPort. It has no loop of its
  * own: the host calls `frame()` from its single requestAnimationFrame after `init()` resolved.
  * The extra members (camera, ghost visibility, suspension rest, backend) are lab controls used only by
  * apps/web; ui and devtools never import this class.
  */
-export class ThreeRenderer implements RendererPort {
+export class ThreeRenderer implements RendererPort, RenderDebugPort {
   private readonly renderer: THREE.WebGPURenderer;
   private readonly scene = new THREE.Scene();
   private readonly chase = new ChaseCamera();
   private readonly sun: THREE.DirectionalLight;
+  private readonly overlays = new DebugOverlays(this.scene);
   private readonly container: HTMLElement;
   private readonly resizeObs: ResizeObserver;
   private status: RenderBackend = 'iniciando';
@@ -113,6 +122,12 @@ export class ThreeRenderer implements RendererPort {
     this.ghost = buildCar(ready.vehicle, true).root;
     this.ghost.visible = false;
     this.scene.add(this.ghost);
+    this.overlays.attach(ready, this.car);
+  }
+
+  /** Debug overlays (AR28); built the first time they are switched on. */
+  setOverlay(kind: OverlayKind, on: boolean): void {
+    this.overlays.set(kind, on);
   }
 
   setGhost(frames: Float32Array | null): void {

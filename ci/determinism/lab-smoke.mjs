@@ -114,6 +114,13 @@ try {
       await settle();
       assert.ok((await ticks()) > held);
     }
+    // AR28 overlays: switching each one on and off must not raise errors.
+    await page.getByRole('tab', { name: 'Depuración' }).click();
+    for (const name of ['Eje de la pista', 'Checkpoints', 'Cajas de colisión']) {
+      await page.getByLabel(name).check();
+      await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+      await page.getByLabel(name).uncheck();
+    }
     await windowErrors();
     console.log('OK', dev ? 'Vite dev' : 'lab build (dist-lab/)', track);
   }

@@ -1,16 +1,20 @@
+import type { OverlayKind, RenderDebugPort } from '@rumbo/contracts';
 import { useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import type { DevActions, DevCameraMode, DevStore, DevTrack } from './dev-snapshot.ts';
+import { DebugPanel } from './panels/DebugPanel.tsx';
 import { SessionPanel } from './panels/SessionPanel.tsx';
 import { TelemetryPanel } from './panels/TelemetryPanel.tsx';
 import { TuningPanel } from './panels/TuningPanel.tsx';
 
-type Tab = 'ajustes' | 'telemetria' | 'sesion';
+type Tab = 'ajustes' | 'telemetria' | 'sesion' | 'depuracion';
 const TABS: [Tab, string][] = [
   ['ajustes', 'Ajustes'],
   ['telemetria', 'Telemetría'],
   ['sesion', 'Sesión'],
+  ['depuracion', 'Depuración'],
 ];
+const NO_OVERLAYS: Record<OverlayKind, boolean> = { axis: false, checkpoints: false, collision: false };
 const CAMERA_NAMES: Record<DevCameraMode, string> = {
   persecucion: 'persecución',
   cercana: 'cercana',
@@ -23,6 +27,7 @@ export interface DevPanelProps {
   actions: DevActions;
   track: DevTrack;
   tracks: DevTrack[];
+  debug: RenderDebugPort;
   /** Element over the 3D view that hosts the show/hide button. */
   toolbar: HTMLElement;
 }
@@ -38,9 +43,10 @@ function PanelToggle({ open, actions, toolbar }: { open: boolean; actions: DevAc
 }
 
 /** Lab side panel: Tuning, Telemetry and Session tabs. Texts are literal Spanish (developer tool). */
-export function DevPanel({ store, actions, track, tracks, toolbar }: DevPanelProps) {
+export function DevPanel({ store, actions, track, tracks, debug, toolbar }: DevPanelProps) {
   const snap = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const [tab, setTab] = useState<Tab>('ajustes');
+  const [overlays, setOverlays] = useState(NO_OVERLAYS);
   const km = snap.ready ? `${(snap.ready.trackLength / 1000).toFixed(2)} km` : '…';
   return (
     <>
@@ -63,6 +69,7 @@ export function DevPanel({ store, actions, track, tracks, toolbar }: DevPanelPro
               <TuningPanel schema={snap.ready.schema} applied={snap.appliedProfile} onApply={actions.applyProfile} />
             )}
             {tab === 'telemetria' && <TelemetryPanel snap={snap} />}
+            {tab === 'depuracion' && <DebugPanel debug={debug} overlays={overlays} onOverlays={setOverlays} />}
             {tab === 'sesion' && (
               <SessionPanel
                 snap={snap}
