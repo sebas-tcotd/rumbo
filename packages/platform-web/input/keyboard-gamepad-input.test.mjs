@@ -39,6 +39,15 @@ test('keyboard keys map to a digital frame and fire actions once per press', () 
   assert.equal(input.device, 'teclado');
 });
 
+test('browser shortcuts with Ctrl, Meta or Alt are not lab actions', () => {
+  const win = fakeWindow();
+  const actions = [];
+  createKeyboardGamepadInput(win, (code) => actions.push(code));
+  for (const mod of ['ctrlKey', 'metaKey', 'altKey']) win.dispatchEvent(key('keydown', 'KeyR', { props: { [mod]: true } }));
+  win.dispatchEvent(key('keydown', 'KeyP', { props: { shiftKey: true } }));
+  assert.deepEqual(actions, ['KeyP'], 'Shift is not a browser shortcut modifier');
+});
+
 test('typing in a form field is not driving input', () => {
   const win = fakeWindow();
   const actions = [];

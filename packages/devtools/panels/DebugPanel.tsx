@@ -45,6 +45,8 @@ function Teleport({ snap, actions }: Pick<DebugPanelProps, 'snap' | 'actions'>) 
   const [s, setS] = useState(0);
   const length = snap.ready?.trackLength ?? 0;
   const progress = snap.state && snap.index ? snap.state.curr[snap.index.progressS] : null;
+  // A sprint only times an attempt that crosses the start line going forward (decided in the 0.6 review).
+  const sprint = snap.ready && !snap.ready.track.closed ? snap.ready.track : null;
   return (
     <section>
       <h3>Teletransporte</h3>
@@ -61,6 +63,11 @@ function Teleport({ snap, actions }: Pick<DebugPanelProps, 'snap' | 'actions'>) 
         Avance actual: {progress === null ? '—' : `${progress.toFixed(0)} m`}. El auto queda en reposo sobre el eje y
         se descarta el intento. La sesión queda alterada: su replay ya no se reproduce.
       </p>
+      {sprint && s > sprint.startS && (
+        <p className="note" role="status">
+          Sprint: pasada la salida ({sprint.startS.toFixed(0)} m) no hay intento cronometrado hasta pulsar T.
+        </p>
+      )}
     </section>
   );
 }

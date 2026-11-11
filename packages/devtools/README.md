@@ -26,7 +26,9 @@ The «Depuración» tab and the Session tab add:
   rules; this tool adds nothing to the set.
 - **Jump to `firstMismatchTick`**: after verifying a file that diverges, «Ir al tick N» re-simulates that replay in
   the lab up to the first mismatched check and pauses there (`devSeekReplay`, bounded by `DEV_SEEK_MAX_CHARS` and
-  `DEV_SEEK_MAX_TICKS`; the worker rejects anything else as `INVALID_REPLAY`). The session becomes altered and keeps
-  the previously applied profile in the tuning panel.
+  `DEV_SEEK_MAX_TICKS`; the worker rejects anything else as `INVALID_REPLAY`). The session becomes altered and the
+  replay's own profile becomes the applied one (tuning panel, car rest height, «Reiniciar sesión»).
+- **Teleport on a sprint** past the start line leaves no timed attempt until T: the sprint only starts timing when
+  the car crosses the start going forward. The Debug tab says so; the timing rules are not changed for dev tools.
 
 Out of scope here: the provenance overlay (2.3) and compiler diagnostics on the map (2.6).

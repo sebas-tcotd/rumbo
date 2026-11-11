@@ -9,6 +9,9 @@ it creates its own React root (StrictMode) and its own i18next instance and retu
 - i18n: `i18n/es.json`, keys `screen.element` in camelCase (`hud.bestLap`, `fatal.title`); notices arrive as
   codes and render as `errors.<CODE>`. `i18n/keys.test.mjs` checks the key format and that every key used in
   the source exists. No language detector and no HTTP backend.
+- The one exception to camelCase (decided in the 0.6 review): `errors.<CODE>` keeps the code's UPPER_SNAKE
+  name (`errors.SIM_NOT_READY`), because the code is the identifier of the error catalogue (story 0.8) and
+  the UI translates it without a code→key map. New error codes follow the same rule.
 - Settings only through `SettingsStorePort` (`locale`); never `localStorage`.
 - Imports: `@rumbo/contracts`, `@rumbo/game` (future), react, react-dom, i18next, react-i18next
   (Biome `noRestrictedImports`, ADR-005).

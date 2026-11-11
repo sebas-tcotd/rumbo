@@ -94,6 +94,18 @@ function seekProblem(json: string, tick: number): string | null {
   return null;
 }
 
+/** The profile embedded in a replay manifest, or null if it does not look like one. */
+function replayProfile(json: string): ProfileFile | null {
+  try {
+    const profile = (JSON.parse(json) as { profile?: unknown }).profile as Partial<ProfileFile> | undefined;
+    const valid =
+      typeof profile?.id === 'string' && typeof profile.name === 'string' && typeof profile.params === 'object';
+    return valid && profile.params !== null ? (profile as ProfileFile) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Store of the lab session; the composition root wires its callbacks to the renderer and controller. */
 export class LabSession {
   private readonly worker: SimPort;
@@ -116,6 +128,8 @@ export class LabSession {
   onReplay: (json: string, ticks: number) => void = () => {};
   /** Called when the worker rejects a command, so the host can drop state tied to it. */
   onCommandError: (operation: string) => void = () => {};
+  /** Called when a confirmed session runs a different profile (applied, or a seek's replay profile). */
+  onProfile: (profile: ProfileFile) => void = () => {};
   /** Called once when the lab stops with a fatal error, so the host can stop its frame loop. */
   onFatal: () => void = () => {};
 
@@ -170,6 +184,8 @@ export class LabSession {
         return;
       }
       this.seekPending = true;
+      // The seek's session runs the replay's own profile: it becomes the applied one when it arrives.
+      this.pendingProfile = replayProfile(cmd.json);
     }
     this.worker.send(cmd);
   }
@@ -228,6 +244,7 @@ export class LabSession {
         break;
       case 'verifyError':
         // A rejected seek answers with verifyError and leaves the live session as it was.
+        if (this.seekPending) this.pendingProfile = null;
         this.seekPending = false;
         this.patch({ verify: null, verifyError: msg.message });
         break;
@@ -285,8 +302,10 @@ export class LabSession {
       altered: seek,
       ...(seek ? { paused: true } : {}),
     });
+    const applied = this.pendingProfile;
     this.pendingProfile = null;
     this.seekPending = false;
+    if (applied) this.onProfile(applied);
     if (this.view.ready) this.onGhost(null);
   }
 
@@ -302,7 +321,10 @@ export class LabSession {
 
   /** A rejected dev command leaves the session as it was: undo the marks set when it was sent. */
   private dropDevCommand(operation: string): void {
-    if (operation === 'devSeekReplay') this.seekPending = false;
+    if (operation === 'devSeekReplay') {
+      this.seekPending = false;
+      this.pendingProfile = null;
+    }
     if (operation === 'devTeleport') this.patch({ altered: this.sessionAltered });
   }
 

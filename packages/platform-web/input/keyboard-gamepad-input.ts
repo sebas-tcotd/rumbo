@@ -67,7 +67,8 @@ export function createKeyboardGamepadInput(target: Window, onKeyAction: (code: s
   const down = (e: KeyboardEvent) => {
     if (isTyping(e)) return;
     if (DRIVE_KEYS.has(e.code)) e.preventDefault();
-    if (!e.repeat) onKeyAction(e.code);
+    // Browser and OS shortcuts (Ctrl+R reload, Ctrl+P print…) are not lab actions.
+    if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) onKeyAction(e.code);
     keys.add(e.code);
     device = 'teclado';
   };

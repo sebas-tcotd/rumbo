@@ -53,6 +53,8 @@ function start(root: HTMLElement): () => void {
     renderer.build(ready, index);
   };
   session.onGhost = (frames) => renderer.setGhost(frames);
+  // A seek runs the replay's profile: the car's rest height follows whatever profile is running.
+  session.onProfile = (p) => renderer.setSuspensionRest(p.params.suspension_rest_m);
   // A fatal error stops drawing and sampling input behind the error screen.
   session.onFatal = () => loop?.stop();
   const stopVisibility = platform.visibility.subscribe((hidden) => session.setHidden(hidden));
