@@ -6,9 +6,9 @@
   "scripts": {
     "predev": "pnpm -w exec turbo run build --filter=@rumbo/web^...",
     "dev": "vite",
-    "build": "tsc --noEmit && vite build && vite build --mode lab",
+    "build": "tsc -b && vite build && vite build --mode lab",
     "build:lab": "vite build --mode lab",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc -b"
   },
   "dependencies": {
     "@rumbo/contracts": "workspace:*",

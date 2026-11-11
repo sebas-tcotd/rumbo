@@ -5,6 +5,8 @@
 //! El arnés de CI (`ci/determinism`) re-simula los mismos archivos con el WASM y exige los
 //! mismos hashes: si coinciden en todas partes, la simulación es determinista entre
 //! plataformas. Para regenerarlos (al cambiar la física): `UPDATE_GOLDEN=1 cargo test --test golden`.
+#![allow(clippy::disallowed_methods, reason = "test harness outside the core: it reads fixtures from disk (golden.rs also honours an env var to record them)")]
+#![allow(clippy::unwrap_used, clippy::expect_used, reason = "test code: a panic is the failure report")]
 mod common;
 use common::{scripted_input, HZ};
 use sim_core::autopilot::Autopilot;

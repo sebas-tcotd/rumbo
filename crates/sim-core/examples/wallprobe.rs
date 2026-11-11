@@ -1,5 +1,7 @@
 //! Depuración: dónde toca muros el piloto automático en una pista.
 //! Uso: cargo run -p sim-core --release --example wallprobe -- <pista.json> [segundos]
+#![allow(clippy::disallowed_methods, reason = "diagnostic tool outside the core: it reads the track file from disk")]
+#![allow(clippy::unwrap_used, clippy::expect_used, reason = "example: a diagnostic tool where a panic is the error report")]
 use sim_core::autopilot::Autopilot;
 use sim_core::{ProfileFile, Simulation, TrackDef, STATE_LEN};
 fn main() {

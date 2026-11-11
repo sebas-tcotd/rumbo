@@ -1,5 +1,6 @@
 //! Depuración: aristas cuyo nombre contiene un texto, con extremos, grado de los vértices y atributos.
 //! Uso: --example streets -- <grafo.json> <texto> [<texto> ...]
+#![allow(clippy::unwrap_used, clippy::expect_used, reason = "example: a diagnostic tool where a panic is the error report")]
 use track_compiler_core::graph::RoadGraph;
 fn main() {
     let a: Vec<String> = std::env::args().collect();

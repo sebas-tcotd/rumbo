@@ -1,4 +1,5 @@
-# Repo-wide checks. Story 0.9 completes this workflow (Biome, tsc -b, clippy, parity, goldens).
+# Repo-wide checks. Story 0.7 adds the layers job (Biome, tsc -b, clippy, guardrails); story 0.9
+# completes this workflow (rustfmt, all tests, size budgets, golden rule).
 name: CI
 
 on:
@@ -35,3 +36,37 @@ jobs:
       - run: node --test ci/track-format/check.test.mjs
       - run: cargo build -p track-compiler-core --target wasm32-unknown-unknown --locked
       - run: cargo test --release -p compiler-cli -p track-compiler-core --locked
+
+  # Story 0.7 (ADR-005, P1): every layer rule has a tool that enforces it, and each tool is proven
+  # alive by a guardrail test with intentional violations.
+  layers:
+    name: Layers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Installs exactly the toolchain in rust-toolchain.toml (clippy is one of its components).
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      # typecheck of @rumbo/sim-worker needs the @rumbo/sim-wasm package (wasm-pack build).
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack@0.15.1
+      # No `version:`: pnpm/action-setup reads it from `packageManager`. Corepack is not used.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Every pnpm package and Cargo member declared in ci/layers/policy.mjs; deps == references;
+      # [lints] inherited; canonical core clippy.toml; biome.json generated from the policy.
+      - run: node ci/layers/check.mjs
+      - run: pnpm exec biome lint
+      # tsc -b over the project references (Turbo `^build` builds dependencies first).
+      - run: pnpm turbo run typecheck
+      - run: pnpm --filter rumbo-layers test
+      - name: Clippy (blocking; pedantic is reported below)
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings -A clippy::pedantic
+      - run: pnpm --filter rumbo-layers run test:clippy
+      - name: Clippy pedantic report (not blocking)
+        run: cargo clippy --workspace --all-targets --locked --message-format=json | node ci/layers/pedantic-summary.mjs >> "$GITHUB_STEP_SUMMARY"

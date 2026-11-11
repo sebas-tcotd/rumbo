@@ -36,3 +36,12 @@ track-format = { path = "crates/track-format" }
 postcard = { version = "=1.1.3", default-features = false, features = ["alloc"] }
 blake3 = "=1.8.4"
 thiserror = "=2.0.21"
+
+# Lints for every crate (story 0.7, ADR-005). Each crate opts in with `[lints] workspace = true`;
+# ci/layers/check.mjs fails when one does not. CI runs clippy with `-D warnings -A clippy::pedantic`:
+# pedantic is a visible warning locally and in the CI summary, never a blocking error.
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+allow_attributes_without_reason = "deny"

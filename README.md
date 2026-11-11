@@ -107,7 +107,7 @@ Tres slots de 328 bytes transportan los estados anterior y actual (41 f32 cada u
 
 `hashContent` usa BLAKE3-128 de Rust. La codificación de retos con Race, Replay y RouteMeta y la carga de fantasmas externos devuelven `UNSUPPORTED_CAPABILITY`. Las fixtures prospectivas comprueban la cabecera de replay v2 y el prefijo de link inline. La semilla se expresa como decimal u64 en la fixture JSON. La escritura de ambos formatos corresponde a 0.10 y 6.7.
 
-`pnpm turbo run build` compila los paquetes. `pnpm turbo run test --force` ejecuta paridad, transferencias y negativos de capas. Para revisar Biome usa `pnpm exec biome lint packages`. Con Chromium instalado en Playwright, `node ci/determinism/lab-smoke.mjs` prueba los bundles (laboratorio en `dist-lab/` y publicación en `dist/`) y `node ci/determinism/lab-smoke.mjs --dev` prueba Vite. `node ci/bundle/check-devtools.mjs` comprueba que `@rumbo/devtools` no está en `dist/` y sí en `dist-lab/`.
+`pnpm turbo run build` compila los paquetes. `pnpm turbo run test --force` ejecuta paridad, transferencias y negativos de capas. Para revisar Biome usa `pnpm exec biome lint` (paquetes y `apps/`). Con Chromium instalado en Playwright, `node ci/determinism/lab-smoke.mjs` prueba los bundles (laboratorio en `dist-lab/` y publicación en `dist/`) y `node ci/determinism/lab-smoke.mjs --dev` prueba Vite. `node ci/bundle/check-devtools.mjs` comprueba que `@rumbo/devtools` no está en `dist/` y sí en `dist-lab/`.
 
 ## Front: paquetes y composition root
 
@@ -118,8 +118,8 @@ instancia a otro adapter ni hay singletons; con HMR, `import.meta.hot.dispose` d
 - **Render:** un solo `requestAnimationFrame` en `apps/web/src/frame-loop.ts` muestrea la entrada, calcula
   `alpha` con `interpolationAlpha` (`@rumbo/contracts`, tiempo absoluto) y llama
   `RendererPort.frame(prev, curr, alpha)`. El renderer no tiene bucle propio ni retiene `StateMsg`.
-- **Capas:** cada paquete tiene su regla `noRestrictedImports` en `biome.json` (ADR-005) con casos positivos y
-  negativos en `packages/contracts/layers.test.mjs`. `ui` y `devtools` nunca importan three ni otros adapters.
+- **Capas:** cada paquete tiene su regla `noRestrictedImports` en `biome.json`, generada desde
+  `ci/layers/policy.mjs` (ADR-005; ver «Capas»). `ui` y `devtools` nunca importan three ni otros adapters.
 - **Exports:** los paquetes que consume Vite (`sim-worker`, `render-three`, `platform-web`, `ui`, `devtools`)
   exportan la fuente (`"default": "./index.ts"`) y los tipos desde `dist/`, generados por `tsc -b`
   (`emitDeclarationOnly` en los paquetes nuevos). `@rumbo/contracts` sigue emitiendo JS porque lo importan
@@ -163,11 +163,46 @@ node ci/track-format/check.mjs
 node --test ci/track-format/check.test.mjs
 cargo test --release -p track-format
 cargo check -p track-format --target wasm32-unknown-unknown
-cargo clippy -p track-format --all-targets -- -D warnings
+cargo clippy -p track-format --all-targets -- -D warnings -A clippy::pedantic
 ```
 
 La prueba `per_tick` compara huellas de todos los ticks de los ocho replays con las capturadas
 antes de la extracción en `18649c3`, además de los controles y hashes finales dorados.
+
+## Capas (ADR-005)
+
+Toda regla de capas tiene una herramienta que la hace cumplir y un test que prueba que sigue viva
+(una violación intencional tiene que fallar). La fuente única es `ci/layers/policy.mjs`.
+
+- **TypeScript:** dependencias `workspace:*` y project references (`tsc -b`, `^build` en Turbo).
+  `biome.json` se **genera** desde la política (`node ci/layers/biome.mjs`; no se edita a mano):
+  `noRestrictedImports` por paquete y por profundidad de carpeta, subcarpetas de `platform-web`
+  aisladas entre sí y de la raíz del paquete, y `apps/web` (composition root) que importa los paquetes
+  por nombre, nunca por ruta relativa. Cada mensaje dice qué usar y cita el ADR.
+- **Rust:** la dirección de dependencias la impone Cargo y la verifica el meta-check. `[workspace.lints]`
+  hace error de `unwrap_used`, `expect_used` (fuera de tests) y de todo `#[allow]` sin `reason`;
+  `pedantic` es warning. Los crates del núcleo (`track-format`, `sim-core`, `track-compiler-core`)
+  tienen un `clippy.toml` (copia de `ci/layers/core-clippy.toml`) que prohíbe `HashMap`/`HashSet`,
+  reloj, sistema de archivos, red y las funciones de float no deterministas (usar `libm`) (P1).
+- **Meta-check:** `node ci/layers/check.mjs` falla si un paquete de pnpm o un miembro de Cargo no está en
+  la política, si sus `@rumbo/*` o sus project references no coinciden con lo permitido, si un crate no
+  hereda `[lints] workspace = true`, si un `clippy.toml` del núcleo difiere del canónico o si
+  `biome.json` no está al día.
+
+**Agregar un paquete o crate:** en el mismo PR, su entrada en `ci/layers/policy.mjs` (lo que puede importar
+y sus casos `allowed`/`rejected`), `node ci/layers/biome.mjs`, su project reference y, si es crate,
+`[lints] workspace = true` (y el `clippy.toml` canónico si es del núcleo). Detalle en `ci/layers/README.md`.
+
+```bash
+node ci/layers/check.mjs
+pnpm exec biome lint
+pnpm --filter rumbo-layers test             # meta-check, generador y guardrail de Biome
+cargo clippy --workspace --all-targets --locked -- -D warnings -A clippy::pedantic
+pnpm --filter rumbo-layers run test:clippy  # guardrail de Clippy (lento)
+```
+
+El job `layers` de `.github/workflows/ci.yml` corre todo lo anterior y publica el conteo de avisos
+`pedantic` en el resumen del run.
 
 ## Controles
 

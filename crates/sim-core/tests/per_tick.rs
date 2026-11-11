@@ -1,5 +1,6 @@
 //! Per-tick state trace fingerprints for experimental physics 0.5.0.
 //! Hash every little-endian u64 state hash, including all ticks between replay checks.
+#![allow(clippy::disallowed_methods, reason = "test harness outside the core: it reads fixtures from disk (golden.rs also honours an env var to record them)")]
 use sim_core::{InputFrame, ReplayManifest, Simulation, TrackDef};
 use std::{fs, path::PathBuf};
 #[test]

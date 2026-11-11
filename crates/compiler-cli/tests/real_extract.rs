@@ -3,6 +3,7 @@
 //! Se activan solas si hay un archivo `data/raw/*.overpass.json` (el más reciente) o si
 //! `RUMBO_OSM` apunta a uno. Sin datos, avisan y pasan: los datos no viajan en CI.
 //! Descarga: `node tools/data-fetch/fetch-osm.mjs`.
+#![allow(clippy::unwrap_used, clippy::expect_used, reason = "test code: a panic is the failure report")]
 use std::path::PathBuf;
 use track_compiler_core::graph::{BuildOptions, RoadGraph};
 use track_compiler_core::osm::Extract;

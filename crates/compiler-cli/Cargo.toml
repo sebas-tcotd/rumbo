@@ -19,3 +19,6 @@ path = "src/bin/rumbo-compiler.rs"
 libm.workspace = true
 # Solo para las pruebas: comprobar que la pista generada la acepta y la recorre el simulador.
 sim-core = { path = "../sim-core" }
+
+[lints]
+workspace = true

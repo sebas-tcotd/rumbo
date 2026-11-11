@@ -3,6 +3,7 @@
 //! Usa `assets/tracks/costa-verde-sprint.json`, generada con `track-compiler track`.
 //! Falla ante saltos verticales, ruedas en el aire, valores inválidos o si el piloto
 //! automático no llega a la meta: lo que en el documento es "un tramo real sin saltos ni huecos".
+#![allow(clippy::unwrap_used, clippy::expect_used, reason = "test code: a panic is the failure report")]
 use sim_core::autopilot::Autopilot;
 use sim_core::race::LapEvent;
 use sim_core::{ProfileFile, Simulation, TrackDef, STATE_LEN};

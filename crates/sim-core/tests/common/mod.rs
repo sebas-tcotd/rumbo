@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, clippy::unwrap_used, clippy::expect_used, reason = "shared test helpers: each test binary uses a different subset, and a panic is the failure report")]
 use sim_core::autopilot::Autopilot;
 use sim_core::input::{FLAG_HANDBRAKE, FLAG_RESET};
 use sim_core::{InputFrame, ProfileFile, Simulation, TrackDef};
@@ -39,7 +39,7 @@ pub fn scripted_input(t: u64) -> InputFrame {
     if (HZ * 5..HZ * 5 + 30).contains(&phase) {
         flags |= FLAG_HANDBRAKE;
     }
-    if sec % 20 == 19 && t % HZ == 0 {
+    if sec % 20 == 19 && t.is_multiple_of(HZ) {
         flags |= FLAG_RESET;
     }
     InputFrame { steer, throttle: if brake > 0 { 0 } else { 230 }, brake, flags }

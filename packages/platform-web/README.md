@@ -21,4 +21,7 @@ Value: `{ "version": N, ...fields }`; v1 holds only `locale` (read by `@rumbo/ui
 `localStorage` key. Corrupt data or an unreadable storage yields defaults; data from a newer build is
 read as defaults and is not overwritten.
 
-Imports: `@rumbo/contracts` only (Biome `noRestrictedImports`, ADR-005).
+Imports: `@rumbo/contracts` only (Biome `noRestrictedImports`, ADR-005). The subfolders (`audio/`, `input/`,
+`storage/`, `telemetry/`, `zone-source/`) are isolated: none imports another or the package root; only the
+root files (`index.ts`, `web-platform.ts`) wire them. A new subfolder is added to `isolatedSubfolders` in
+`ci/layers/policy.mjs`.

@@ -1,4 +1,5 @@
 //! Pruebas de S3: red conducible con cruces (San Borja, sector Las Artes Norte).
+#![allow(clippy::unwrap_used, clippy::expect_used, reason = "test code: a panic is the failure report")]
 use std::collections::BTreeMap;
 use track_compiler_core::graph::{BuildOptions, RoadGraph};
 use track_compiler_core::network::{self, NetworkOptions, ASPHALT};

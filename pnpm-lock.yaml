@@ -115,6 +115,8 @@ importers:
 
   ci/exact-versions: {}
 
+  ci/layers: {}
+
   crates/sim-wasm: {}
 
   packages/contracts:

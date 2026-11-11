@@ -1,5 +1,6 @@
 //! Compara las entradas al derrape: freno + dirección contra freno de mano + dirección.
 //! Uso: cargo run -p sim-core --release --example drift_entry
+#![allow(clippy::unwrap_used, clippy::expect_used, reason = "example: a diagnostic tool where a panic is the error report")]
 use sim_core::input::FLAG_HANDBRAKE;
 use sim_core::{InputFrame, ProfileFile, Simulation, TrackDef, STATE_LEN};
 

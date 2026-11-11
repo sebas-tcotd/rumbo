@@ -1,0 +1,5 @@
+# Clippy configuration for the crates outside the deterministic core (story 0.7).
+# The core crates (track-format, sim-core, track-compiler-core) have their own clippy.toml, a copy of
+# ci/layers/core-clippy.toml: Clippy reads the file next to the crate and does not merge it with this one.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

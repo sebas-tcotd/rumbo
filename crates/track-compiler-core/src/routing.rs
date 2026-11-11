@@ -399,7 +399,10 @@ fn leg(
     };
     let length;
     if use_direct {
-        let (c, _, _) = best.unwrap();
+        // use_direct is only true when `best` is Some.
+        let Some((c, _, _)) = best else {
+            return Err("ruta directa sin tramo".into());
+        };
         length = c;
         let fwd = b.along_m >= a.along_m;
         steps.push(Step::new(&ea.id, fwd));
@@ -410,7 +413,10 @@ fn leg(
         }
         push(&mut en, pts);
     } else {
-        let (_, meters, chain, start_fwd, end_fwd) = via_graph.unwrap();
+        // use_direct is only false when `via_graph` is Some.
+        let Some((_, meters, chain, start_fwd, end_fwd)) = via_graph else {
+            return Err("ruta por el grafo sin recorrido".into());
+        };
         length = meters;
         // Primer tramo parcial (se omite si el punto está en el cruce mismo).
         let head = if start_fwd { ea.length_m - a.along_m } else { a.along_m };

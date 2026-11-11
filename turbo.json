@@ -106,9 +106,11 @@
         "build"
       ],
       "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/biome.json"
+        "$TURBO_DEFAULT$"
       ]
+    },
+    "rumbo-layers#test": {
+      "cache": false
     }
   }
 }

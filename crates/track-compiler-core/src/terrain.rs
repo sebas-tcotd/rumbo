@@ -93,7 +93,12 @@ impl HeightField {
 
         // Gaussiano separable, con los bordes recortados.
         let k = ((3.0 * opts.sigma_m) / opts.step_m).ceil() as isize;
-        let weights: Vec<f64> = (-k..=k).map(|d| libm::exp(-0.5 * (d as f64 * opts.step_m / opts.sigma_m).powi(2))).collect();
+        let weights: Vec<f64> = (-k..=k)
+            .map(|d| {
+                let u = d as f64 * opts.step_m / opts.sigma_m;
+                libm::exp(-0.5 * (u * u))
+            })
+            .collect();
         let pass = |src: &[f64], horizontal: bool| -> Vec<f64> {
             let mut out = vec![0.0; w * h];
             for j in 0..h as isize {

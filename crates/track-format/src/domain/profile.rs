@@ -153,8 +153,13 @@ impl VehicleProfile {
     }
 }
 
-pub fn schema_json() -> String {
-    serde_json::to_string(PARAMS).expect("schema serializa")
+/// Profile parameter schema as JSON (keys, ranges, defaults), in schema order.
+///
+/// # Errors
+///
+/// Returns the serializer error; with the static `PARAMS` table it does not fail in practice.
+pub fn schema_json() -> Result<String, serde_json::Error> {
+    serde_json::to_string(PARAMS)
 }
 
 #[cfg(test)]

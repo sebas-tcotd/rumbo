@@ -1,5 +1,6 @@
 //! Depuración: aristas cercanas a un punto, marcando las que usa una ruta.
 //! Uso: cargo run -p compiler-cli --release --example near -- <grafo.json> <punto lat,lon> <radio m> <desde lat,lon> <hasta lat,lon>
+#![allow(clippy::unwrap_used, clippy::expect_used, reason = "example: a diagnostic tool where a panic is the error report")]
 use track_compiler_core::graph::RoadGraph;
 use track_compiler_core::routing::{route, RouteOptions};
 use track_compiler_core::GeoPoint;

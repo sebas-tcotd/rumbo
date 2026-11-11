@@ -175,8 +175,8 @@ pub fn state_layout() -> String {
 
 /// Esquema de parámetros del perfil (JSON).
 #[wasm_bindgen]
-pub fn profile_schema() -> String {
-    profile::schema_json()
+pub fn profile_schema() -> Result<String, JsValue> {
+    profile::schema_json().map_err(|e| js_err(e.to_string()))
 }
 
 /// Perfil por defecto (JSON de `ProfileFile`).

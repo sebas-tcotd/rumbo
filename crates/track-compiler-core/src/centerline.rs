@@ -60,8 +60,11 @@ pub fn resample(pts: &[[f64; 2]], step: f64) -> Vec<[f64; 2]> {
         }
         carry = seg - (t - step);
     }
-    let last = *pts.last().unwrap();
-    if dist(*out.last().unwrap(), last) > step * 0.25 {
+    // `out` starts with pts[0], so both are non-empty here; the early return never fires.
+    let (Some(&last), Some(&tail)) = (pts.last(), out.last()) else {
+        return out;
+    };
+    if dist(tail, last) > step * 0.25 {
         out.push(last);
     }
     out
@@ -72,7 +75,12 @@ pub fn resample(pts: &[[f64; 2]], step: f64) -> Vec<[f64; 2]> {
 pub fn gaussian(pts: &[[f64; 2]], step: f64, sigma: f64, closed: bool) -> Vec<[f64; 2]> {
     let n = pts.len();
     let r = ((3.0 * sigma) / step).ceil() as isize;
-    let weights: Vec<f64> = (-r..=r).map(|k| libm::exp(-0.5 * ((k as f64 * step) / sigma).powi(2))).collect();
+    let weights: Vec<f64> = (-r..=r)
+        .map(|k| {
+            let u = (k as f64 * step) / sigma;
+            libm::exp(-0.5 * (u * u))
+        })
+        .collect();
     (0..n)
         .map(|i| {
             if !closed && (i == 0 || i == n - 1) {

@@ -63,7 +63,7 @@ fn tampered_profile_is_rejected() {
 fn adversarial_inputs_stay_finite_and_deterministic() {
     // Choques a fondo, volante al tope, frenadas bruscas y resets repetidos.
     let pattern = |t: u64| {
-        let steer = if (t / 90) % 2 == 0 { 127 } else { -127 };
+        let steer = if (t / 90).is_multiple_of(2) { 127 } else { -127 };
         let flags = if t % 1500 == 1499 { FLAG_RESET } else { 0 };
         let brake = if t % 400 < 10 { 255 } else { 0 };
         InputFrame { steer, throttle: 255, brake, flags }

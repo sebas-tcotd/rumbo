@@ -3,6 +3,7 @@
 //! Usa `assets/tracks/san-borja-las-artes.json`, generada con `track-compiler track --network`.
 //! El piloto automático da vueltas completas pasando por cruces en T y de cuatro brazos,
 //! girando y siguiendo derecho: sin saltos, sin ruedas en el aire y sin tocar muros.
+#![allow(clippy::unwrap_used, clippy::expect_used, reason = "test code: a panic is the failure report")]
 use sim_core::autopilot::Autopilot;
 use sim_core::race::LapEvent;
 use sim_core::{ProfileFile, Simulation, TrackDef, STATE_LEN};
