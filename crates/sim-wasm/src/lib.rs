@@ -47,6 +47,12 @@ impl Lab {
         self.state.clone()
     }
 
+    /// Refresh the fixed scratch buffer. JS copies before calling WASM again.
+    pub fn state_ptr(&mut self) -> *const f32 {
+        self.sim.write_state(&mut self.state);
+        self.state.as_ptr()
+    }
+
     pub fn tick(&self) -> f64 {
         self.sim.tick() as f64
     }
@@ -125,8 +131,12 @@ impl Lab {
     }
 
     /// Replay de la sesión completa (JSON del manifest).
-    pub fn replay_json(&self) -> String {
-        serde_json::to_string(&self.sim.replay()).unwrap_or_default()
+    ///
+    /// # Errors
+    ///
+    /// Devuelve el mensaje de serialización si el replay no puede codificarse.
+    pub fn replay_json(&self) -> Result<String, JsValue> {
+        serde_json::to_string(&self.sim.replay()).map_err(|e| js_err(e.to_string()))
     }
 
     fn part(&self, name: &str) -> Option<&sim_core::track::MeshPart> {
@@ -193,4 +203,19 @@ pub fn tick_hz() -> u32 {
 #[wasm_bindgen]
 pub fn physics_version() -> String {
     sim_core::PHYSICS_VERSION.to_string()
+}
+
+/// Hash bytes using the canonical track-format content identity.
+#[wasm_bindgen]
+pub fn hash_content(bytes: &[u8]) -> String {
+    track_format::hash::content_hash(bytes).hex()
+}
+
+/// Versioned ABI descriptor derived from the simulation's actual field order.
+#[wasm_bindgen]
+pub fn snapshot_descriptor() -> String {
+    let fields: Vec<_> = STATE_FIELDS.iter().enumerate().map(|(index, name)| {
+        serde_json::json!({"name": name, "type": "f32", "offset": index * size_of::<f32>()})
+    }).collect();
+    serde_json::json!({"version": 1, "stride": STATE_LEN * size_of::<f32>(), "fields": fields}).to_string()
 }

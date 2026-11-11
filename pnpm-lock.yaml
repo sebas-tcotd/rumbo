@@ -59,9 +59,12 @@ importers:
 
   apps/web:
     dependencies:
-      '@rumbo/sim-wasm':
+      '@rumbo/contracts':
         specifier: workspace:*
-        version: link:../../crates/sim-wasm
+        version: link:../../packages/contracts
+      '@rumbo/sim-worker':
+        specifier: workspace:*
+        version: link:../../packages/sim-worker
       react:
         specifier: 'catalog:'
         version: 19.3.1
@@ -107,6 +110,25 @@ importers:
   ci/exact-versions: {}
 
   crates/sim-wasm: {}
+
+  packages/contracts:
+    devDependencies:
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
+  packages/sim-worker:
+    dependencies:
+      '@rumbo/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@rumbo/sim-wasm':
+        specifier: workspace:*
+        version: link:../../crates/sim-wasm
+    devDependencies:
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
 
 packages:
 

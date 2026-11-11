@@ -4,15 +4,17 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "predev": "pnpm -w exec turbo run build --filter=race-lab-web^...",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@rumbo/sim-wasm": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "three": "catalog:"
+    "three": "catalog:",
+    "@rumbo/contracts": "workspace:*",
+    "@rumbo/sim-worker": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "catalog:",

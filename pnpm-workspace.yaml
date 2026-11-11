@@ -1,5 +1,6 @@
 packages:
   - apps/*
+  - packages/*
   - crates/sim-wasm
   - ci/*
 
