@@ -12,20 +12,43 @@ const physicsVersion = /PHYSICS_VERSION: &str = "([^"]+)"/.exec(
   await readFile(new URL('../../crates/track-format/src/version.rs', import.meta.url), 'utf8'),
 )?.[1];
 assert.ok(physicsVersion, 'physics version not found');
-const config = {
+// The lab smoke drives the devtools panel, so it previews the lab build (dist-lab/, mode 'lab').
+// The publication build (dist/) gets its own minimal check below: it loads, drives, shows the HUD and
+// has no panel. Both builds come from `pnpm turbo run build`.
+const config = (mode) => ({
   root,
+  mode,
   configFile: root + '/vite.config.ts',
   server: { port: 0, host: '127.0.0.1' },
   preview: { port: 0, host: '127.0.0.1' },
-};
-const server = dev ? await createServer(config) : await preview(config);
+});
+const server = dev ? await createServer(config('development')) : await preview(config('lab'));
 if (dev) await server.listen();
+const publication = dev ? null : await preview(config('production'));
 let browser;
 try {
   browser = await chromium.launch();
   const page = await browser.newPage({ acceptDownloads: true });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (msg) => msg.type() === 'error' && errors.push(msg.text()));
+  // Window error events Playwright's pageerror misses (e.g. "ResizeObserver loop completed…").
+  await page.addInitScript(() => {
+    window.__windowErrors = [];
+    window.addEventListener('error', (e) => window.__windowErrors.push(e.message));
+  });
+  const windowErrors = async () => errors.push(...(await page.evaluate(() => window.__windowErrors)));
+  if (publication) {
+    await page.goto(publication.resolvedUrls.local[0] + '?pista=test-loop');
+    await page.locator('.hud .speed-unit').waitFor();
+    await page.keyboard.down('w');
+    await page.waitForFunction(() => Number(document.querySelector('.speed-value')?.textContent) > 5);
+    await page.keyboard.up('w');
+    assert.equal(await page.getByRole('tab').count(), 0, 'publication build has no lab panel');
+    assert.equal(await page.locator('.panel-toggle').count(), 0);
+    await windowErrors();
+    console.log('OK publication (dist/) test-loop');
+  }
   const base = server.resolvedUrls.local[0];
   for (const track of ['costa-verde-sprint', 'san-borja-las-artes', 'test-loop']) {
     await page.goto(base + '?pista=' + track);
@@ -91,10 +114,12 @@ try {
       await settle();
       assert.ok((await ticks()) > held);
     }
-    console.log('OK', dev ? 'Vite dev' : 'production', track);
+    await windowErrors();
+    console.log('OK', dev ? 'Vite dev' : 'lab build (dist-lab/)', track);
   }
   assert.deepEqual(errors, []);
 } finally {
   await browser?.close();
   await server.close();
+  await publication?.close();
 }

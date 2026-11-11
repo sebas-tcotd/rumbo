@@ -21,6 +21,9 @@ catalogs:
     '@vitejs/plugin-react':
       specifier: 6.2.1
       version: 6.2.1
+    i18next:
+      specifier: 26.7.2
+      version: 26.7.2
     playwright:
       specifier: 1.64.1
       version: 1.64.1
@@ -30,6 +33,9 @@ catalogs:
     react-dom:
       specifier: 19.3.1
       version: 19.3.1
+    react-i18next:
+      specifier: 17.1.9
+      version: 17.1.9
     selenium-webdriver:
       specifier: 4.52.0
       version: 4.52.0
@@ -62,18 +68,21 @@ importers:
       '@rumbo/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@rumbo/devtools':
+        specifier: workspace:*
+        version: link:../../packages/devtools
+      '@rumbo/platform-web':
+        specifier: workspace:*
+        version: link:../../packages/platform-web
+      '@rumbo/render-three':
+        specifier: workspace:*
+        version: link:../../packages/render-three
       '@rumbo/sim-worker':
         specifier: workspace:*
         version: link:../../packages/sim-worker
-      react:
-        specifier: 'catalog:'
-        version: 19.3.1
-      react-dom:
-        specifier: 'catalog:'
-        version: 19.3.1(react@19.3.1)
-      three:
-        specifier: 'catalog:'
-        version: 0.187.0
+      '@rumbo/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
     devDependencies:
       '@types/react':
         specifier: 'catalog:'
@@ -81,9 +90,6 @@ importers:
       '@types/react-dom':
         specifier: 'catalog:'
         version: 19.3.0(@types/react@19.3.0)
-      '@types/three':
-        specifier: 'catalog:'
-        version: 0.187.0
       '@vitejs/plugin-react':
         specifier: 'catalog:'
         version: 6.2.1(vite@8.3.5)
@@ -117,6 +123,54 @@ importers:
         specifier: 'catalog:'
         version: 7.0.2
 
+  packages/devtools:
+    dependencies:
+      '@rumbo/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      react:
+        specifier: 'catalog:'
+        version: 19.3.1
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.3.1(react@19.3.1)
+    devDependencies:
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.3.0(@types/react@19.3.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
+  packages/platform-web:
+    dependencies:
+      '@rumbo/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
+  packages/render-three:
+    dependencies:
+      '@rumbo/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      three:
+        specifier: 'catalog:'
+        version: 0.187.0
+    devDependencies:
+      '@types/three':
+        specifier: 'catalog:'
+        version: 0.187.0
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
   packages/sim-worker:
     dependencies:
       '@rumbo/contracts':
@@ -130,7 +184,39 @@ importers:
         specifier: 'catalog:'
         version: 7.0.2
 
+  packages/ui:
+    dependencies:
+      '@rumbo/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      i18next:
+        specifier: 'catalog:'
+        version: 26.7.2(typescript@7.0.2)
+      react:
+        specifier: 'catalog:'
+        version: 19.3.1
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.3.1(react@19.3.1)
+      react-i18next:
+        specifier: 'catalog:'
+        version: 17.1.9(i18next@26.7.2(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2)
+    devDependencies:
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.3.0(@types/react@19.3.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
 packages:
+
+  '@babel/runtime@7.29.10':
+    resolution: {integrity: sha512-NpugTzbKgGrNe45Ui32cN8vCFFMxVtP/9rtfwv0nP5FRDAjvYBxJcLVpYA9mr1jxP6cnIT7x9LUzuDTbWYYNRA==}
+    engines: {node: '>=6.9.0'}
 
   '@bazel/runfiles@6.5.0':
     resolution: {integrity: sha512-RzahvqTkfpY2jsDxo8YItPX+/iZ6hbiikw1YhE0bA9EKBR5Og8Pa6FHn9PO9M0zaXRVsr0GFQLKbB/0rzy9SzA==}
@@ -522,6 +608,17 @@ packages:
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
 
+  html-parse-stringify@4.0.1:
+    resolution: {integrity: sha512-0zHsZJrK7S3K2aucXWL6ycoYJ/iNtIcFHC/nYQgFklPtrv5LpJctIiSCroWZWeuoXvuyFdzp6KzjJQ+OT5MfFw==}
+
+  i18next@26.7.2:
+    resolution: {integrity: sha512-RsOY3BeaCDdkk52NeJSFAXELQ2rQXBO/tOub6L8ue2ICPfR/FRDWDOfEDg4xMPd1SqO5goVYQ6i72qWEUB/PPw==}
+    peerDependencies:
+      typescript: ^5 || ^6 || ^7
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
   immediate@3.0.6:
     resolution: {integrity: sha512-XXOFtyqDjNDAQxVfYxuF7g9Il/IbWmmlQg2MYKOH8ExIT1qg6xc4zyS3HaEEATgs1btfzxq15ciUiY7gjSXRGQ==}
 
@@ -651,6 +748,22 @@ packages:
     peerDependencies:
       react: ^19.3.1
 
+  react-i18next@17.1.9:
+    resolution: {integrity: sha512-OgYqIH13XHPlWTaaI795Dz+k2AdKnXcOxNQVnf750T8Ij0TYWp1nYvXRpoJBulPqlyk2OAbn1PM4tFKiIj/byA==}
+    peerDependencies:
+      i18next: '>= 26.2.0'
+      react: '>= 16.8.0'
+      react-dom: '*'
+      react-native: '*'
+      typescript: ^5 || ^6 || ^7
+    peerDependenciesMeta:
+      react-dom:
+        optional: true
+      react-native:
+        optional: true
+      typescript:
+        optional: true
+
   react@19.3.1:
     resolution: {integrity: sha512-QNhWdt7nrgVWWQG58QuGsAR3jv3Hbe4mb4vz7w2csnHavciZJgda1CPNaldF6eVxv90ud3jUXpKlHL69gO38yw==}
     engines: {node: '>=0.10.0'}
@@ -702,6 +815,11 @@ packages:
     resolution: {integrity: sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA==}
     engines: {node: '>=16.20.0'}
     hasBin: true
+
+  use-sync-external-store@1.7.0:
+    resolution: {integrity: sha512-6L+EeigHMQhdaIPNIFUKwfWJSwWFQ8gJbJ2DLOs5sDIegTwR9fRxvnM3uciHKjIZhFz+KAv2emhWMRvDmMcY8A==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
@@ -762,6 +880,8 @@ packages:
         optional: true
 
 snapshots:
+
+  '@babel/runtime@7.29.10': {}
 
   '@bazel/runfiles@6.5.0': {}
 
@@ -980,6 +1100,12 @@ snapshots:
   fsevents@2.3.3:
     optional: true
 
+  html-parse-stringify@4.0.1: {}
+
+  i18next@26.7.2(typescript@7.0.2):
+    optionalDependencies:
+      typescript: 7.0.2
+
   immediate@3.0.6: {}
 
   inherits@2.0.4: {}
@@ -1074,6 +1200,17 @@ snapshots:
     dependencies:
       react: 19.3.1
       scheduler: 0.28.0
+
+  react-i18next@17.1.9(i18next@26.7.2(typescript@7.0.2))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@7.0.2):
+    dependencies:
+      '@babel/runtime': 7.29.10
+      html-parse-stringify: 4.0.1
+      i18next: 26.7.2(typescript@7.0.2)
+      react: 19.3.1
+      use-sync-external-store: 1.7.0(react@19.3.1)
+    optionalDependencies:
+      react-dom: 19.3.1(react@19.3.1)
+      typescript: 7.0.2
 
   react@19.3.1: {}
 
@@ -1170,6 +1307,10 @@ snapshots:
       '@typescript/typescript-sunos-x64': 7.0.2
       '@typescript/typescript-win32-arm64': 7.0.2
       '@typescript/typescript-win32-x64': 7.0.2
+
+  use-sync-external-store@1.7.0(react@19.3.1):
+    dependencies:
+      react: 19.3.1
 
   util-deprecate@1.0.2: {}
 

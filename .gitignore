@@ -1,5 +1,6 @@
 
 dist/
+dist-lab/
 crates/sim-wasm/pkg/
 *.log
 .DS_Store

@@ -67,9 +67,9 @@ Cada mínimo lo fija la API más nueva que el juego necesita (datos de
 
 ```bash
 pnpm install
-pnpm turbo run build                 # compila el WASM (cacheado por Turbo) y la app
+pnpm turbo run build                 # compila el WASM (cacheado por Turbo), los paquetes y la app (dist/ y dist-lab/)
 pnpm turbo run test                  # cargo test --release --workspace + dorados en Node + exact-versions
-pnpm --filter race-lab-web dev       # compila WASM y paquetes (predev, cacheado) e inicia Vite
+pnpm --filter @rumbo/web dev         # compila WASM y paquetes (predev, cacheado) e inicia Vite con devtools
 ```
 
 ## Qué hay
@@ -86,11 +86,14 @@ crates/
     src/autopilot.rs   Piloto automático (prueba de manejo automática y replays de referencia)
     tests/             Determinismo, replays dorados, casos adversos y pruebas de manejo
   sim-wasm/   Capa fina de wasm-bindgen; no tiene lógica de simulación
-packages/contracts/  Puertos, protocolo versionado y layout de 41 campos f32
-packages/sim-worker/ Worker, binding WASM, reloj fijo y cliente de SimPort
-apps/web/     Vite + React + three.js (WebGPU, con WebGL 2 de respaldo)
-  src/render/                 Render: solo lee estado, nunca escribe en la simulación
-  src/debug/                  Panel de ajuste, telemetría y sesión
+packages/contracts/     Puertos, protocolo versionado, layout de 41 campos f32, ajustes y tiempo de frame
+packages/sim-worker/    Worker, binding WASM, reloj fijo y cliente de SimPort
+packages/render-three/  ThreeRenderer (RendererPort): three.js WebGPU con WebGL 2 de respaldo; solo lee estado
+packages/platform-web/  Adapters del navegador: input/, storage/ (rumbo.settings.v1), audio/, telemetry/, zone-source/
+packages/ui/            HUD, carga, avisos y fatal provisional; React + react-i18next (recurso es)
+packages/devtools/      Laboratorio: paneles de ajuste, telemetría y sesión (solo en builds con devtools)
+apps/web/               @rumbo/web: composition root único (src/main.tsx), bucle de frame y store del lab
+tools/data-fetch/       fetch-osm.mjs: descarga de extractos de OpenStreetMap
 assets/
   tracks/test-loop.json       Pista de control: recta, horquilla, eses y curva de derrape
   profiles/hatch-arcade.json  Perfil por defecto
@@ -104,7 +107,34 @@ Tres slots de 328 bytes transportan los estados anterior y actual (41 f32 cada u
 
 `hashContent` usa BLAKE3-128 de Rust. La codificación de retos con Race, Replay y RouteMeta y la carga de fantasmas externos devuelven `UNSUPPORTED_CAPABILITY`. Las fixtures prospectivas comprueban la cabecera de replay v2 y el prefijo de link inline. La semilla se expresa como decimal u64 en la fixture JSON. La escritura de ambos formatos corresponde a 0.10 y 6.7.
 
-`pnpm turbo run build` compila los paquetes. `pnpm turbo run test --force` ejecuta paridad, transferencias y negativos de capas. Para revisar Biome usa `pnpm exec biome lint packages`. Con Chromium instalado en Playwright, `node ci/determinism/lab-smoke.mjs` prueba el bundle y `node ci/determinism/lab-smoke.mjs --dev` prueba Vite.
+`pnpm turbo run build` compila los paquetes. `pnpm turbo run test --force` ejecuta paridad, transferencias y negativos de capas. Para revisar Biome usa `pnpm exec biome lint packages`. Con Chromium instalado en Playwright, `node ci/determinism/lab-smoke.mjs` prueba los bundles (laboratorio en `dist-lab/` y publicación en `dist/`) y `node ci/determinism/lab-smoke.mjs --dev` prueba Vite. `node ci/bundle/check-devtools.mjs` comprueba que `@rumbo/devtools` no está en `dist/` y sí en `dist-lab/`.
+
+## Front: paquetes y composition root
+
+`apps/web/src/main.tsx` es el único composition root (ADR-001): crea `createWorkerSim`, `createThreeRenderer`,
+`createWebPlatform`, el store del lab y `mountUi`, y les pasa sus dependencias por argumento. Ningún paquete
+instancia a otro adapter ni hay singletons; con HMR, `import.meta.hot.dispose` desarma todo antes de volver a armar.
+
+- **Render:** un solo `requestAnimationFrame` en `apps/web/src/frame-loop.ts` muestrea la entrada, calcula
+  `alpha` con `interpolationAlpha` (`@rumbo/contracts`, tiempo absoluto) y llama
+  `RendererPort.frame(prev, curr, alpha)`. El renderer no tiene bucle propio ni retiene `StateMsg`.
+- **Capas:** cada paquete tiene su regla `noRestrictedImports` en `biome.json` (ADR-005) con casos positivos y
+  negativos en `packages/contracts/layers.test.mjs`. `ui` y `devtools` nunca importan three ni otros adapters.
+- **Exports:** los paquetes que consume Vite (`sim-worker`, `render-three`, `platform-web`, `ui`, `devtools`)
+  exportan la fuente (`"default": "./index.ts"`) y los tipos desde `dist/`, generados por `tsc -b`
+  (`emitDeclarationOnly` en los paquetes nuevos). `@rumbo/contracts` sigue emitiendo JS porque lo importan
+  pruebas de Node. Los imports relativos llevan extensión `.ts`/`.tsx` para que Node (type stripping) ejecute
+  las pruebas co-localizadas sin compilar.
+- **Ajustes (`rumbo.settings.v1`):** esquema versionado en `packages/platform-web/storage/` con migraciones
+  puras encadenadas. **Toda historia que guarde un ajuste lo agrega a ese esquema** (campo en `Settings`,
+  `SETTINGS_VERSION` + 1, migración `vN → vN+1`, validación y fixture); nunca una clave nueva de
+  `localStorage`. La UI solo usa `SettingsStorePort`. Detalle en `packages/platform-web/README.md`.
+- **i18n:** `mountUi` crea su propia instancia de i18next (`createInstance`, `initAsync: false`) con el
+  recurso `packages/ui/i18n/es.json`; claves `pantalla.elemento` en camelCase. Los avisos llegan como código
+  (`errors.<CODIGO>`). Los textos de devtools quedan literales: es una herramienta de desarrollo.
+- **Devtools:** flag de build. Activo en `vite dev`, en `vite build --mode lab` (`apps/web/dist-lab/`) y con
+  `RUMBO_DEVTOOLS=1`; apagado en la publicación (`apps/web/dist/`), donde el `import('@rumbo/devtools')` queda
+  detrás de una constante `false` y no se emite el chunk. `pnpm --filter @rumbo/web build` genera ambas salidas.
 
 ## Kernel compartido
 
@@ -207,7 +237,7 @@ El CLI `compiler-cli` lee Overpass y GeoTIFF y escribe los archivos. El núcleo 
 
 ```
 data/queries/lima-costa-verde.overpassql   Consulta: Miraflores, Barranco, parte de San Isidro y la Costa Verde
-scripts/fetch-osm.mjs                      Descarga el extracto y lo archiva con fecha en data/raw/
+tools/data-fetch/fetch-osm.mjs             Descarga el extracto y lo archiva con fecha en data/raw/
 crates/track-compiler-core/src/
   osm.rs          Lectura de Overpass JSON
   geo.rs          WGS84 → plano tangente ENU en metros (f64, libm)
@@ -223,7 +253,7 @@ El núcleo comparte las identidades de `track-format` y usa serde, serde_json y 
 
 ```bash
 # 1. Descargar el extracto (si Overpass responde 429 o 504, espera o usa otro servidor con OVERPASS_URL)
-node scripts/fetch-osm.mjs
+node tools/data-fetch/fetch-osm.mjs
 
 # 2. Construir el grafo y su GeoJSON
 cargo run -p compiler-cli --release -- ingest data/raw/lima-costa-verde-AAAA-MM-DD.overpass.json \
@@ -335,7 +365,7 @@ que termina, sale de ella y pasa de largo). Los dos cruces de referencia son Mon
 Milet × Rousseau (cuatro brazos).
 
 ```bash
-node scripts/fetch-osm.mjs data/queries/lima-san-borja.overpassql lima-san-borja
+node tools/data-fetch/fetch-osm.mjs data/queries/lima-san-borja.overpassql lima-san-borja
 cargo run -p compiler-cli --release -- ingest data/raw/lima-san-borja-2026-11-04.overpass.json \
   --region lima-san-borja --out data/graphs/lima-san-borja.json
 cargo run -p compiler-cli --release -- track data/graphs/lima-san-borja.json \
