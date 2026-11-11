@@ -4,6 +4,7 @@
 
 import {
   buildIndex,
+  type DevCommand,
   type Hashes,
   type LapMsg,
   type ProfileFile,
@@ -41,6 +42,8 @@ export interface LabView {
   /** Non-fatal rejection of a command (invalid profile, unsupported load, failed export). */
   notice: UiNotice | null;
   sessionNumber: number;
+  /** A dev command (teleport, seek) changed this session: its replay no longer reproduces. */
+  altered: boolean;
   // Lab controls, owned by the lab controller.
   autopilot: boolean;
   /** Manual pause (Esc); hiding the tab also pauses the worker but does not show the badge. */
@@ -65,6 +68,7 @@ const INITIAL: LabView = {
   error: null,
   notice: null,
   sessionNumber: 0,
+  altered: false,
   autopilot: false,
   paused: false,
   camera: 'persecucion',
@@ -90,6 +94,8 @@ export class LabSession {
   private view: LabView = INITIAL;
   private autopilot = false;
   private pendingProfile: ProfileFile | null = null;
+  /** A seek was sent: the session it creates starts out altered. */
+  private alterOnSession = false;
   private disposed = false;
   private lastUiUpdate = 0;
   /** Latest state message; its prev/curr arrays are the sim client's scratch, valid until the next one. */
@@ -132,6 +138,14 @@ export class LabSession {
       default:
         this.worker.send(msg);
     }
+  }
+
+  /** Sends an AR28 dev command and marks the session it affects as altered. */
+  sendDev(cmd: DevCommand): void {
+    if (this.disposed) return;
+    if (cmd.type === 'devTeleport') this.patch({ altered: true });
+    else this.alterOnSession = true;
+    this.worker.send(cmd);
   }
 
   /** Tab visibility (P2): a hidden tab pauses the worker without undoing a manual pause. */
@@ -185,6 +199,7 @@ export class LabSession {
         this.patch({ verify: msg.report, verifyError: null });
         break;
       case 'verifyError':
+        this.alterOnSession = false;
         this.patch({ verify: null, verifyError: msg.message });
         break;
       case 'commandError':
@@ -231,8 +246,10 @@ export class LabSession {
       verifyError: null,
       state: null,
       notice: null,
+      altered: this.alterOnSession,
     });
     this.pendingProfile = null;
+    this.alterOnSession = false;
     if (this.view.ready) this.onGhost(null);
   }
 

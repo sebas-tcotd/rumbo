@@ -127,7 +127,22 @@ export const FLAG_RESTART = 4;
 
 export const PROTOCOL_VERSION = 1;
 export type InputFrame = Omit<Extract<ToWorker, { type: 'input' }>, 'type'>;
+
+/** Largest replay accepted by `devSeekReplay` (UTF-16 code units of the JSON). */
+export const DEV_SEEK_MAX_CHARS = 16 * 1024 * 1024;
+/** Largest tick accepted by `devSeekReplay`: 30 min at 120 Hz, as `MAX_SEEK_TICKS` in sim-core. */
+export const DEV_SEEK_MAX_TICKS = 30 * 60 * 120;
+/**
+ * Lab dev commands (AR28). The worker is shared by every build, so they always exist, but nothing sends
+ * them outside devtools. A session that receives one no longer reproduces its replay: the host marks it
+ * as altered.
+ * - `devTeleport`: car at rest on the centerline at lap distance `s`; drops the current attempt.
+ * - `devSeekReplay`: replaces the session with `json` re-simulated up to `tick` and pauses there.
+ *   Rejections arrive as `verifyError` (INVALID_REPLAY).
+ */
+export type DevCommand = { type: 'devTeleport'; s: number } | { type: 'devSeekReplay'; json: string; tick: number };
 export type SimCommand =
+  | DevCommand
   | Exclude<ToWorker, { type: 'init' | 'input' | 'pause' }>
   | {
       type: 'load';

@@ -3,7 +3,6 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DevPanel } from './DevPanel.tsx';
 import type { DevActions, DevEvents, DevStore, DevTrack } from './dev-snapshot.ts';
-import { download } from './panels/download.ts';
 import './devtools.css';
 
 /**
@@ -37,7 +36,6 @@ export interface MountedDevtools {
 /** Mounts the lab panel in its own React root (separate from the player UI on purpose). */
 export function mountDevtools(targets: DevtoolsTargets, deps: DevtoolsDeps): MountedDevtools {
   targets.panel.dataset.devtools = DEVTOOLS_MARKER;
-  const stopReplays = deps.events.onReplay((json, ticks) => download(`replay-${ticks}-ticks.json`, json));
   const root = createRoot(targets.panel);
   root.render(
     <StrictMode>
@@ -47,13 +45,13 @@ export function mountDevtools(targets: DevtoolsTargets, deps: DevtoolsDeps): Mou
         track={deps.track}
         tracks={deps.tracks}
         debug={deps.debug}
+        events={deps.events}
         toolbar={targets.toolbar}
       />
     </StrictMode>,
   );
   return {
     unmount() {
-      stopReplays();
       root.unmount();
       delete targets.panel.dataset.devtools;
     },

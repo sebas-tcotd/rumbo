@@ -1,8 +1,9 @@
-import type { OverlayKind, RenderDebugPort } from '@rumbo/contracts';
-import { useState, useSyncExternalStore } from 'react';
+import { DEV_SEEK_MAX_CHARS, DEV_SEEK_MAX_TICKS, type OverlayKind, type RenderDebugPort } from '@rumbo/contracts';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import type { DevActions, DevCameraMode, DevStore, DevTrack } from './dev-snapshot.ts';
+import type { DevActions, DevCameraMode, DevEvents, DevSnapshot, DevStore, DevTrack } from './dev-snapshot.ts';
 import { DebugPanel } from './panels/DebugPanel.tsx';
+import { download } from './panels/download.ts';
 import { SessionPanel } from './panels/SessionPanel.tsx';
 import { TelemetryPanel } from './panels/TelemetryPanel.tsx';
 import { TuningPanel } from './panels/TuningPanel.tsx';
@@ -25,6 +26,7 @@ const CAMERA_NAMES: Record<DevCameraMode, string> = {
 export interface DevPanelProps {
   store: DevStore;
   actions: DevActions;
+  events: DevEvents;
   track: DevTrack;
   tracks: DevTrack[];
   debug: RenderDebugPort;
@@ -42,11 +44,58 @@ function PanelToggle({ open, actions, toolbar }: { open: boolean; actions: DevAc
   );
 }
 
-/** Lab side panel: Tuning, Telemetry and Session tabs. Texts are literal Spanish (developer tool). */
-export function DevPanel({ store, actions, track, tracks, debug, toolbar }: DevPanelProps) {
+/**
+ * Replay files: downloads exported replays (as `<track>.<case>.json` when recording a golden), remembers
+ * the last verified file and re-simulates it up to its first mismatch (AR28).
+ */
+function useReplayFiles(snap: DevSnapshot, actions: DevActions, events: DevEvents, track: DevTrack) {
+  const golden = useRef<string | null>(null);
+  const [lastFile, setLastFile] = useState<string | null>(null);
+  const [seekError, setSeekError] = useState<string | null>(null);
+  useEffect(
+    () =>
+      events.onReplay((json, ticks) => {
+        const name = golden.current;
+        golden.current = null;
+        download(name ? `${track.id}.${name}.json` : `replay-${ticks}-ticks.json`, json);
+      }),
+    [events, track.id],
+  );
+  const mismatch = snap.verify && !snap.verify.ok ? snap.verify.firstMismatchTick : null;
+  const seekTick = lastFile !== null && mismatch !== null ? mismatch : null;
+  return {
+    seekTick,
+    seekError,
+    recordGolden(name: string) {
+      golden.current = name;
+      actions.exportReplay();
+    },
+    verifyFile(json: string) {
+      setLastFile(json);
+      setSeekError(null);
+      actions.verifyReplayFile(json);
+    },
+    verifyCurrent() {
+      setLastFile(null);
+      actions.verifyCurrentSession();
+    },
+    seek() {
+      if (lastFile === null || seekTick === null) return;
+      if (lastFile.length > DEV_SEEK_MAX_CHARS || seekTick > DEV_SEEK_MAX_TICKS) {
+        setSeekError('El replay es demasiado grande para re-simularlo en el laboratorio.');
+        return;
+      }
+      actions.seekReplay(lastFile, seekTick);
+    },
+  };
+}
+
+/** Lab side panel: Tuning, Telemetry, Session and Debug tabs. Texts are literal Spanish (developer tool). */
+export function DevPanel({ store, actions, events, track, tracks, debug, toolbar }: DevPanelProps) {
   const snap = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const [tab, setTab] = useState<Tab>('ajustes');
   const [overlays, setOverlays] = useState(NO_OVERLAYS);
+  const files = useReplayFiles(snap, actions, events, track);
   const km = snap.ready ? `${(snap.ready.trackLength / 1000).toFixed(2)} km` : '…';
   return (
     <>
@@ -69,7 +118,16 @@ export function DevPanel({ store, actions, track, tracks, debug, toolbar }: DevP
               <TuningPanel schema={snap.ready.schema} applied={snap.appliedProfile} onApply={actions.applyProfile} />
             )}
             {tab === 'telemetria' && <TelemetryPanel snap={snap} />}
-            {tab === 'depuracion' && <DebugPanel debug={debug} overlays={overlays} onOverlays={setOverlays} />}
+            {tab === 'depuracion' && (
+              <DebugPanel
+                snap={snap}
+                actions={actions}
+                debug={debug}
+                overlays={overlays}
+                onOverlays={setOverlays}
+                onRecordGolden={files.recordGolden}
+              />
+            )}
             {tab === 'sesion' && (
               <SessionPanel
                 snap={snap}
@@ -83,9 +141,12 @@ export function DevPanel({ store, actions, track, tracks, debug, toolbar }: DevP
                 camera={CAMERA_NAMES[snap.camera]}
                 onCamera={actions.cycleCamera}
                 onExport={actions.exportReplay}
-                onVerifyCurrent={actions.verifyCurrentSession}
-                onVerifyFile={actions.verifyReplayFile}
+                onVerifyCurrent={files.verifyCurrent}
+                onVerifyFile={files.verifyFile}
                 onRestart={actions.restartSession}
+                seekTick={files.seekTick}
+                onSeek={files.seek}
+                seekError={files.seekError}
               />
             )}
           </div>

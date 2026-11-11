@@ -217,3 +217,35 @@ test('content hashing does not depend on the current generation', async (t) => {
   const [reply] = await send({ type: 'hashContent', requestId: 3, bytes: new Uint8Array(), generation: 9 });
   assert.equal(reply.hash, 'af1349b9f5f9a1a6a0404dea36dcc949');
 });
+
+test('AR28 dev commands: teleport moves the car, seek re-simulates a replay up to a tick and pauses', async (t) => {
+  const { STATE_FIELDS } = await import('../../packages/contracts/dist/index.js');
+  const field = (m, name) => new Float32Array(m.buffer)[STATE_FIELDS.length + STATE_FIELDS.indexOf(name)];
+  const send = host(t);
+  await send(load);
+  const [moved] = await send({ type: 'devTeleport', s: 200 });
+  assert.equal(moved.type, 'snapshot');
+  assert.equal(moved.paused, true);
+  assert.ok(Math.abs(field(moved, 'progressS') - 200) < 3, String(field(moved, 'progressS')));
+  const golden = readFileSync(new URL('../../crates/sim-core/tests/golden/test-loop.scripted.json', import.meta.url), 'utf8');
+  const seek = (tick) => send({ type: 'devSeekReplay', json: golden, tick });
+  const first = await seek(600);
+  assert.deepEqual(
+    first.map((m) => m.type),
+    ['session', 'snapshot'],
+  );
+  assert.equal(field(first[1], 'tick'), 600);
+  assert.equal(first[1].paused, true);
+  const again = await seek(600);
+  assert.deepEqual(new Float32Array(again[1].buffer), new Float32Array(first[1].buffer), 'deterministic seek');
+  const ticks = JSON.parse(golden).ticks;
+  for (const [json, tick] of [
+    [golden, ticks + 1],
+    ['{', 10],
+  ]) {
+    const [rejected] = await send({ type: 'devSeekReplay', json, tick });
+    assert.deepEqual([rejected.type, rejected.code], ['verifyError', 'INVALID_REPLAY']);
+  }
+  // The session survives a rejected seek.
+  assert.equal((await send({ type: 'exportReplay' }))[0].type, 'replay');
+});

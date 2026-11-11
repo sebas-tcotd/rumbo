@@ -22,6 +22,62 @@ const config = (mode) => ({
   server: { port: 0, host: '127.0.0.1' },
   preview: { port: 0, host: '127.0.0.1' },
 });
+const telemetry = (page, label) =>
+  page
+    .locator('dt')
+    .filter({ hasText: new RegExp('^' + label + '$') })
+    .locator('..')
+    .locator('dd')
+    .innerText();
+/** Waits until the telemetry value next to `label` satisfies `accept` (both run in the page). */
+const waitTelemetry = (page, label, accept, arg) =>
+  page.waitForFunction(
+    ([label, accept, arg]) => {
+      const dd = [...document.querySelectorAll('dt')].find((dt) => dt.textContent === label)?.nextElementSibling;
+      return dd ? new Function('value', 'arg', 'return ' + accept)(dd.textContent, arg) : false;
+    },
+    [label, accept, arg],
+  );
+
+/** AR28 on test-loop: record a golden, jump to the first mismatch of an altered replay, teleport. */
+async function devtoolsAr28(page) {
+  await page.getByRole('tab', { name: 'Depuración' }).click();
+  const golden = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Grabar dorado' }).click();
+  const file = await golden;
+  assert.equal(file.suggestedFilename(), 'test-loop.lab.json');
+  assert.equal(JSON.parse(await readFile(await file.path(), 'utf8')).format, 'race-lab-replay/1');
+
+  // A golden with one input run changed on purpose diverges; the lab re-simulates up to that tick.
+  const source = new URL('../../crates/sim-core/tests/golden/test-loop.scripted.json', import.meta.url);
+  const replay = JSON.parse(await readFile(source, 'utf8'));
+  const k = Math.floor(replay.inputs.length / 2);
+  replay.inputs[k][1] = (replay.inputs[k][1] ^ 0x7f) >>> 0;
+  await page.getByRole('tab', { name: 'Sesión' }).click();
+  await page
+    .locator('input[type=file]')
+    .setInputFiles({ name: 'altered.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(replay)) });
+  const seek = page.getByRole('button', { name: /^Ir al tick \d+$/ });
+  await seek.waitFor();
+  const tick = Number((await seek.innerText()).match(/\d+/)[0]);
+  assert.ok(tick > 0 && tick <= replay.ticks, String(tick));
+  await seek.click();
+  await page.getByText('Sesión alterada', { exact: false }).waitFor();
+  await page.locator('.badge', { hasText: 'En pausa' }).waitFor();
+  await page.getByRole('tab', { name: 'Telemetría' }).click();
+  await waitTelemetry(page, 'Tick', 'value === String(arg)', tick);
+
+  // Teleport: the car lands at s while paused, and an altered session cannot be recorded as a golden.
+  await page.getByRole('tab', { name: 'Depuración' }).click();
+  assert.equal(await page.getByRole('button', { name: 'Grabar dorado' }).isDisabled(), true);
+  await page.getByLabel(/Distancia s/).fill('200');
+  await page.getByRole('button', { name: 'Teletransportar' }).click();
+  await page.getByRole('tab', { name: 'Telemetría' }).click();
+  await waitTelemetry(page, 'Progreso', 'Math.abs(Number(value.split("/")[0]) - arg) < 5', 200);
+  assert.match(await telemetry(page, 'Progreso'), /^\d+ \/ \d+ m$/);
+  await page.keyboard.press('Escape');
+}
+
 const server = dev ? await createServer(config('development')) : await preview(config('lab'));
 if (dev) await server.listen();
 const publication = dev ? null : await preview(config('production'));
@@ -113,6 +169,7 @@ try {
       await page.keyboard.press('Escape');
       await settle();
       assert.ok((await ticks()) > held);
+      await devtoolsAr28(page);
     }
     // AR28 overlays: switching each one on and off must not raise errors.
     await page.getByRole('tab', { name: 'Depuración' }).click();

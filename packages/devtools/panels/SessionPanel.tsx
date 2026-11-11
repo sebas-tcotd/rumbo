@@ -18,6 +18,11 @@ export interface SessionPanelProps {
   onVerifyCurrent: () => void;
   onVerifyFile: (json: string) => void;
   onRestart: () => void;
+  /** AR28: tick of the first mismatch of the last verified file, when it can be re-simulated here. */
+  seekTick: number | null;
+  onSeek: () => void;
+  /** Local rejection of a seek (oversized file) before it reaches the worker. */
+  seekError: string | null;
 }
 
 const KEYS: [string, string][] = [
@@ -150,6 +155,17 @@ export function SessionPanel(p: SessionPanelProps) {
           <p className={verify.ok ? 'verify ok' : 'verify bad'} role="status">
             {verify.ok ? 'Idéntico: ' : 'Divergencia: '}
             {verify.message}. {verify.ticks} ticks, hash final {verify.actualFinal || '—'}.
+          </p>
+        )}
+        {p.seekTick !== null && (
+          <div className="row">
+            <button onClick={p.onSeek}>Ir al tick {p.seekTick}</button>
+          </div>
+        )}
+        {p.seekError && <p className="verify bad" role="alert">{p.seekError}</p>}
+        {p.snap.altered && (
+          <p className="note">
+            Sesión alterada (teletransporte o salto a un tick): el replay exportado no se reproducirá igual.
           </p>
         )}
         <dl className="stats">

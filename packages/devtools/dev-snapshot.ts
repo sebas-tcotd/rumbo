@@ -22,6 +22,8 @@ export interface DevSnapshot {
   laps: DevLap[];
   verify: VerifyReport | null;
   verifyError: string | null;
+  /** A dev command (teleport, seek) changed the session: its replay no longer reproduces. */
+  altered: boolean;
   autopilot: boolean;
   ghostOn: boolean;
   camera: DevCameraMode;
@@ -43,6 +45,10 @@ export interface DevActions {
   verifyCurrentSession(): void;
   verifyReplayFile(json: string): void;
   switchTrack(id: string): void;
+  /** AR28: car to lap distance `s`; the session becomes altered. */
+  teleport(s: number): void;
+  /** AR28: re-simulates a replay up to `tick` in the lab and pauses there. */
+  seekReplay(json: string, tick: number): void;
 }
 
 /** A compiler diagnostic attached to a track. */

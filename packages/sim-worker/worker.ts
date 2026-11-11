@@ -138,7 +138,11 @@ function publish() {
  * session untouched; traps and other errors still propagate to `fatal`.
  */
 function startSession(profileJson: string, showInitial: boolean) {
-  const next = new Lab(trackJson, profileJson, 1);
+  replaceLab(new Lab(trackJson, profileJson, 1), showInitial);
+}
+
+/** Install an already-built Lab as the live session and announce it. */
+function replaceLab(next: Lab, showInitial: boolean) {
   lab?.free();
   lab = next;
   hasState = false;
@@ -231,6 +235,41 @@ function recordGhost(s: Float32Array) {
   rec[o + 6] = s[I.qw];
   rec[o + 7] = s[I.progressS];
   recFrames++;
+}
+
+/** Show the latest state while paused (no tick will publish it). */
+function publishPaused(l: Lab) {
+  capture(l);
+  lastAt = performance.timeOrigin + performance.now();
+  dirty = true;
+  publish();
+}
+
+/** AR28: move the car to lap distance `s`. Not recorded in the replay (the host marks the session). */
+function devTeleport(l: Lab, s: number) {
+  l.teleport(s);
+  // Both interpolation states are the new pose, so the renderer snaps instead of sweeping across the map.
+  hasState = false;
+  if (paused) publishPaused(l);
+}
+
+/**
+ * AR28: replace the session with a replay re-simulated up to `tick`, paused there. A rejected replay
+ * (thrown string) is reported like a failed verification and leaves the live session untouched.
+ */
+function devSeekReplay(json: string, tick: number) {
+  let next: Lab;
+  try {
+    next = Lab.from_replay(trackJson, json, tick);
+  } catch (cause) {
+    if (typeof cause !== 'string') throw cause;
+    post({ type: 'verifyError', code: 'INVALID_REPLAY', message: cause });
+    return;
+  }
+  paused = true;
+  clearTimeout(timer);
+  clock.stop();
+  replaceLab(next, true);
 }
 
 let failed = false;
@@ -415,6 +454,12 @@ ctx.onmessage = async (ev: MessageEvent<CommandMessage>) => {
             post({ type: 'commandError', operation: 'exportReplay', code: 'EXPORT_FAILED' });
           }
         }
+        break;
+      case 'devTeleport':
+        devTeleport(currentLab(), msg.s);
+        break;
+      case 'devSeekReplay':
+        devSeekReplay(msg.json, msg.tick);
         break;
       case 'verifyReplay': {
         const t0 = performance.now();

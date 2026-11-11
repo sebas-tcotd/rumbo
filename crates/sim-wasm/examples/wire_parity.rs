@@ -15,7 +15,8 @@ fn protocol() -> Value {
             "start":[],"pause":[],"resume":[],"dispose":[],"reset":[],"restart":[],"exportReplay":[],
             "load":["profile","race","track","zone"],"input":["frame"],"loadGhost":["replay"],
             "verifyReplay":["json"],"newSession":["profileJson"],"autopilot":["on"],
-            "hashContent":["bytes","requestId"],"returnBuffer":["buffer","slot"]
+            "hashContent":["bytes","requestId"],"returnBuffer":["buffer","slot"],
+            "devTeleport":["s"],"devSeekReplay":["json","tick"]
         },
         "responses":{
             "ready":["barriers","centerline","checkpoints","groundY","hashes","layout","meshes","physicsVersion",
@@ -52,6 +53,10 @@ fn fixture() -> Result<Value, Box<dyn std::error::Error>> {
         "protocol":protocol(), "input": frame.pack(), "envelope": envelope, "hash":track_format::hash::content_hash(&envelope).hex(),
         "load":{"type":"load","zone":null,"race":null,"track":"track","profile":"profile","protocolVersion":1,"generation":2},
         "fatal":{"type":"fatal","code":"SIM_FAILED","message":"trap","protocolVersion":1,"generation":2},
+        // AR28 dev commands (story 0.6): shapes only; behaviour lives in sim_core::replay::resimulate_until
+        // and Simulation::teleport_to_s, reached through Lab::from_replay and Lab::teleport.
+        "devTeleport":{"type":"devTeleport","s":120.5,"protocolVersion":1,"generation":2},
+        "devSeekReplay":{"type":"devSeekReplay","json":"{}","tick":sim_core::replay::MAX_SEEK_TICKS,"protocolVersion":1,"generation":2},
         "header":{"format":"rumbo-replay/2","physicsVersion":sim_core::PHYSICS_VERSION,"trackHash":"t","raceHash":"r","profileRef":{"id":"p","hash":"h"},"seed":u64::MAX.to_string()},
         "link":"#v1.i.YQ", "codec":{"encodeChallenge":["race","replay","routeMeta"],"decodeChallenge":["bytes"],"hashContent":["bytes"],"routeMeta":{"name":"Lima","durationEstimate":60}}
     }))

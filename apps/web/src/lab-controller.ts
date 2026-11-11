@@ -20,6 +20,10 @@ export interface LabController {
   verifyCurrentSession(): void;
   verifyReplayFile(json: string): void;
   switchTrack(id: string): void;
+  /** AR28: car to lap distance `s` (marks the session altered). */
+  teleport(s: number): void;
+  /** AR28: re-simulates a replay up to `tick` and stays paused there. */
+  seekReplay(json: string, tick: number): void;
   /** Replays exported for download (devtools subscribes); returns the unsubscribe function. */
   onReplay(listener: (json: string, ticks: number) => void): () => void;
 }
@@ -84,6 +88,12 @@ export function createLabController({ session, renderer, switchTrack }: LabContr
     },
     verifyReplayFile: (json) => session.send({ type: 'verifyReplay', json }),
     switchTrack,
+    teleport: (s) => session.sendDev({ type: 'devTeleport', s }),
+    seekReplay(json, tick) {
+      verifyAfterExport = false;
+      c.setPaused(true);
+      session.sendDev({ type: 'devSeekReplay', json, tick });
+    },
     onReplay(listener) {
       replayListeners.add(listener);
       return () => replayListeners.delete(listener);

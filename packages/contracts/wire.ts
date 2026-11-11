@@ -1,5 +1,5 @@
 import type { CommandMessage, ResponseMessage } from './protocol.js';
-import { PROTOCOL_VERSION } from './protocol.js';
+import { DEV_SEEK_MAX_CHARS, DEV_SEEK_MAX_TICKS, PROTOCOL_VERSION } from './protocol.js';
 import { SNAPSHOT_BYTES, SNAPSHOT_SLOTS, SNAPSHOT_VERSION } from './snapshot.js';
 
 type Check = ((value: unknown) => boolean) & { requiredKeys?: readonly string[] };
@@ -69,6 +69,11 @@ const commands = {
   autopilot: fields({ on: bool }),
   hashContent: fields({ bytes: (v) => v instanceof Uint8Array, requestId: integer }),
   returnBuffer: fields({ slot, buffer }),
+  devTeleport: fields({ s: number }),
+  devSeekReplay: fields({
+    json: (v) => typeof v === 'string' && v.length <= DEV_SEEK_MAX_CHARS,
+    tick: (v) => integer(v) && (v as number) <= DEV_SEEK_MAX_TICKS,
+  }),
 } satisfies Record<CommandMessage['type'], Check>;
 const responses = {
   ready: fields({
