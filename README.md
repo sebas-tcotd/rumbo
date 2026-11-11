@@ -69,7 +69,7 @@ Cada mínimo lo fija la API más nueva que el juego necesita (datos de
 pnpm install
 pnpm turbo run build                 # compila el WASM (cacheado por Turbo) y la app
 pnpm turbo run test                  # cargo test --release --workspace + dorados en Node + exact-versions
-pnpm --filter race-lab-web dev       # compila el WASM si hace falta y abre Vite
+pnpm --filter race-lab-web dev       # compila WASM y paquetes (predev, cacheado) e inicia Vite
 ```
 
 ## Qué hay
@@ -86,14 +86,25 @@ crates/
     src/autopilot.rs   Piloto automático (prueba de manejo automática y replays de referencia)
     tests/             Determinismo, replays dorados, casos adversos y pruebas de manejo
   sim-wasm/   Capa fina de wasm-bindgen; no tiene lógica de simulación
+packages/contracts/  Puertos, protocolo versionado y layout de 41 campos f32
+packages/sim-worker/ Worker, binding WASM, reloj fijo y cliente de SimPort
 apps/web/     Vite + React + three.js (WebGPU, con WebGL 2 de respaldo)
-  src/workers/sim.worker.ts   Dueño del reloj de 120 Hz
   src/render/                 Render: solo lee estado, nunca escribe en la simulación
   src/debug/                  Panel de ajuste, telemetría y sesión
 assets/
   tracks/test-loop.json       Pista de control: recta, horquilla, eses y curva de derrape
   profiles/hatch-arcade.json  Perfil por defecto
 ```
+
+## Worker de simulación
+
+El worker ejecuta hasta ocho ticks de 1/120 s por despertar y conserva la fracción restante. Una pausa manual y una pestaña oculta suspenden el reloj. El laboratorio conserva la entrada por tick y el formato `race-lab-replay/1`.
+
+Tres slots de 328 bytes transportan los estados anterior y actual (41 f32 cada uno). El mensaje lleva la versión del layout, generación, slot y timestamp. El cliente copia ambos estados a memoria propia antes de devolver el buffer mediante transferencia. El renderer puede leer hasta la próxima entrega. React conserva una copia a unos 15 Hz. Una vuelta completada y sus frames de fantasma viajan por un mensaje independiente del pool.
+
+`hashContent` usa BLAKE3-128 de Rust. La codificación de retos con Race, Replay y RouteMeta y la carga de fantasmas externos devuelven `UNSUPPORTED_CAPABILITY`. Las fixtures prospectivas comprueban la cabecera de replay v2 y el prefijo de link inline. La semilla se expresa como decimal u64 en la fixture JSON. La escritura de ambos formatos corresponde a 0.10 y 6.7.
+
+`pnpm turbo run build` compila los paquetes. `pnpm turbo run test --force` ejecuta paridad, transferencias y negativos de capas. Para revisar Biome usa `pnpm exec biome lint packages`. Con Chromium instalado en Playwright, `node ci/determinism/lab-smoke.mjs` prueba el bundle y `node ci/determinism/lab-smoke.mjs --dev` prueba Vite.
 
 ## Kernel compartido
 

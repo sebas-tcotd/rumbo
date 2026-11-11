@@ -26,7 +26,9 @@ const EMPTY: LabSnapshot = {
   laps: [],
   hasGhost: false,
   verify: null,
+  verifyError: null,
   error: null,
+  notice: null,
   sessionNumber: 0,
 };
 const noopSubscribe = () => () => {};
@@ -50,15 +52,24 @@ export function App() {
     const el = viewport.current;
     if (!el) return;
     const c = new SimClient();
+    const onVisibility = () => c.setHidden(document.hidden);
+    document.addEventListener('visibilitychange', onVisibility);
+    onVisibility();
     const r = new LabRenderer(el);
     let disposed = false;
     let lastSent = '';
     const keyActions = new Map<string, () => void>();
     const sampler = new InputSampler((code) => keyActions.get(code)?.());
 
-    c.onReady = (ready, index) => r.build(ready, index);
+    c.onReady = (ready, index) => {
+      lastSent = '';
+      r.build(ready, index);
+    };
     c.onState = (m) => r.setState(m);
     c.onGhost = (g) => r.setGhost(g);
+    c.onCommandError = (operation) => {
+      if (operation === 'exportReplay') verifyAfterExport.current = false;
+    };
     c.onReplay = (json, ticks) => {
       if (verifyAfterExport.current) {
         verifyAfterExport.current = false;
@@ -68,6 +79,7 @@ export function App() {
       }
     };
     r.onFrame = () => {
+      if (document.hidden) { lastSent = ''; return; }
       const i: DriveInput = sampler.sample();
       const key = `${i.steer.toFixed(3)}|${i.throttle.toFixed(3)}|${i.brake.toFixed(3)}|${i.handbrake}`;
       if (key !== lastSent) {
@@ -96,6 +108,7 @@ export function App() {
       disposed = true;
       sampler.dispose();
       r.dispose();
+      document.removeEventListener('visibilitychange', onVisibility);
       c.dispose();
       setClient(null);
       setRenderer(null);
@@ -113,6 +126,7 @@ export function App() {
 
   const applyProfile = useCallback(
     (p: ProfileFile) => {
+      verifyAfterExport.current = false;
       client?.newSession(p);
       renderer?.setSuspensionRest(p.params.suspension_rest_m);
     },
@@ -127,11 +141,16 @@ export function App() {
       <div className="viewport" ref={viewport}>
         {!loading && <Hud snap={snap} ghostTicksAt={ghostTicksAt} autopilot={autopilot} paused={paused} />}
         {loading && !snap.error && <div className="loading">Cargando la simulación…</div>}
+        {snap.notice && !snap.error && (
+          <div className="loading" role="status">
+            {snap.notice}
+          </div>
+        )}
         {snap.error && (
           <div className="fatal" role="alert">
-            <strong>La simulación no pudo iniciar.</strong>
+            <strong>La simulación se detuvo.</strong>
             <p>{snap.error}</p>
-            <p>Si falta el paquete WASM, ejecuta <code>npm run wasm</code> en apps/web y recarga.</p>
+            <p>Recarga la página para iniciar otra sesión.</p>
           </div>
         )}
         <button className="panel-toggle" onClick={() => setPanelOpen((v) => !v)} aria-expanded={panelOpen}>

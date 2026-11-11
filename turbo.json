@@ -1,10 +1,31 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "stream",
-  "remoteCache": { "enabled": false },
-  "globalPassThroughEnv": ["CARGO_HOME", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "HOME", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "SSL_CERT_FILE"],
+  "remoteCache": {
+    "enabled": false
+  },
+  "globalPassThroughEnv": [
+    "CARGO_HOME",
+    "RUSTUP_HOME",
+    "RUSTUP_TOOLCHAIN",
+    "USERPROFILE",
+    "LOCALAPPDATA",
+    "APPDATA",
+    "HOME",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY",
+    "SSL_CERT_FILE"
+  ],
   "tasks": {
-    "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**"
+      ]
+    },
     "@rumbo/sim-wasm#build": {
       "inputs": [
         "$TURBO_ROOT$/crates/**",
@@ -14,17 +35,68 @@
         "$TURBO_ROOT$/Cargo.toml",
         "$TURBO_ROOT$/rust-toolchain.toml"
       ],
-      "outputs": ["pkg/**"]
+      "outputs": [
+        "pkg/**"
+      ]
     },
-    "typecheck": { "dependsOn": ["^build"] },
-    "test": { "dependsOn": ["^build"] },
+    "typecheck": {
+      "dependsOn": [
+        "^build"
+      ]
+    },
+    "test": {
+      "dependsOn": [
+        "^build"
+      ]
+    },
     "//#test": {
-      "inputs": ["crates/**", "!crates/sim-wasm/pkg/**", "!crates/*/.turbo/**", "Cargo.lock", "Cargo.toml", "rust-toolchain.toml", "assets/**", "data/**"]
+      "inputs": [
+        "crates/**",
+        "!crates/sim-wasm/pkg/**",
+        "!crates/*/.turbo/**",
+        "Cargo.lock",
+        "Cargo.toml",
+        "rust-toolchain.toml",
+        "assets/**",
+        "data/**"
+      ]
     },
     "rumbo-determinism#test": {
-      "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/assets/**", "$TURBO_ROOT$/crates/sim-core/tests/golden/**"]
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/assets/**",
+        "$TURBO_ROOT$/crates/sim-core/tests/golden/**"
+      ]
     },
-    "dev": { "dependsOn": ["^build"], "cache": false, "persistent": true }
+    "dev": {
+      "dependsOn": [
+        "^build"
+      ],
+      "cache": false,
+      "persistent": true
+    },
+    "@rumbo/sim-worker#test": {
+      "dependsOn": [
+        "build"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/crates/sim-wasm/**",
+        "!$TURBO_ROOT$/crates/sim-wasm/.turbo/**",
+        "$TURBO_ROOT$/assets/tracks/test-loop.json"
+      ]
+    },
+    "@rumbo/contracts#test": {
+      "dependsOn": [
+        "build"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/biome.json"
+      ]
+    }
   }
 }

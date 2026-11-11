@@ -8,6 +8,7 @@ license.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+track-format = { path = "../track-format" }
 sim-core = { path = "../sim-core" }
 wasm-bindgen.workspace = true
 serde_json.workspace = true  # igual en nativo y WASM

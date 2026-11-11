@@ -144,6 +144,7 @@ export function SessionPanel(p: Props) {
             e.target.value = '';
           }}
         />
+        {p.snap.verifyError && <p className="verify bad" role="alert">{p.snap.verifyError}</p>}
         {verify && (
           <p className={verify.ok ? 'verify ok' : 'verify bad'} role="status">
             {verify.ok ? 'Idéntico: ' : 'Divergencia: '}

@@ -42,7 +42,13 @@ jobs:
           cache: pnpm
       - run: rustc --version && cargo --version && node --version && wasm-pack --version
       - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo run build --filter @rumbo/sim-wasm
+      - run: pnpm turbo run build
+      - run: pnpm turbo run test --filter @rumbo/contracts --filter @rumbo/sim-worker --force
+      - run: pnpm exec biome lint packages
+      - run: pnpm --filter rumbo-determinism exec playwright install --with-deps chromium
+      - run: node --test ci/determinism/worker-integration.test.mjs
+      - run: node ci/determinism/lab-smoke.mjs
+      - run: node ci/determinism/lab-smoke.mjs --dev
       - run: node run.mjs --browser node --out results
         working-directory: ci/determinism
       - uses: actions/upload-artifact@v7

@@ -1,0 +1,92 @@
+{
+  "files": {
+    "includes": [
+      "packages/**/*.{ts,mjs}",
+      "ci/determinism/{worker-host.mjs,worker-integration.test.mjs,lab-smoke.mjs}",
+      "!**/dist",
+      "!**/node_modules"
+    ]
+  },
+  "linter": {
+    "rules": {
+      "preset": "none"
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["packages/contracts/**/*.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["react", "react/**", "react-dom", "react-dom/**", "three", "three/**"],
+                    "message": "ADR-005: no UI or render libraries here; expose behavior through a port in @rumbo/contracts."
+                  },
+                  {
+                    "group": ["@rumbo/**"],
+                    "message": "ADR-005: contracts imports no other @rumbo package; invert the dependency through a port declared here."
+                  },
+                  {
+                    "group": ["../**"],
+                    "message": "ADR-005: no relative escapes out of the package; import its public entry point."
+                  },
+                  {
+                    "group": ["**/*.wasm"],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/sim-worker/**/*.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["react", "react/**", "react-dom", "react-dom/**", "three", "three/**"],
+                    "message": "ADR-005: no UI or render libraries here; expose behavior through a port in @rumbo/contracts."
+                  },
+                  {
+                    "group": ["@rumbo/**", "!@rumbo/contracts", "!@rumbo/sim-wasm"],
+                    "message": "ADR-005: sim-worker may import only @rumbo/contracts and @rumbo/sim-wasm."
+                  },
+                  {
+                    "group": ["../**"],
+                    "message": "ADR-005: no relative escapes out of the package; import its public entry point."
+                  },
+                  {
+                    "group": ["**/*.wasm"],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 110,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single"
+    }
+  }
+}
