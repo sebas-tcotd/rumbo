@@ -93,3 +93,19 @@ test('data written by a newer build is not overwritten', () => {
   assert.equal(store.save({ locale: 'es' }).ok, false);
   assert.equal(storage.map.get(SETTINGS_KEY), fixture('v9-future.json'));
 });
+
+test('saving before any load still protects data from a newer build', () => {
+  const storage = memoryStorage(fixture('v9-future.json'));
+  assert.equal(createLocalSettingsStore(storage).save({ locale: 'es' }).ok, false);
+  assert.equal(storage.map.get(SETTINGS_KEY), fixture('v9-future.json'));
+});
+
+test('a migration that throws leaves defaults, never throws and keeps the stored data', () => {
+  const stored = '{"version":1,"locale":"es"}';
+  const storage = memoryStorage(stored);
+  const broken = (raw) => migrateSettings(raw, [() => { throw new Error('bad step'); }], 2);
+  const store = createLocalSettingsStore(storage, broken);
+  assert.deepEqual(store.load(), DEFAULTS);
+  assert.equal(store.save({ locale: 'es' }).ok, false);
+  assert.equal(storage.map.get(SETTINGS_KEY), stored);
+});

@@ -81,6 +81,8 @@ let recFrames = 0;
 let prevLap = 0;
 let prevLapTicks = 0;
 let prevBest = -1;
+/** False while the lap in progress was not recorded from its start (a seek lands mid-lap). */
+let recFromLapStart = true;
 
 function mesh(l: Lab, part: string): MeshData {
   return {
@@ -154,6 +156,7 @@ function replaceLab(next: Lab, showInitial: boolean) {
   prevLap = 0;
   prevLapTicks = 0;
   prevBest = -1;
+  recFromLapStart = true;
   if (!paused) clock.start(performance.now());
   post({ type: 'session', hashes: { track: next.track_hash(), profile: next.profile_hash() } });
   if (paused && showInitial) {
@@ -210,10 +213,12 @@ function recordGhost(s: Float32Array) {
     // Empezó una vuelta nueva (completa, anulada o la primera).
     if (lap > prevLap) {
       const isBest = best !== prevBest;
-      const ghost = isBest ? rec.slice(0, recFrames * GHOST_STRIDE) : null;
+      // A partial recording would offset the ghost (frames are indexed from the lap start).
+      const ghost = isBest && recFromLapStart ? rec.slice(0, recFrames * GHOST_STRIDE) : null;
       post({ type: 'lap', ticks: s[I.lastLapTicks], best: isBest, ghost }, ghost ? [ghost.buffer] : []);
     }
     recFrames = 0;
+    recFromLapStart = true;
   }
   prevLap = lap;
   prevLapTicks = lapTicks;
@@ -270,6 +275,12 @@ function devSeekReplay(json: string, tick: number) {
   clearTimeout(timer);
   clock.stop();
   replaceLab(next, true);
+  // The re-simulated session is mid-race: lap tracking starts from its current state (captured by
+  // replaceLab while paused), and a lap already under way never becomes the ghost.
+  prevLap = lastState[I.lap];
+  prevLapTicks = lastState[I.lapTicks];
+  prevBest = lastState[I.bestLapTicks];
+  recFromLapStart = lastState[I.nextCheckpoint] < 1; // timer not started: recording begins at the line
 }
 
 let failed = false;

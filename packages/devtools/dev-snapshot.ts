@@ -80,4 +80,6 @@ export interface DevStore {
 /** Replays exported by the worker reach devtools here (it downloads them). */
 export interface DevEvents {
   onReplay(listener: (json: string, ticks: number) => void): () => void;
+  /** The worker rejected an export: no replay will arrive for it. Returns the unsubscribe function. */
+  onExportFailed(listener: () => void): () => void;
 }

@@ -128,13 +128,16 @@ pub const MAX_SEEK_TICKS: u64 = 30 * 60 * 120;
 /// `Simulation::step`, so the returned session records the same inputs as the prefix of the replay.
 /// # Errors
 /// Same rejections as `verify_replay` for format, track, profile and physics version, plus a `tick`
-/// beyond the replay or beyond `MAX_SEEK_TICKS`.
+/// beyond the recorded inputs or beyond `MAX_SEEK_TICKS`. The bound is the inputs actually recorded,
+/// not the declared `ticks`, so the session returned is always exactly at `tick`.
 pub fn resimulate_until(manifest: &ReplayManifest, track: &TrackDef, tick: u64) -> Result<Simulation, String> {
     if manifest.format != REPLAY_FORMAT {
         return Err(format!("formato desconocido: {}", manifest.format));
     }
-    if tick > manifest.ticks || tick > MAX_SEEK_TICKS {
-        return Err(format!("tick fuera del replay: {tick} (máximo {})", manifest.ticks.min(MAX_SEEK_TICKS)));
+    let recorded: u64 = manifest.inputs.iter().map(|run| u64::from(run[0])).sum();
+    let max = recorded.min(MAX_SEEK_TICKS);
+    if tick > max {
+        return Err(format!("tick fuera del replay: {tick} (máximo {max})"));
     }
     if manifest.physics_version != crate::PHYSICS_VERSION {
         return Err(format!("versión de física distinta: replay {}", manifest.physics_version));
@@ -155,5 +158,6 @@ pub fn resimulate_until(manifest: &ReplayManifest, track: &TrackDef, tick: u64) 
             sim.step(input);
         }
     }
+    debug_assert_eq!(sim.tick(), tick, "the inputs cover `tick` (checked above)");
     Ok(sim)
 }

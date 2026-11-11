@@ -7,7 +7,7 @@ import { GHOST_STRIDE } from './protocol.js';
  */
 export function interpolationAlpha(nowAbsMs: number, atMs: number, tickHz: number): number {
   const alpha = (nowAbsMs - atMs) / (1000 / tickHz);
-  if (Number.isNaN(alpha)) return 1;
+  if (!Number.isFinite(alpha)) return 1;
   return Math.min(1, Math.max(0, alpha));
 }
 

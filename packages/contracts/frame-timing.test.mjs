@@ -11,6 +11,8 @@ test('alpha is the elapsed fraction of one tick since the snapshot was due', () 
   assert.equal(interpolationAlpha(at + 5 * tick, at, 120), 1, 'clamped above');
   assert.equal(interpolationAlpha(at - 3, at, 120), 0, 'a future `at` clamps to 0');
   assert.equal(interpolationAlpha(Number.NaN, at, 120), 1);
+  assert.equal(interpolationAlpha(Number.NEGATIVE_INFINITY, at, 120), 1, 'any non-finite input yields 1');
+  assert.equal(interpolationAlpha(at, Number.POSITIVE_INFINITY, 120), 1);
 });
 
 test('ghostTicksAt finds the first frame at or past s', () => {

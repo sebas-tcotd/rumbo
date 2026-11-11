@@ -34,6 +34,7 @@ export interface RendererPort {
   /**
    * Draws one display frame between two consecutive ticks. prev/curr are host-owned scratch valid only
    * during the call: the renderer copies what it needs and keeps no reference. 0 ≤ alpha ≤ 1.
+   * Before the first snapshot the host passes all-zero arrays: draw the scene without posing the car.
    */
   frame(prev: Float32Array, curr: Float32Array, alpha: number): void;
   /** Best-lap ghost poses (GHOST_STRIDE floats per tick), or null to hide it. */

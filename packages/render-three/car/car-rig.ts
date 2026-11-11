@@ -84,6 +84,10 @@ export function buildCar(vehicle: VehicleGeometry, ghost: boolean): CarRig {
   return { root, body, wheels, spinners };
 }
 
+/** Per-wheel state fields, in the order of the vehicle's hardpoints (FL, FR, RL, RR). */
+const CONTACT_FIELDS = ['contactFL', 'contactFR', 'contactRL', 'contactRR'] as const;
+const COMPRESSION_FIELDS = ['compFL', 'compFR', 'compRL', 'compRR'] as const;
+
 /** Wheel placement inputs that do not change during a session. */
 export interface WheelSetup {
   hardpoints: [number, number, number][];
@@ -107,8 +111,9 @@ export function placeWheels(
   const nextSpin = spin - ((s[I.speedKmh] / 3.6) * dt) / setup.wheelRadius;
   for (let i = 0; i < 4; i++) {
     const [x, y, z] = setup.hardpoints[i];
-    const contact = s[I.contactFL + i] > 0.5;
-    const drop = contact ? setup.suspensionRest - s[I.compFL + i] : setup.suspensionRest;
+    // Each field by name: the layout comes from the worker at runtime and need not be contiguous.
+    const contact = s[I[CONTACT_FIELDS[i]]] > 0.5;
+    const drop = contact ? setup.suspensionRest - s[I[COMPRESSION_FIELDS[i]]] : setup.suspensionRest;
     // Wheels stick out of the body a little (visual only).
     car.wheels[i].position.set(x + Math.sign(x) * 0.17, y - drop, z);
     car.wheels[i].rotation.set(0, i < 2 ? steer : 0, 0);

@@ -15,7 +15,7 @@
   "overrides": [
     {
       "includes": [
-        "packages/contracts/**/*.ts"
+        "packages/contracts/**/*.{ts,tsx}"
       ],
       "linter": {
         "rules": {
@@ -62,7 +62,7 @@
     },
     {
       "includes": [
-        "packages/sim-worker/**/*.ts"
+        "packages/sim-worker/**/*.{ts,tsx}"
       ],
       "linter": {
         "rules": {
@@ -111,7 +111,53 @@
     },
     {
       "includes": [
-        "packages/render-three/*.{ts,tsx}"
+        "packages/render-three/**/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**"
+                    ],
+                    "message": "ADR-005: no React here; UI lives in @rumbo/ui (player) or @rumbo/devtools (lab) and talks to this layer through ports in @rumbo/contracts."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts"
+                    ],
+                    "message": "ADR-005: render-three may import only @rumbo/contracts (and three); apps/web wires it to the other adapters."
+                  },
+                  {
+                    "group": [
+                      "../../../../**"
+                    ],
+                    "message": "ADR-005: no relative escapes out of the package; import its public entry point. (files deeper than three subfolders: no import may climb four or more levels)"
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/render-three/*.{ts,tsx,mjs}"
       ],
       "linter": {
         "rules": {
@@ -157,7 +203,7 @@
     },
     {
       "includes": [
-        "packages/render-three/*/*.{ts,tsx}"
+        "packages/render-three/*/*.{ts,tsx,mjs}"
       ],
       "linter": {
         "rules": {
@@ -203,7 +249,7 @@
     },
     {
       "includes": [
-        "packages/render-three/*/*/*.{ts,tsx}"
+        "packages/render-three/*/*/*.{ts,tsx,mjs}"
       ],
       "linter": {
         "rules": {
@@ -249,7 +295,60 @@
     },
     {
       "includes": [
-        "packages/platform-web/*.{ts,tsx}"
+        "packages/platform-web/**/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**"
+                    ],
+                    "message": "ADR-005: no React here; UI lives in @rumbo/ui (player) or @rumbo/devtools (lab) and talks to this layer through ports in @rumbo/contracts."
+                  },
+                  {
+                    "group": [
+                      "three",
+                      "three/**"
+                    ],
+                    "message": "ADR-005: three is used only by @rumbo/render-three; reach the renderer through RendererPort/RenderDebugPort injected from apps/web."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts"
+                    ],
+                    "message": "ADR-005: platform-web may import only @rumbo/contracts; apps/web wires it to the other adapters."
+                  },
+                  {
+                    "group": [
+                      "../../../../**"
+                    ],
+                    "message": "ADR-005: no relative escapes out of the package; import its public entry point. (files deeper than three subfolders: no import may climb four or more levels)"
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/platform-web/*.{ts,tsx,mjs}"
       ],
       "linter": {
         "rules": {
@@ -302,7 +401,7 @@
     },
     {
       "includes": [
-        "packages/platform-web/*/*.{ts,tsx}"
+        "packages/platform-web/*/*.{ts,tsx,mjs}"
       ],
       "linter": {
         "rules": {
@@ -355,7 +454,7 @@
     },
     {
       "includes": [
-        "packages/platform-web/*/*/*.{ts,tsx}"
+        "packages/platform-web/*/*/*.{ts,tsx,mjs}"
       ],
       "linter": {
         "rules": {
@@ -408,7 +507,52 @@
     },
     {
       "includes": [
-        "packages/ui/*.{ts,tsx}"
+        "packages/ui/**/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "three",
+                      "three/**"
+                    ],
+                    "message": "ADR-005: three is used only by @rumbo/render-three; reach the renderer through RendererPort/RenderDebugPort injected from apps/web."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts",
+                      "!@rumbo/game"
+                    ],
+                    "message": "ADR-005: ui may import only @rumbo/contracts (and @rumbo/game); adapters reach it as ports injected by mountUi."
+                  },
+                  {
+                    "group": [
+                      "../../../../**"
+                    ],
+                    "message": "ADR-005: no relative escapes out of the package; import its public entry point. (files deeper than three subfolders: no import may climb four or more levels)"
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/ui/*.{ts,tsx,mjs}"
       ],
       "linter": {
         "rules": {
@@ -453,7 +597,7 @@
     },
     {
       "includes": [
-        "packages/ui/*/*.{ts,tsx}"
+        "packages/ui/*/*.{ts,tsx,mjs}"
       ],
       "linter": {
         "rules": {
@@ -498,7 +642,7 @@
     },
     {
       "includes": [
-        "packages/ui/*/*/*.{ts,tsx}"
+        "packages/ui/*/*/*.{ts,tsx,mjs}"
       ],
       "linter": {
         "rules": {
@@ -543,7 +687,52 @@
     },
     {
       "includes": [
-        "packages/devtools/*.{ts,tsx}"
+        "packages/devtools/**/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "three",
+                      "three/**"
+                    ],
+                    "message": "ADR-005: three is used only by @rumbo/render-three; reach the renderer through RendererPort/RenderDebugPort injected from apps/web."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts",
+                      "!@rumbo/game"
+                    ],
+                    "message": "ADR-005: devtools may import only @rumbo/contracts (and @rumbo/game); the renderer reaches it as RenderDebugPort injected by mountDevtools."
+                  },
+                  {
+                    "group": [
+                      "../../../../**"
+                    ],
+                    "message": "ADR-005: no relative escapes out of the package; import its public entry point. (files deeper than three subfolders: no import may climb four or more levels)"
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/devtools/*.{ts,tsx,mjs}"
       ],
       "linter": {
         "rules": {
@@ -588,7 +777,7 @@
     },
     {
       "includes": [
-        "packages/devtools/*/*.{ts,tsx}"
+        "packages/devtools/*/*.{ts,tsx,mjs}"
       ],
       "linter": {
         "rules": {
@@ -633,7 +822,7 @@
     },
     {
       "includes": [
-        "packages/devtools/*/*/*.{ts,tsx}"
+        "packages/devtools/*/*/*.{ts,tsx,mjs}"
       ],
       "linter": {
         "rules": {

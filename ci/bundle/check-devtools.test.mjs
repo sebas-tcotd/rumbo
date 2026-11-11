@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkBuilds, readMarker } from './check-devtools.mjs';
+import { checkBuilds, devtoolsFingerprints, readMarker } from './check-devtools.mjs';
 
 const MARKER = 'rumbo-devtools-bundle-marker';
 
@@ -39,6 +39,34 @@ test('fails on a devtools chunk in dist even without the marker', (t) => {
 test('fails when the lab build lacks devtools', (t) => {
   const dirs = builds(t, { dist: { 'index.js': 'app' }, lab: { 'index.js': 'app' } });
   assert.match(checkBuilds(dirs).join('\n'), /lab build is missing devtools/);
+});
+
+const FINGERPRINTS = { texts: ['Laboratorio de manejo'], classes: ['panel-head'] };
+
+test('fails on a partial leak: a devtools text without the marker', (t) => {
+  const dirs = builds(t, { dist: { 'index.js': 'h("h1",null,"Laboratorio de manejo")' }, lab: { 'a.js': MARKER } });
+  assert.match(checkBuilds({ ...dirs, fingerprints: FINGERPRINTS }).join('\n'), /devtools text "Laboratorio de manejo"/);
+});
+
+test('fails on devtools styles in the publication CSS, not on a class name prefix', (t) => {
+  const leak = builds(t, { dist: { 'index.js': 'app', 'index.css': '.panel-head{color:red}' }, lab: { 'a.js': MARKER } });
+  assert.match(checkBuilds({ ...leak, fingerprints: FINGERPRINTS }).join('\n'), /devtools styles \(\.panel-head\)/);
+  const ok = builds(t, { dist: { 'index.js': 'app', 'index.css': '.panel-header{color:red}' }, lab: { 'a.js': MARKER } });
+  assert.deepEqual(checkBuilds({ ...ok, fingerprints: FINGERPRINTS }), []);
+});
+
+test('reports a missing build instead of throwing', () => {
+  assert.match(checkBuilds({ dist: 'no/such/dist', distLab: 'no/such/lab', marker: MARKER }).join('\n'), /missing/);
+});
+
+test('fingerprints keep devtools prose and classes the shipped code does not have', () => {
+  const fp = devtoolsFingerprints({
+    devtoolsSources: ['<h1>Laboratorio de manejo</h1><p>Piloto automático</p>{useState<string | null>(null)}<b>x</b>'],
+    devtoolsCss: ['.panel-head{} .hud{}'],
+    shippedSources: ['"autopilot": "Piloto automático"'],
+    shippedCss: ['.hud{}'],
+  });
+  assert.deepEqual(fp, { texts: ['Laboratorio de manejo'], classes: ['panel-head'] });
 });
 
 test('reads the marker from the devtools source', () => {

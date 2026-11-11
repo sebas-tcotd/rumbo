@@ -49,6 +49,21 @@ fn resimulation_rejects_out_of_range_ticks_and_foreign_replays() {
 }
 
 #[test]
+fn resimulation_is_bounded_by_the_recorded_inputs_not_the_declared_ticks() {
+    let def = track("test-loop");
+    let mut truncated = golden("test-loop.scripted");
+    let recorded: u64 = truncated.inputs.iter().map(|run| u64::from(run[0])).sum();
+    // Declares more ticks than it records: a seek past the inputs is refused, never short.
+    truncated.ticks = recorded + 500;
+    assert!(resimulate_until(&truncated, &def, recorded + 1).is_err());
+    assert_eq!(resimulate_until(&truncated, &def, recorded).unwrap().tick(), recorded);
+    // Declares fewer ticks than it records: a tick inside the inputs is still reachable.
+    let mut short = golden("test-loop.scripted");
+    short.ticks = recorded / 2;
+    assert_eq!(resimulate_until(&short, &def, recorded - 1).unwrap().tick(), recorded - 1);
+}
+
+#[test]
 fn teleport_places_the_car_on_the_centerline_at_s_and_drops_the_attempt() {
     let def = track("test-loop");
     let mut sim = Simulation::new(&def, &ProfileFile::default(), 1).unwrap();

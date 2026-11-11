@@ -100,6 +100,8 @@ try {
     await page.keyboard.down('w');
     await page.waitForFunction(() => Number(document.querySelector('.speed-value')?.textContent) > 5);
     await page.keyboard.up('w');
+    // Let any lazily loaded chunk arrive before asserting it never mounted.
+    await page.waitForLoadState('networkidle');
     assert.equal(await page.getByRole('tab').count(), 0, 'publication build has no lab panel');
     assert.equal(await page.locator('.panel-toggle').count(), 0);
     await windowErrors();

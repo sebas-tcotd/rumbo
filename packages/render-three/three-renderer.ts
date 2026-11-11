@@ -140,7 +140,9 @@ export class ThreeRenderer implements RendererPort, RenderDebugPort {
     const dt = Math.min(0.5, (now - this.lastFrame) / 1000);
     this.lastFrame = now;
     const I = this.I;
-    if (I && this.car) this.pose(prev, curr, alpha, I, this.car, dt);
+    // An all-zero orientation is no state at all (the host draws before the first snapshot).
+    const hasState = I !== null && (curr[I.qx] !== 0 || curr[I.qy] !== 0 || curr[I.qz] !== 0 || curr[I.qw] !== 0);
+    if (I && hasState && this.car) this.pose(prev, curr, alpha, I, this.car, dt);
     this.renderer.render(this.scene, this.chase.camera);
   }
 

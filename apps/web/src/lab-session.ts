@@ -4,6 +4,8 @@
 
 import {
   buildIndex,
+  DEV_SEEK_MAX_CHARS,
+  DEV_SEEK_MAX_TICKS,
   type DevCommand,
   type Hashes,
   type LapMsg,
@@ -85,6 +87,13 @@ type Listener = () => void;
 /** Minimum time between two React-visible state copies (~15 Hz). */
 const UI_INTERVAL_MS = 66;
 
+/** Why a seek would be refused before reaching the worker (same bounds as its wire validation). */
+function seekProblem(json: string, tick: number): string | null {
+  if (json.length > DEV_SEEK_MAX_CHARS) return 'El replay es demasiado grande para re-simularlo en el laboratorio.';
+  if (!Number.isInteger(tick) || tick < 0 || tick > DEV_SEEK_MAX_TICKS) return `Tick fuera de rango: ${tick}.`;
+  return null;
+}
+
 /** Store of the lab session; the composition root wires its callbacks to the renderer and controller. */
 export class LabSession {
   private readonly worker: SimPort;
@@ -94,8 +103,10 @@ export class LabSession {
   private view: LabView = INITIAL;
   private autopilot = false;
   private pendingProfile: ProfileFile | null = null;
-  /** A seek was sent: the session it creates starts out altered. */
-  private alterOnSession = false;
+  /** A seek was sent and not answered yet: the session it creates starts out altered and paused. */
+  private seekPending = false;
+  /** `altered` as the current session started (a seek's session is born altered). */
+  private sessionAltered = false;
   private disposed = false;
   private lastUiUpdate = 0;
   /** Latest state message; its prev/curr arrays are the sim client's scratch, valid until the next one. */
@@ -105,6 +116,8 @@ export class LabSession {
   onReplay: (json: string, ticks: number) => void = () => {};
   /** Called when the worker rejects a command, so the host can drop state tied to it. */
   onCommandError: (operation: string) => void = () => {};
+  /** Called once when the lab stops with a fatal error, so the host can stop its frame loop. */
+  onFatal: () => void = () => {};
 
   constructor(connect: ConnectSim) {
     this.worker = connect((msg) => this.handle(msg));
@@ -140,11 +153,24 @@ export class LabSession {
     }
   }
 
-  /** Sends an AR28 dev command and marks the session it affects as altered. */
+  /**
+   * Sends an AR28 dev command and marks the session it affects as altered. Arguments the worker would
+   * reject as an invalid command (which is fatal there) are refused here: a non-finite teleport is
+   * ignored and an out-of-bounds seek is reported like a rejected replay.
+   */
   sendDev(cmd: DevCommand): void {
     if (this.disposed) return;
-    if (cmd.type === 'devTeleport') this.patch({ altered: true });
-    else this.alterOnSession = true;
+    if (cmd.type === 'devTeleport') {
+      if (!Number.isFinite(cmd.s)) return;
+      this.patch({ altered: true });
+    } else {
+      const problem = seekProblem(cmd.json, cmd.tick);
+      if (problem) {
+        this.patch({ verifyError: problem });
+        return;
+      }
+      this.seekPending = true;
+    }
     this.worker.send(cmd);
   }
 
@@ -174,8 +200,10 @@ export class LabSession {
 
   /** Stops the lab with a fatal message (e.g. no WebGPU/WebGL). */
   fail(error: string): void {
+    const first = !this.disposed;
     this.dispose();
     this.patch({ error: error || 'SIM_FAILED' });
+    if (first) this.onFatal();
   }
 
   private handle(msg: SimResponse): void {
@@ -199,13 +227,15 @@ export class LabSession {
         this.patch({ verify: msg.report, verifyError: null });
         break;
       case 'verifyError':
-        this.alterOnSession = false;
+        // A rejected seek answers with verifyError and leaves the live session as it was.
+        this.seekPending = false;
         this.patch({ verify: null, verifyError: msg.message });
         break;
       case 'commandError':
         this.handleCommandError(msg.code, msg.operation);
         break;
       case 'unsupported':
+        this.dropDevCommand(msg.operation);
         this.patch({ notice: { code: 'UNSUPPORTED_OPERATION', operation: msg.operation } });
         this.onCommandError(msg.operation);
         break;
@@ -236,6 +266,12 @@ export class LabSession {
   }
 
   private handleSession(hashes: Hashes): void {
+    const seek = this.seekPending;
+    // The worker publishes a single state for a paused session: it must not fall in the UI throttle.
+    this.lastUiUpdate = Number.NEGATIVE_INFINITY;
+    // A seek's session arrives paused in the worker; the host adopts it as a manual pause.
+    if (seek) this.manuallyPaused = true;
+    this.sessionAltered = seek;
     this.patch({
       hashes,
       sessionNumber: this.view.sessionNumber + 1,
@@ -246,20 +282,28 @@ export class LabSession {
       verifyError: null,
       state: null,
       notice: null,
-      altered: this.alterOnSession,
+      altered: seek,
+      ...(seek ? { paused: true } : {}),
     });
     this.pendingProfile = null;
-    this.alterOnSession = false;
+    this.seekPending = false;
     if (this.view.ready) this.onGhost(null);
   }
 
   private handleCommandError(code: 'SIM_NOT_READY' | 'INVALID_PROFILE' | 'EXPORT_FAILED', operation: string): void {
+    this.dropDevCommand(operation);
     // SIM_NOT_READY on startup input is harmless: it is sampled again once the lab is ready.
     if (code !== 'SIM_NOT_READY') {
       if (operation === 'newSession') this.pendingProfile = null;
       this.patch({ notice: { code } });
     }
     this.onCommandError(operation);
+  }
+
+  /** A rejected dev command leaves the session as it was: undo the marks set when it was sent. */
+  private dropDevCommand(operation: string): void {
+    if (operation === 'devSeekReplay') this.seekPending = false;
+    if (operation === 'devTeleport') this.patch({ altered: this.sessionAltered });
   }
 
   private handleLap(msg: LapMsg): void {

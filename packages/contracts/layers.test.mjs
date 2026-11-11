@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const biome = join(root, 'node_modules/@biomejs/biome/bin/biome');
 
@@ -104,6 +104,52 @@ for (const [name, { allowed, rejected }] of Object.entries(LAYERS)) {
     }
   });
 }
+
+/** The four front packages also lint .tsx and .mjs files, at any folder depth. */
+const DEEP = ['render-three', 'platform-web', 'ui', 'devtools'];
+const deepCases = (name) => [
+  ['x/case.tsx', LAYERS[name].rejected[0]],
+  ['x/y/case.mjs', LAYERS[name].rejected[1]],
+  ['x/y/z/case.tsx', LAYERS[name].rejected[0]],
+  ['x/y/z/w/case.ts', LAYERS[name].rejected[1]],
+  ['x/y/z/case.ts', 'export * from "../../../../contracts/protocol";'],
+];
+
+for (const name of DEEP) {
+  test(name + ' keeps its layer rules in deep folders, .tsx and .mjs', () => {
+    const dir = mkdtempSync(join(root, 'packages', name, 'layer-test-'));
+    const lint = (rel, source) => {
+      const path = join(dir, rel);
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, source);
+      return spawnSync(process.execPath, [biome, 'lint', path], { cwd: root, encoding: 'utf8' });
+    };
+    try {
+      const ok = lint('x/y/z/allowed.tsx', LAYERS[name].allowed);
+      assert.equal(ok.status, 0, 'allowed imports must pass three folders deep\n' + ok.stderr);
+      for (const [rel, source] of deepCases(name)) {
+        const result = lint(rel, source);
+        assert.equal(result.status, 1, rel + ': ' + source);
+        assert.match(result.stderr, /noRestrictedImports/, rel);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test('devtools rejects three subpaths', () => {
+  const dir = mkdtempSync(join(root, 'packages', 'devtools', 'layer-test-'));
+  try {
+    const path = join(dir, 'case.tsx');
+    writeFileSync(path, 'import "three/webgpu";');
+    const result = spawnSync(process.execPath, [biome, 'lint', path], { cwd: root, encoding: 'utf8' });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /noRestrictedImports/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test('a package root file cannot climb out with a single ../', () => {
   const path = join(root, 'packages', 'ui', 'layer-root-case.ts');

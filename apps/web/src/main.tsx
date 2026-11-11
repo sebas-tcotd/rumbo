@@ -53,6 +53,8 @@ function start(root: HTMLElement): () => void {
     renderer.build(ready, index);
   };
   session.onGhost = (frames) => renderer.setGhost(frames);
+  // A fatal error stops drawing and sampling input behind the error screen.
+  session.onFatal = () => loop?.stop();
   const stopVisibility = platform.visibility.subscribe((hidden) => session.setHidden(hidden));
   session.setHidden(platform.visibility.hidden);
   // Without devtools there is no panel: the viewport takes the whole width.
@@ -64,7 +66,8 @@ function start(root: HTMLElement): () => void {
   renderer.setSuspensionRest(profile.params.suspension_rest_m);
   renderer.init().then(
     () => {
-      if (disposed) return;
+      // The simulation may have failed while the renderer was starting: no loop behind the error.
+      if (disposed || session.getSnapshot().error !== null) return;
       session.patch({ rendererReady: true, backend: renderer.backend });
       loop = startFrameLoop({ session, renderer, input: platform.input, isHidden: () => platform.visibility.hidden });
     },
@@ -75,13 +78,20 @@ function start(root: HTMLElement): () => void {
   const ui = mountUi(dom.uiRoot, { store: session, settings: platform.settings });
 
   if (import.meta.env.RUMBO_DEVTOOLS) {
-    import('@rumbo/devtools').then(({ mountDevtools }) => {
-      if (disposed) return;
-      devtools = mountDevtools(
-        { panel: dom.panel, toolbar: dom.toolbar },
-        { store: session, actions: controller, events: controller, track, tracks: TRACKS, debug: renderer },
-      );
-    });
+    import('@rumbo/devtools').then(
+      ({ mountDevtools }) => {
+        if (disposed) return;
+        devtools = mountDevtools(
+          { panel: dom.panel, toolbar: dom.toolbar },
+          { store: session, actions: controller, events: controller, track, tracks: TRACKS, debug: renderer },
+        );
+      },
+      (error: unknown) => {
+        // The lab keeps driving without its panel; say why instead of leaving an empty column.
+        console.error('DEVTOOLS_LOAD_FAILED', error);
+        if (!disposed) dom.panel.textContent = 'No se pudieron cargar las herramientas del laboratorio.';
+      },
+    );
   }
 
   return () => {
