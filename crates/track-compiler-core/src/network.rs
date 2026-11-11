@@ -111,6 +111,13 @@ pub struct RefPoint {
     pub edge: usize,
 }
 
+impl Corridor {
+    /// Edge at the start (`at_start`) or at the end of the corridor. Corridors always have edges.
+    fn end_edge(&self, at_start: bool) -> (usize, bool) {
+        if at_start { self.edges[0] } else { self.edges[self.edges.len() - 1] }
+    }
+}
+
 struct Corridor {
     /// Aristas en orden de recorrido y si van en su sentido de digitalización.
     edges: Vec<(usize, bool)>,
@@ -201,7 +208,8 @@ fn point_at(poly: &[[f64; 2]], s: f64) -> [f64; 2] {
         }
         acc += l;
     }
-    *poly.last().unwrap()
+    // Past the end (or an empty polyline, which callers never pass): clamp to the last point.
+    poly.last().copied().unwrap_or_default()
 }
 
 fn poly_len(poly: &[[f64; 2]]) -> f64 {
@@ -379,7 +387,7 @@ pub fn build(g: &RoadGraph, r: &ResolvedRoute, opts: &NetworkOptions) -> Result<
         let d0 = unit(sub(point_at(&c.axis, probe), c.axis[0]));
         arms_at.entry(c.start).or_default().push(Arm { corridor: ci, at_start: true, d: d0, half: c.half });
         if let Some(e) = c.end {
-            let d1 = unit(sub(point_at(&c.axis, l - probe), *c.axis.last().unwrap()));
+            let d1 = unit(sub(point_at(&c.axis, l - probe), c.axis[c.axis.len() - 1]));
             arms_at.entry(e).or_default().push(Arm { corridor: ci, at_start: false, d: d1, half: c.half });
         }
     }
@@ -493,8 +501,8 @@ pub fn build(g: &RoadGraph, r: &ResolvedRoute, opts: &NetworkOptions) -> Result<
     let mut bad: BTreeMap<usize, String> = BTreeMap::new();
     for (ci, c) in corridors.iter().enumerate() {
         let l = poly_len(&c.axis);
-        let t0 = arm_setback(&geoms, c.start, ci, true);
-        let t1 = c.end.map_or(0.0, |e| arm_setback(&geoms, e, ci, false));
+        let t0 = arm_setback(&geoms, c.start, ci, true)?;
+        let t1 = c.end.map(|e| arm_setback(&geoms, e, ci, false)).transpose()?.unwrap_or(0.0);
         if t0 + t1 + 2.0 > l {
             let why = format!("dos cruces a {l:.0} m: sus áreas se superponen");
             bad.insert(c.start, why.clone());
@@ -514,7 +522,7 @@ pub fn build(g: &RoadGraph, r: &ResolvedRoute, opts: &NetworkOptions) -> Result<
             .iter()
             .map(|a| {
                 let c = &corridors[a.corridor];
-                let (ei, _) = if a.at_start { c.edges[0] } else { *c.edges.last().unwrap() };
+                let (ei, _) = c.end_edge(a.at_start);
                 (g.edges[ei].layer, g.edges[ei].bridge || g.edges[ei].tunnel)
             })
             .collect();
@@ -546,7 +554,7 @@ pub fn build(g: &RoadGraph, r: &ResolvedRoute, opts: &NetworkOptions) -> Result<
             .iter()
             .map(|a| {
                 let c = &corridors[a.corridor];
-                let (ei, _) = if a.at_start { c.edges[0] } else { *c.edges.last().unwrap() };
+                let (ei, _) = c.end_edge(a.at_start);
                 g.edges[ei].id.clone()
             })
             .collect();
@@ -574,9 +582,9 @@ pub fn build(g: &RoadGraph, r: &ResolvedRoute, opts: &NetworkOptions) -> Result<
     }
     for (ci, c) in corridors.iter().enumerate() {
         let l = poly_len(&c.axis);
-        let t0 = arm_setback(&geoms, c.start, ci, true);
+        let t0 = arm_setback(&geoms, c.start, ci, true)?;
         let t1 = match c.end {
-            Some(e) => l - arm_setback(&geoms, e, ci, false),
+            Some(e) => l - arm_setback(&geoms, e, ci, false)?,
             None => (t0 + opts.stub_m).min(l - 6.0).max(t0 + 8.0).min(l),
         };
         if t1 - t0 < 0.5 {
@@ -595,9 +603,9 @@ pub fn build(g: &RoadGraph, r: &ResolvedRoute, opts: &NetworkOptions) -> Result<
                 [add(pts[i], mul(l, -(h + s))), add(pts[i], mul(l, -h)), add(pts[i], mul(l, h)), add(pts[i], mul(l, h + s))]
             })
             .collect();
-        sections[0] = mouth(&geoms, c.start, ci, true);
+        sections[0] = mouth(&geoms, c.start, ci, true)?;
         if let Some(e) = c.end {
-            let mo = mouth(&geoms, e, ci, false);
+            let mo = mouth(&geoms, e, ci, false)?;
             sections[m - 1] = [mo[3], mo[2], mo[1], mo[0]];
         }
         for w in sections.windows(2) {
@@ -628,7 +636,9 @@ pub fn build(g: &RoadGraph, r: &ResolvedRoute, opts: &NetworkOptions) -> Result<
             let line = vec![m[3], m[0]];
             let mid = mul(add(m[3], m[0]), 0.5);
             let nr = net.reference.len();
-            let q = (0..nr).min_by(|&x, &y| len(sub(net.reference[x].en, mid)).total_cmp(&len(sub(net.reference[y].en, mid)))).unwrap();
+            let q = (0..nr)
+                .min_by(|&x, &y| len(sub(net.reference[x].en, mid)).total_cmp(&len(sub(net.reference[y].en, mid))))
+                .ok_or("red inválida: el recorrido de referencia está vacío")?;
             let ahead = net.reference[(q + 12) % nr].en;
             let heading = unit(sub(ahead, net.reference[q].en));
             let arrow = if dot(heading, sub(line[1], line[0])) >= 0.0 { 1.0 } else { -1.0 };
@@ -713,8 +723,7 @@ fn reference(
         let v = if fi { corridors[ci].end } else { Some(corridors[ci].start) }
             .ok_or("el recorrido sale por una calle lateral")?;
         let jg = &geoms[&v];
-        let arm = |c: usize, at_start: bool| jg.arms.iter().position(|a| a.corridor == c && a.at_start == at_start).unwrap();
-        let (ia, ib) = (arm(ci, !fi), arm(co, fo));
+        let (ia, ib) = (arm_index(jg, ci, !fi)?, arm_index(jg, co, fo)?);
         let m = jg.arms.len();
         // Sector entre los dos brazos, si son vecinos.
         let sector = if (ia + 1) % m == ib {
@@ -778,7 +787,9 @@ fn reference(
     }
     // Empieza junto al primer punto del recorrido.
     let start = r.en[0];
-    let k0 = (0..out.len()).min_by(|&x, &y| len(sub(out[x].en, start)).total_cmp(&len(sub(out[y].en, start)))).unwrap();
+    let k0 = (0..out.len())
+        .min_by(|&x, &y| len(sub(out[x].en, start)).total_cmp(&len(sub(out[y].en, start))))
+        .ok_or("el recorrido de referencia quedó vacío")?;
     out.rotate_left(k0);
     // Paso uniforme de 1 m sobre el lazo cerrado, con un suavizado corto para los empalmes.
     let mut ring: Vec<[f64; 2]> = out.iter().map(|q| q.en).collect();
@@ -803,20 +814,27 @@ fn reference(
         .collect())
 }
 
-fn arm_of(geoms: &BTreeMap<usize, JunctionGeom>, v: usize, corridor: usize, at_start: bool) -> (&JunctionGeom, usize) {
+/// Index of the arm of junction `jg` that is the given end of `corridor`.
+fn arm_index(jg: &JunctionGeom, corridor: usize, at_start: bool) -> Result<usize, String> {
+    jg.arms
+        .iter()
+        .position(|a| a.corridor == corridor && a.at_start == at_start)
+        .ok_or_else(|| format!("red inválida: el corredor {corridor} no es brazo de su cruce"))
+}
+
+fn arm_of(geoms: &BTreeMap<usize, JunctionGeom>, v: usize, corridor: usize, at_start: bool) -> Result<(&JunctionGeom, usize), String> {
     let jg = &geoms[&v];
-    let k = jg.arms.iter().position(|a| a.corridor == corridor && a.at_start == at_start).unwrap();
-    (jg, k)
+    Ok((jg, arm_index(jg, corridor, at_start)?))
 }
 
-fn arm_setback(geoms: &BTreeMap<usize, JunctionGeom>, v: usize, corridor: usize, at_start: bool) -> f64 {
-    let (jg, k) = arm_of(geoms, v, corridor, at_start);
-    jg.setback[k]
+fn arm_setback(geoms: &BTreeMap<usize, JunctionGeom>, v: usize, corridor: usize, at_start: bool) -> Result<f64, String> {
+    let (jg, k) = arm_of(geoms, v, corridor, at_start)?;
+    Ok(jg.setback[k])
 }
 
-fn mouth(geoms: &BTreeMap<usize, JunctionGeom>, v: usize, corridor: usize, at_start: bool) -> [[f64; 2]; 4] {
-    let (jg, k) = arm_of(geoms, v, corridor, at_start);
-    jg.mouths[k]
+fn mouth(geoms: &BTreeMap<usize, JunctionGeom>, v: usize, corridor: usize, at_start: bool) -> Result<[[f64; 2]; 4], String> {
+    let (jg, k) = arm_of(geoms, v, corridor, at_start)?;
+    Ok(jg.mouths[k])
 }
 
 impl Junction {

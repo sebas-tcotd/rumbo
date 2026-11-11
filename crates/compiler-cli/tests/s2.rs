@@ -1,4 +1,5 @@
 //! Pruebas de S2: modelo de elevación, perfil filtrado, eje y generación de la pista.
+#![allow(clippy::unwrap_used, clippy::expect_used, reason = "test code: a panic is the failure report")]
 use track_compiler_core::dem::Dem;
 use track_compiler_core::elevation::{filter, Anchor, ElevationOptions};
 use track_compiler_core::graph::{BuildOptions, RoadGraph};

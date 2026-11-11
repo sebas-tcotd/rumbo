@@ -1,4 +1,5 @@
 //! Pruebas de manejo: sanidad física y la "prueba de manejo automática".
+#![allow(clippy::unwrap_used, clippy::expect_used, reason = "test code: a panic is the failure report")]
 mod common;
 use common::*;
 use sim_core::race::LapEvent;

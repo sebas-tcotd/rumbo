@@ -90,7 +90,9 @@ function rustTokens(source) {
   return tokens;
 }
 
-export function checkSource(source, file = 'source', kernel = true) {
+// `allowedRuntime` lifts the ban on one of the runtime crates for a core crate that legitimately
+// uses it (sim-core and rapier3d); randomness, wasm-bindgen and tiff stay forbidden everywhere.
+export function checkSource(source, file = 'source', kernel = true, allowedRuntime = []) {
   const tokens = rustTokens(source);
   const forbiddenSerde = new Set(['flatten', 'skip_serializing_if']);
   // The compiler has no runtime I/O boundary. Reject whole modules so aliases
@@ -105,7 +107,7 @@ export function checkSource(source, file = 'source', kernel = true) {
         else if (depth === 1 && forbiddenSerde.has(tokens[j])) throw new Error(`forbidden serde attribute: ${file}`);
       }
     }
-    if (['rand', 'rapier3d', 'wasm_bindgen', 'tiff'].includes(tokens[i]) && tokens[i + 1] === '::') throw new Error(`forbidden kernel runtime: ${file}`);
+    if (['rand', 'rapier3d', 'wasm_bindgen', 'tiff'].includes(tokens[i]) && !allowedRuntime.includes(tokens[i]) && tokens[i + 1] === '::') throw new Error(`forbidden kernel runtime: ${file}`);
     if (tokens[i] !== 'std') continue;
     // Reject aliasing the entire std namespace or importing all of it: either
     // would require resolving arbitrary aliases in later paths. Safe submodule
@@ -123,11 +125,11 @@ export function checkSource(source, file = 'source', kernel = true) {
     }
   }
 }
-function sources(dir, kernel = true) {
+function sources(dir, kernel = true, allowedRuntime = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
-    if (e.isDirectory()) sources(p, kernel);
-    else if (e.name.endsWith('.rs')) checkSource(readFileSync(p, 'utf8'), p, kernel);
+    if (e.isDirectory()) sources(p, kernel, allowedRuntime);
+    else if (e.name.endsWith('.rs')) checkSource(readFileSync(p, 'utf8'), p, kernel, allowedRuntime);
   }
 }
 export function check(root = resolve('.')) {
@@ -137,5 +139,7 @@ export function check(root = resolve('.')) {
   checkDependencies(metadata, 'compiler-cli');
   checkDependencies(metadata, 'track-compiler-core');
   sources(join(root, 'crates/track-compiler-core/src'), false);
+  // sim-core is part of the deterministic core too (story 0.7): same std and serde rules, plus Rapier.
+  sources(join(root, 'crates/sim-core/src'), true, ['rapier3d']);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) { check(); console.log('track-format layers and serde: OK'); }

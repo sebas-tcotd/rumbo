@@ -1,4 +1,5 @@
 //! Pistas abiertas (sprint): cronometraje de salida a llegada, vuelta a la grilla y muros finales.
+#![allow(clippy::unwrap_used, clippy::expect_used, reason = "test code: a panic is the failure report")]
 use sim_core::autopilot::Autopilot;
 use sim_core::input::FLAG_RESTART;
 use sim_core::race::LapEvent;
@@ -12,8 +13,8 @@ fn s_track() -> TrackDef {
     for i in 0..=35 {
         let t = i as f32 / 35.0;
         let x = t * 700.0;
-        let z = 60.0 * (t * std::f32::consts::TAU).sin();
-        let y = 4.0 * (t * std::f32::consts::PI).sin();
+        let z = 60.0 * libm::sinf(t * std::f32::consts::TAU);
+        let y = 4.0 * libm::sinf(t * std::f32::consts::PI);
         pts.push(format!(r#"{{"x":{x},"z":{z},"y":{y}}}"#));
     }
     let json = format!(

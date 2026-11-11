@@ -1,0 +1,12 @@
+{
+  "name": "rumbo-layers",
+  "private": true,
+  "type": "module",
+  "description": "Layer policy (ADR-005): Biome generator, meta-check and guardrail tests.",
+  "scripts": {
+    "test": "node --test check.test.mjs biome.test.mjs biome-guardrail.test.mjs pedantic-summary.test.mjs",
+    "test:clippy": "node --test clippy-guardrail.test.mjs",
+    "check": "node check.mjs",
+    "biome": "node biome.mjs"
+  }
+}

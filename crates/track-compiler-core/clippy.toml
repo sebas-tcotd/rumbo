@@ -1,0 +1,89 @@
+# Canonical clippy.toml of the deterministic core (P1, ADR-005), story 0.7.
+# crates/{track-format,sim-core,track-compiler-core}/clippy.toml must be exact copies of this file
+# (ci/layers/check.mjs). Clippy reads the file next to the crate and does not merge it with the root
+# clippy.toml, so the test allowances are repeated here.
+#
+# Every path below must resolve: a path Clippy cannot resolve is only a configuration warning and the
+# rule would be dead. ci/layers/clippy-guardrail.test.mjs proves each family still fires.
+
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+
+disallowed-types = [
+  { path = "std::collections::HashMap", reason = "P1/ADR-005: iteration order is not deterministic; use BTreeMap or a sorted Vec" },
+  { path = "std::collections::HashSet", reason = "P1/ADR-005: iteration order is not deterministic; use BTreeSet or a sorted Vec" },
+  { path = "std::collections::hash_map::RandomState", reason = "P1/ADR-005: randomly seeded hashing; the core uses no hashed collections" },
+  { path = "std::time::Instant", reason = "P1/ADR-005: no wall clock in the core; time comes from the tick count" },
+  { path = "std::time::SystemTime", reason = "P1/ADR-005: no wall clock in the core; time comes from the tick count" },
+  { path = "std::fs::File", reason = "P1/ADR-005: no I/O in the core; read through a port implemented in an adapter crate" },
+  { path = "std::fs::OpenOptions", reason = "P1/ADR-005: no I/O in the core; read through a port implemented in an adapter crate" },
+  { path = "std::net::TcpStream", reason = "P1/ADR-005: no network in the core" },
+  { path = "std::net::TcpListener", reason = "P1/ADR-005: no network in the core" },
+  { path = "std::net::UdpSocket", reason = "P1/ADR-005: no network in the core" },
+]
+
+# Transcendental and power functions are not guaranteed bit-identical across targets: use libm.
+# Allowed float methods (IEEE 754 exact): sqrt, abs, floor, ceil, round, trunc, fract, min, max, clamp,
+# signum, copysign, rem_euclid, div_euclid, to_degrees, to_radians, total_cmp.
+disallowed-methods = [
+  { path = "std::time::Instant::now", reason = "P1/ADR-005: no wall clock in the core; time comes from the tick count" },
+  { path = "std::time::SystemTime::now", reason = "P1/ADR-005: no wall clock in the core; time comes from the tick count" },
+  { path = "std::fs::read", reason = "P1/ADR-005: no I/O in the core; read through a port implemented in an adapter crate" },
+  { path = "std::fs::read_to_string", reason = "P1/ADR-005: no I/O in the core; read through a port implemented in an adapter crate" },
+  { path = "std::fs::write", reason = "P1/ADR-005: no I/O in the core; write through a port implemented in an adapter crate" },
+  { path = "std::env::var", reason = "P1/ADR-005: no environment in the core; pass configuration in explicitly" },
+  { path = "f64::sin", reason = "P1/ADR-005: use libm::sin (bit-identical across targets)" },
+  { path = "f64::cos", reason = "P1/ADR-005: use libm::cos (bit-identical across targets)" },
+  { path = "f64::tan", reason = "P1/ADR-005: use libm::tan (bit-identical across targets)" },
+  { path = "f64::sin_cos", reason = "P1/ADR-005: use libm::sin and libm::cos (bit-identical across targets)" },
+  { path = "f64::asin", reason = "P1/ADR-005: use libm::asin (bit-identical across targets)" },
+  { path = "f64::acos", reason = "P1/ADR-005: use libm::acos (bit-identical across targets)" },
+  { path = "f64::atan", reason = "P1/ADR-005: use libm::atan (bit-identical across targets)" },
+  { path = "f64::atan2", reason = "P1/ADR-005: use libm::atan2 (bit-identical across targets)" },
+  { path = "f64::sinh", reason = "P1/ADR-005: use libm::sinh (bit-identical across targets)" },
+  { path = "f64::cosh", reason = "P1/ADR-005: use libm::cosh (bit-identical across targets)" },
+  { path = "f64::tanh", reason = "P1/ADR-005: use libm::tanh (bit-identical across targets)" },
+  { path = "f64::asinh", reason = "P1/ADR-005: use libm::asinh (bit-identical across targets)" },
+  { path = "f64::acosh", reason = "P1/ADR-005: use libm::acosh (bit-identical across targets)" },
+  { path = "f64::atanh", reason = "P1/ADR-005: use libm::atanh (bit-identical across targets)" },
+  { path = "f64::exp", reason = "P1/ADR-005: use libm::exp (bit-identical across targets)" },
+  { path = "f64::exp2", reason = "P1/ADR-005: use libm::exp2 (bit-identical across targets)" },
+  { path = "f64::exp_m1", reason = "P1/ADR-005: use libm::expm1 (bit-identical across targets)" },
+  { path = "f64::ln", reason = "P1/ADR-005: use libm::log (bit-identical across targets)" },
+  { path = "f64::log", reason = "P1/ADR-005: use libm::log / log2 / log10 (bit-identical across targets)" },
+  { path = "f64::log2", reason = "P1/ADR-005: use libm::log2 (bit-identical across targets)" },
+  { path = "f64::log10", reason = "P1/ADR-005: use libm::log10 (bit-identical across targets)" },
+  { path = "f64::ln_1p", reason = "P1/ADR-005: use libm::log1p (bit-identical across targets)" },
+  { path = "f64::powf", reason = "P1/ADR-005: use libm::pow (bit-identical across targets)" },
+  { path = "f64::powi", reason = "P1/ADR-005: the powi intrinsic differs by target; multiply explicitly or use libm::pow" },
+  { path = "f64::cbrt", reason = "P1/ADR-005: use libm::cbrt (bit-identical across targets)" },
+  { path = "f64::hypot", reason = "P1/ADR-005: use libm::hypot (bit-identical across targets)" },
+  { path = "f64::mul_add", reason = "P1/ADR-005: fused multiply-add is emulated differently by target; write a * b + c" },
+  { path = "f32::sin", reason = "P1/ADR-005: use libm::sinf (bit-identical across targets)" },
+  { path = "f32::cos", reason = "P1/ADR-005: use libm::cosf (bit-identical across targets)" },
+  { path = "f32::tan", reason = "P1/ADR-005: use libm::tanf (bit-identical across targets)" },
+  { path = "f32::sin_cos", reason = "P1/ADR-005: use libm::sinf and libm::cosf (bit-identical across targets)" },
+  { path = "f32::asin", reason = "P1/ADR-005: use libm::asinf (bit-identical across targets)" },
+  { path = "f32::acos", reason = "P1/ADR-005: use libm::acosf (bit-identical across targets)" },
+  { path = "f32::atan", reason = "P1/ADR-005: use libm::atanf (bit-identical across targets)" },
+  { path = "f32::atan2", reason = "P1/ADR-005: use libm::atan2f (bit-identical across targets)" },
+  { path = "f32::sinh", reason = "P1/ADR-005: use libm::sinhf (bit-identical across targets)" },
+  { path = "f32::cosh", reason = "P1/ADR-005: use libm::coshf (bit-identical across targets)" },
+  { path = "f32::tanh", reason = "P1/ADR-005: use libm::tanhf (bit-identical across targets)" },
+  { path = "f32::asinh", reason = "P1/ADR-005: use libm::asinhf (bit-identical across targets)" },
+  { path = "f32::acosh", reason = "P1/ADR-005: use libm::acoshf (bit-identical across targets)" },
+  { path = "f32::atanh", reason = "P1/ADR-005: use libm::atanhf (bit-identical across targets)" },
+  { path = "f32::exp", reason = "P1/ADR-005: use libm::expf (bit-identical across targets)" },
+  { path = "f32::exp2", reason = "P1/ADR-005: use libm::exp2f (bit-identical across targets)" },
+  { path = "f32::exp_m1", reason = "P1/ADR-005: use libm::expm1f (bit-identical across targets)" },
+  { path = "f32::ln", reason = "P1/ADR-005: use libm::logf (bit-identical across targets)" },
+  { path = "f32::log", reason = "P1/ADR-005: use libm::logf / log2f / log10f (bit-identical across targets)" },
+  { path = "f32::log2", reason = "P1/ADR-005: use libm::log2f (bit-identical across targets)" },
+  { path = "f32::log10", reason = "P1/ADR-005: use libm::log10f (bit-identical across targets)" },
+  { path = "f32::ln_1p", reason = "P1/ADR-005: use libm::log1pf (bit-identical across targets)" },
+  { path = "f32::powf", reason = "P1/ADR-005: use libm::powf (bit-identical across targets)" },
+  { path = "f32::powi", reason = "P1/ADR-005: the powi intrinsic differs by target; multiply explicitly or use libm::powf" },
+  { path = "f32::cbrt", reason = "P1/ADR-005: use libm::cbrtf (bit-identical across targets)" },
+  { path = "f32::hypot", reason = "P1/ADR-005: use libm::hypotf (bit-identical across targets)" },
+  { path = "f32::mul_add", reason = "P1/ADR-005: fused multiply-add is emulated differently by target; write a * b + c" },
+]

@@ -111,3 +111,11 @@ test('CLI isolates simulation in dev dependencies', () => {
     assert.throws(() => checkDependencies(metadata, 'compiler-cli'), /forbidden/);
   }
 });
+
+test('sim-core mode allows Rapier and still rejects runtime I/O, time and randomness', () => {
+  checkSource('use rapier3d::prelude::*;', 'sim-core', true, ['rapier3d']);
+  for (const source of ['use std::time::Instant;', 'std::fs::read(path)', 'use std::net::TcpStream;', 'rand::random::<u32>()', 'wasm_bindgen::JsValue']) {
+    assert.throws(() => checkSource(source, 'sim-core', true, ['rapier3d']), /forbidden kernel runtime/, source);
+  }
+  assert.throws(() => checkSource('use rapier3d::prelude::*;'), /forbidden kernel runtime/);
+});

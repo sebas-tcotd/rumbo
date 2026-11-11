@@ -91,7 +91,8 @@ pub struct Profile {
 
 /// Rellena huecos por interpolación lineal; los extremos copian el valor más cercano.
 fn fill(v: &[Option<f64>]) -> Option<Vec<f64>> {
-    let known: Vec<usize> = (0..v.len()).filter(|&i| v[i].is_some()).collect();
+    // (index, height) of every known sample, in index order.
+    let known: Vec<(usize, f64)> = v.iter().enumerate().filter_map(|(i, h)| h.map(|h| (i, h))).collect();
     if known.is_empty() {
         return None;
     }
@@ -100,14 +101,14 @@ fn fill(v: &[Option<f64>]) -> Option<Vec<f64>> {
         *o = match v[i] {
             Some(h) => h,
             None => {
-                let next = known.partition_point(|&k| k < i);
+                let next = known.partition_point(|&(k, _)| k < i);
                 match (next.checked_sub(1).map(|k| known[k]), known.get(next).copied()) {
-                    (Some(a), Some(b)) => {
+                    (Some((a, ha)), Some((b, hb))) => {
                         let t = (i - a) as f64 / (b - a) as f64;
-                        v[a].unwrap() * (1.0 - t) + v[b].unwrap() * t
+                        ha * (1.0 - t) + hb * t
                     }
-                    (Some(a), None) => v[a].unwrap(),
-                    (None, Some(b)) => v[b].unwrap(),
+                    (Some((_, ha)), None) => ha,
+                    (None, Some((_, hb))) => hb,
                     (None, None) => unreachable!(),
                 }
             }
@@ -147,7 +148,8 @@ fn smooth(h: &[f64], ds: f64, sigma: f64) -> Vec<f64> {
             let reach = r.min(i).min(n as isize - 1 - i);
             let (mut acc, mut wsum) = (0.0, 0.0);
             for k in -reach..=reach {
-                let w = libm::exp(-0.5 * ((k as f64 * ds) / sigma).powi(2));
+                let u = (k as f64 * ds) / sigma;
+                let w = libm::exp(-0.5 * (u * u));
                 acc += h[(i + k) as usize] * w;
                 wsum += w;
             }
@@ -246,10 +248,10 @@ pub fn profile(samples: &[CenterSample], dem: &dyn ElevationSource, frame: &Loca
                         let dy = libm::hypot(samples[y].en[0] - q[0], samples[y].en[1] - q[1]);
                         dx.total_cmp(&dy)
                     })
-                    .unwrap();
-                (k, a.height_m - filtered[k], a.height_m)
+                    .ok_or("elevation anchors need at least one centerline sample")?;
+                Ok((k, a.height_m - filtered[k], a.height_m))
             })
-            .collect();
+            .collect::<Result<_, String>>()?;
         fixes.sort_by_key(|f| f.0);
         // La corrección es local: cada ancla arregla su entorno y no mueve el resto de la pista.
         // Dos anclas cercanas fijan el tramo entre ellas: el error del modelo no tiene forma de

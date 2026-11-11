@@ -1,5 +1,6 @@
 //! Depuración: geometría y altura del DEM a lo largo de unas aristas.
 //! Uso: --example edgeprof -- <grafo.json> <dem.tif> <id> [<id> ...]
+#![allow(clippy::unwrap_used, clippy::expect_used, reason = "example: a diagnostic tool where a panic is the error report")]
 use track_compiler_core::graph::RoadGraph;
 fn main() {
     let a: Vec<String> = std::env::args().collect();

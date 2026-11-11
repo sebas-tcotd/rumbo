@@ -218,7 +218,9 @@ pub fn compile_track(def: &TrackDef) -> Result<CompiledTrack, String> {
     for i in 1..dense.len() {
         acc[i] = acc[i - 1] + (pos(&dense[i]) - pos(&dense[i - 1])).length();
     }
-    let total = *acc.last().unwrap();
+    let Some(&total) = acc.last() else {
+        return Err("track centerline has no samples".into());
+    };
     let count = (total / def.sample_spacing).floor().max(8.0) as usize;
     let spacing = total / count as f32;
     let mut raw: Vec<[f32; 5]> = Vec::with_capacity(count + 1);
@@ -622,7 +624,7 @@ fn wall_segment(
 }
 
 /// S3: superficie, muros y marcas a partir de la red compilada.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, reason = "builds four mesh parts in one pass over the network; a struct would only wrap these same borrows")]
 fn build_network(
     net: &NetworkDef,
     samples: &[Sample],

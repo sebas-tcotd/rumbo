@@ -1,5 +1,6 @@
 //! Depuración: lista los giros de más de 100° de la ruta más corta pura entre puntos.
 //! Uso: cargo run -p compiler-cli --release --example turns -- <grafo.json> lat,lon lat,lon [...]
+#![allow(clippy::unwrap_used, clippy::expect_used, reason = "example: a diagnostic tool where a panic is the error report")]
 use track_compiler_core::graph::RoadGraph;
 use track_compiler_core::routing::{route, RouteOptions};
 use track_compiler_core::GeoPoint;

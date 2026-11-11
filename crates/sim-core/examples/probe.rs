@@ -1,5 +1,6 @@
 //! Sonda de diagnóstico: imprime telemetría de escenarios básicos.
 //! Uso: cargo run -p sim-core --release --example probe
+#![allow(clippy::unwrap_used, clippy::expect_used, reason = "example: a diagnostic tool where a panic is the error report")]
 use sim_core::autopilot::Autopilot;
 use sim_core::race::LapEvent;
 use sim_core::{InputFrame, ProfileFile, Simulation, TrackDef, STATE_LEN};
@@ -55,7 +56,7 @@ fn main() {
     println!("autopiloto: vmax {:.0} km/h, slip máx {:.1}°, vueltas {:?}, inválido {}", maxspd, max_slip, sim.timer().completed, sim.invalid());
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "alternate scenario kept for manual runs; main() calls one at a time")]
 pub fn drift_probe() {
     let track = TrackDef::from_json(include_str!("../../../assets/tracks/test-loop.json")).unwrap();
     let mut st = [0.0f32; STATE_LEN];

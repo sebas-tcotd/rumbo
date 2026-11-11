@@ -1,4 +1,5 @@
 //! Pruebas de S1: proyección, grafo y ruteo sobre el fixture sintético.
+#![allow(clippy::unwrap_used, clippy::expect_used, reason = "test code: a panic is the failure report")]
 use track_compiler_core::export::{graph_geojson, route_geojson};
 use track_compiler_core::geo::{curvature_radii, haversine_m};
 use track_compiler_core::graph::{BuildOptions, Oneway, RoadGraph};
@@ -39,7 +40,7 @@ fn projection_is_east_north_in_meters() {
     // cerca del ecuador la esfera sobrestima el arco norte-sur en ~0,5 %).
     let (m, n) = curvature_radii(LAT0);
     let step = 0.001_f64.to_radians();
-    let (ee, en) = (n * LAT0.to_radians().cos() * step, m * step);
+    let (ee, en) = (n * libm::cos(LAT0.to_radians()) * step, m * step);
     assert!((pe[0] - ee).abs() / ee < 1e-4, "este {} vs {}", pe[0], ee);
     assert!((pn[1] - en).abs() / en < 1e-4, "norte {} vs {}", pn[1], en);
     // Y la esfera media queda dentro del 1 %, como verificación gruesa.

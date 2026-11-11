@@ -10,3 +10,6 @@ rapier3d.workspace = true  # exact version + enhanced-determinism, see root Carg
 libm.workspace = true
 serde.workspace = true
 serde_json.workspace = true  # igual en nativo y WASM
+
+[lints]
+workspace = true

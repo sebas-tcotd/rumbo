@@ -2,9 +2,14 @@
   "files": {
     "includes": [
       "packages/**/*.{ts,tsx,mjs}",
+      "apps/**/*.{ts,tsx}",
       "ci/determinism/{worker-host.mjs,worker-integration.test.mjs,lab-smoke.mjs}",
       "!**/dist",
-      "!**/node_modules"
+      "!**/dist-lab",
+      "!**/node_modules",
+      "!**/pkg",
+      "!**/.turbo",
+      "!!.claude"
     ]
   },
   "linter": {
@@ -46,6 +51,13 @@
                       "../**"
                     ],
                     "message": "ADR-005: no relative escapes out of the package; import its public entry point."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
                   },
                   {
                     "group": [
@@ -98,6 +110,13 @@
                   },
                   {
                     "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
                       "**/*.wasm"
                     ],
                     "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
@@ -141,6 +160,13 @@
                       "../../../../**"
                     ],
                     "message": "ADR-005: no relative escapes out of the package; import its public entry point. (files deeper than three subfolders: no import may climb four or more levels)"
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
                   },
                   {
                     "group": [
@@ -190,6 +216,13 @@
                   },
                   {
                     "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
                       "**/*.wasm"
                     ],
                     "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
@@ -236,6 +269,13 @@
                   },
                   {
                     "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
                       "**/*.wasm"
                     ],
                     "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
@@ -279,6 +319,13 @@
                       "../../../**"
                     ],
                     "message": "ADR-005: no relative escapes out of the package; import its public entry point."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
                   },
                   {
                     "group": [
@@ -335,6 +382,13 @@
                   },
                   {
                     "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
                       "**/*.wasm"
                     ],
                     "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
@@ -385,6 +439,13 @@
                       "../**"
                     ],
                     "message": "ADR-005: no relative escapes out of the package; import its public entry point."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
                   },
                   {
                     "group": [
@@ -441,6 +502,13 @@
                   },
                   {
                     "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
                       "**/*.wasm"
                     ],
                     "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
@@ -494,6 +562,913 @@
                   },
                   {
                     "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/platform-web/audio/**/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**"
+                    ],
+                    "message": "ADR-005: no React here; UI lives in @rumbo/ui (player) or @rumbo/devtools (lab) and talks to this layer through ports in @rumbo/contracts."
+                  },
+                  {
+                    "group": [
+                      "three",
+                      "three/**"
+                    ],
+                    "message": "ADR-005: three is used only by @rumbo/render-three; reach the renderer through RendererPort/RenderDebugPort injected from apps/web."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts"
+                    ],
+                    "message": "ADR-005: platform-web may import only @rumbo/contracts; apps/web wires it to the other adapters."
+                  },
+                  {
+                    "group": [
+                      "../../../**"
+                    ],
+                    "message": "ADR-005: platform-web subfolders are isolated adapters; audio/ must not import other subfolders or the package root. Share types through @rumbo/contracts; apps/web wires them together."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/platform-web/audio/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**"
+                    ],
+                    "message": "ADR-005: no React here; UI lives in @rumbo/ui (player) or @rumbo/devtools (lab) and talks to this layer through ports in @rumbo/contracts."
+                  },
+                  {
+                    "group": [
+                      "three",
+                      "three/**"
+                    ],
+                    "message": "ADR-005: three is used only by @rumbo/render-three; reach the renderer through RendererPort/RenderDebugPort injected from apps/web."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts"
+                    ],
+                    "message": "ADR-005: platform-web may import only @rumbo/contracts; apps/web wires it to the other adapters."
+                  },
+                  {
+                    "group": [
+                      "../**"
+                    ],
+                    "message": "ADR-005: platform-web subfolders are isolated adapters; audio/ must not import other subfolders or the package root. Share types through @rumbo/contracts; apps/web wires them together."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/platform-web/audio/*/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**"
+                    ],
+                    "message": "ADR-005: no React here; UI lives in @rumbo/ui (player) or @rumbo/devtools (lab) and talks to this layer through ports in @rumbo/contracts."
+                  },
+                  {
+                    "group": [
+                      "three",
+                      "three/**"
+                    ],
+                    "message": "ADR-005: three is used only by @rumbo/render-three; reach the renderer through RendererPort/RenderDebugPort injected from apps/web."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts"
+                    ],
+                    "message": "ADR-005: platform-web may import only @rumbo/contracts; apps/web wires it to the other adapters."
+                  },
+                  {
+                    "group": [
+                      "../../**"
+                    ],
+                    "message": "ADR-005: platform-web subfolders are isolated adapters; audio/ must not import other subfolders or the package root. Share types through @rumbo/contracts; apps/web wires them together."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/platform-web/input/**/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**"
+                    ],
+                    "message": "ADR-005: no React here; UI lives in @rumbo/ui (player) or @rumbo/devtools (lab) and talks to this layer through ports in @rumbo/contracts."
+                  },
+                  {
+                    "group": [
+                      "three",
+                      "three/**"
+                    ],
+                    "message": "ADR-005: three is used only by @rumbo/render-three; reach the renderer through RendererPort/RenderDebugPort injected from apps/web."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts"
+                    ],
+                    "message": "ADR-005: platform-web may import only @rumbo/contracts; apps/web wires it to the other adapters."
+                  },
+                  {
+                    "group": [
+                      "../../../**"
+                    ],
+                    "message": "ADR-005: platform-web subfolders are isolated adapters; input/ must not import other subfolders or the package root. Share types through @rumbo/contracts; apps/web wires them together."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/platform-web/input/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**"
+                    ],
+                    "message": "ADR-005: no React here; UI lives in @rumbo/ui (player) or @rumbo/devtools (lab) and talks to this layer through ports in @rumbo/contracts."
+                  },
+                  {
+                    "group": [
+                      "three",
+                      "three/**"
+                    ],
+                    "message": "ADR-005: three is used only by @rumbo/render-three; reach the renderer through RendererPort/RenderDebugPort injected from apps/web."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts"
+                    ],
+                    "message": "ADR-005: platform-web may import only @rumbo/contracts; apps/web wires it to the other adapters."
+                  },
+                  {
+                    "group": [
+                      "../**"
+                    ],
+                    "message": "ADR-005: platform-web subfolders are isolated adapters; input/ must not import other subfolders or the package root. Share types through @rumbo/contracts; apps/web wires them together."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/platform-web/input/*/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**"
+                    ],
+                    "message": "ADR-005: no React here; UI lives in @rumbo/ui (player) or @rumbo/devtools (lab) and talks to this layer through ports in @rumbo/contracts."
+                  },
+                  {
+                    "group": [
+                      "three",
+                      "three/**"
+                    ],
+                    "message": "ADR-005: three is used only by @rumbo/render-three; reach the renderer through RendererPort/RenderDebugPort injected from apps/web."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts"
+                    ],
+                    "message": "ADR-005: platform-web may import only @rumbo/contracts; apps/web wires it to the other adapters."
+                  },
+                  {
+                    "group": [
+                      "../../**"
+                    ],
+                    "message": "ADR-005: platform-web subfolders are isolated adapters; input/ must not import other subfolders or the package root. Share types through @rumbo/contracts; apps/web wires them together."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/platform-web/storage/**/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**"
+                    ],
+                    "message": "ADR-005: no React here; UI lives in @rumbo/ui (player) or @rumbo/devtools (lab) and talks to this layer through ports in @rumbo/contracts."
+                  },
+                  {
+                    "group": [
+                      "three",
+                      "three/**"
+                    ],
+                    "message": "ADR-005: three is used only by @rumbo/render-three; reach the renderer through RendererPort/RenderDebugPort injected from apps/web."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts"
+                    ],
+                    "message": "ADR-005: platform-web may import only @rumbo/contracts; apps/web wires it to the other adapters."
+                  },
+                  {
+                    "group": [
+                      "../../../**"
+                    ],
+                    "message": "ADR-005: platform-web subfolders are isolated adapters; storage/ must not import other subfolders or the package root. Share types through @rumbo/contracts; apps/web wires them together."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/platform-web/storage/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**"
+                    ],
+                    "message": "ADR-005: no React here; UI lives in @rumbo/ui (player) or @rumbo/devtools (lab) and talks to this layer through ports in @rumbo/contracts."
+                  },
+                  {
+                    "group": [
+                      "three",
+                      "three/**"
+                    ],
+                    "message": "ADR-005: three is used only by @rumbo/render-three; reach the renderer through RendererPort/RenderDebugPort injected from apps/web."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts"
+                    ],
+                    "message": "ADR-005: platform-web may import only @rumbo/contracts; apps/web wires it to the other adapters."
+                  },
+                  {
+                    "group": [
+                      "../**"
+                    ],
+                    "message": "ADR-005: platform-web subfolders are isolated adapters; storage/ must not import other subfolders or the package root. Share types through @rumbo/contracts; apps/web wires them together."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/platform-web/storage/*/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**"
+                    ],
+                    "message": "ADR-005: no React here; UI lives in @rumbo/ui (player) or @rumbo/devtools (lab) and talks to this layer through ports in @rumbo/contracts."
+                  },
+                  {
+                    "group": [
+                      "three",
+                      "three/**"
+                    ],
+                    "message": "ADR-005: three is used only by @rumbo/render-three; reach the renderer through RendererPort/RenderDebugPort injected from apps/web."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts"
+                    ],
+                    "message": "ADR-005: platform-web may import only @rumbo/contracts; apps/web wires it to the other adapters."
+                  },
+                  {
+                    "group": [
+                      "../../**"
+                    ],
+                    "message": "ADR-005: platform-web subfolders are isolated adapters; storage/ must not import other subfolders or the package root. Share types through @rumbo/contracts; apps/web wires them together."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/platform-web/telemetry/**/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**"
+                    ],
+                    "message": "ADR-005: no React here; UI lives in @rumbo/ui (player) or @rumbo/devtools (lab) and talks to this layer through ports in @rumbo/contracts."
+                  },
+                  {
+                    "group": [
+                      "three",
+                      "three/**"
+                    ],
+                    "message": "ADR-005: three is used only by @rumbo/render-three; reach the renderer through RendererPort/RenderDebugPort injected from apps/web."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts"
+                    ],
+                    "message": "ADR-005: platform-web may import only @rumbo/contracts; apps/web wires it to the other adapters."
+                  },
+                  {
+                    "group": [
+                      "../../../**"
+                    ],
+                    "message": "ADR-005: platform-web subfolders are isolated adapters; telemetry/ must not import other subfolders or the package root. Share types through @rumbo/contracts; apps/web wires them together."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/platform-web/telemetry/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**"
+                    ],
+                    "message": "ADR-005: no React here; UI lives in @rumbo/ui (player) or @rumbo/devtools (lab) and talks to this layer through ports in @rumbo/contracts."
+                  },
+                  {
+                    "group": [
+                      "three",
+                      "three/**"
+                    ],
+                    "message": "ADR-005: three is used only by @rumbo/render-three; reach the renderer through RendererPort/RenderDebugPort injected from apps/web."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts"
+                    ],
+                    "message": "ADR-005: platform-web may import only @rumbo/contracts; apps/web wires it to the other adapters."
+                  },
+                  {
+                    "group": [
+                      "../**"
+                    ],
+                    "message": "ADR-005: platform-web subfolders are isolated adapters; telemetry/ must not import other subfolders or the package root. Share types through @rumbo/contracts; apps/web wires them together."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/platform-web/telemetry/*/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**"
+                    ],
+                    "message": "ADR-005: no React here; UI lives in @rumbo/ui (player) or @rumbo/devtools (lab) and talks to this layer through ports in @rumbo/contracts."
+                  },
+                  {
+                    "group": [
+                      "three",
+                      "three/**"
+                    ],
+                    "message": "ADR-005: three is used only by @rumbo/render-three; reach the renderer through RendererPort/RenderDebugPort injected from apps/web."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts"
+                    ],
+                    "message": "ADR-005: platform-web may import only @rumbo/contracts; apps/web wires it to the other adapters."
+                  },
+                  {
+                    "group": [
+                      "../../**"
+                    ],
+                    "message": "ADR-005: platform-web subfolders are isolated adapters; telemetry/ must not import other subfolders or the package root. Share types through @rumbo/contracts; apps/web wires them together."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/platform-web/zone-source/**/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**"
+                    ],
+                    "message": "ADR-005: no React here; UI lives in @rumbo/ui (player) or @rumbo/devtools (lab) and talks to this layer through ports in @rumbo/contracts."
+                  },
+                  {
+                    "group": [
+                      "three",
+                      "three/**"
+                    ],
+                    "message": "ADR-005: three is used only by @rumbo/render-three; reach the renderer through RendererPort/RenderDebugPort injected from apps/web."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts"
+                    ],
+                    "message": "ADR-005: platform-web may import only @rumbo/contracts; apps/web wires it to the other adapters."
+                  },
+                  {
+                    "group": [
+                      "../../../**"
+                    ],
+                    "message": "ADR-005: platform-web subfolders are isolated adapters; zone-source/ must not import other subfolders or the package root. Share types through @rumbo/contracts; apps/web wires them together."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/platform-web/zone-source/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**"
+                    ],
+                    "message": "ADR-005: no React here; UI lives in @rumbo/ui (player) or @rumbo/devtools (lab) and talks to this layer through ports in @rumbo/contracts."
+                  },
+                  {
+                    "group": [
+                      "three",
+                      "three/**"
+                    ],
+                    "message": "ADR-005: three is used only by @rumbo/render-three; reach the renderer through RendererPort/RenderDebugPort injected from apps/web."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts"
+                    ],
+                    "message": "ADR-005: platform-web may import only @rumbo/contracts; apps/web wires it to the other adapters."
+                  },
+                  {
+                    "group": [
+                      "../**"
+                    ],
+                    "message": "ADR-005: platform-web subfolders are isolated adapters; zone-source/ must not import other subfolders or the package root. Share types through @rumbo/contracts; apps/web wires them together."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/platform-web/zone-source/*/*.{ts,tsx,mjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**"
+                    ],
+                    "message": "ADR-005: no React here; UI lives in @rumbo/ui (player) or @rumbo/devtools (lab) and talks to this layer through ports in @rumbo/contracts."
+                  },
+                  {
+                    "group": [
+                      "three",
+                      "three/**"
+                    ],
+                    "message": "ADR-005: three is used only by @rumbo/render-three; reach the renderer through RendererPort/RenderDebugPort injected from apps/web."
+                  },
+                  {
+                    "group": [
+                      "@rumbo/**",
+                      "!@rumbo/contracts"
+                    ],
+                    "message": "ADR-005: platform-web may import only @rumbo/contracts; apps/web wires it to the other adapters."
+                  },
+                  {
+                    "group": [
+                      "../../**"
+                    ],
+                    "message": "ADR-005: platform-web subfolders are isolated adapters; zone-source/ must not import other subfolders or the package root. Share types through @rumbo/contracts; apps/web wires them together."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
                       "**/*.wasm"
                     ],
                     "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
@@ -536,6 +1511,13 @@
                       "../../../../**"
                     ],
                     "message": "ADR-005: no relative escapes out of the package; import its public entry point. (files deeper than three subfolders: no import may climb four or more levels)"
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
                   },
                   {
                     "group": [
@@ -584,6 +1566,13 @@
                   },
                   {
                     "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
                       "**/*.wasm"
                     ],
                     "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
@@ -626,6 +1615,13 @@
                       "../../**"
                     ],
                     "message": "ADR-005: no relative escapes out of the package; import its public entry point."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
                   },
                   {
                     "group": [
@@ -674,6 +1670,13 @@
                   },
                   {
                     "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
                       "**/*.wasm"
                     ],
                     "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
@@ -716,6 +1719,13 @@
                       "../../../../**"
                     ],
                     "message": "ADR-005: no relative escapes out of the package; import its public entry point. (files deeper than three subfolders: no import may climb four or more levels)"
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
                   },
                   {
                     "group": [
@@ -764,6 +1774,13 @@
                   },
                   {
                     "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
                       "**/*.wasm"
                     ],
                     "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
@@ -809,6 +1826,13 @@
                   },
                   {
                     "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
                       "**/*.wasm"
                     ],
                     "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
@@ -851,6 +1875,161 @@
                       "../../../**"
                     ],
                     "message": "ADR-005: no relative escapes out of the package; import its public entry point."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/web/**/*.{ts,tsx}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "../../../../**"
+                    ],
+                    "message": "ADR-005: apps/web imports packages by name (@rumbo/*), never by relative path into packages/; assets go through the @assets alias."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/web/*.{ts,tsx}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "../**"
+                    ],
+                    "message": "ADR-005: apps/web imports packages by name (@rumbo/*), never by relative path into packages/; assets go through the @assets alias."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/web/*/*.{ts,tsx}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "../../**"
+                    ],
+                    "message": "ADR-005: apps/web imports packages by name (@rumbo/*), never by relative path into packages/; assets go through the @assets alias."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
+                  },
+                  {
+                    "group": [
+                      "**/*.wasm"
+                    ],
+                    "message": "ADR-005: WASM is loaded only inside the adapter through @rumbo/sim-wasm."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/web/*/*/*.{ts,tsx}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "../../../**"
+                    ],
+                    "message": "ADR-005: apps/web imports packages by name (@rumbo/*), never by relative path into packages/; assets go through the @assets alias."
+                  },
+                  {
+                    "group": [
+                      "./**/../**",
+                      "./**/.."
+                    ],
+                    "message": "ADR-005: write relative imports normalized (no \"..\" after \"./\"); a non-normalized path hides where it goes."
                   },
                   {
                     "group": [

@@ -134,6 +134,7 @@ pub fn haversine_m(a: GeoPoint, b: GeoPoint) -> f64 {
     let (p1, p2) = (rad(a.lat), rad(b.lat));
     let dp = p2 - p1;
     let dl = rad(b.lon - a.lon);
-    let h = libm::sin(dp / 2.0).powi(2) + libm::cos(p1) * libm::cos(p2) * libm::sin(dl / 2.0).powi(2);
+    let (sp, sl) = (libm::sin(dp / 2.0), libm::sin(dl / 2.0));
+    let h = sp * sp + libm::cos(p1) * libm::cos(p2) * (sl * sl);
     2.0 * r * libm::asin(libm::sqrt(h))
 }

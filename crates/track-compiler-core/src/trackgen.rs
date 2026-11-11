@@ -75,8 +75,11 @@ pub struct GeneratedTrack {
     pub status: Status,
 }
 
-fn round(v: f64, digits: i32) -> f64 {
-    let k = 10f64.powi(digits);
+/// Exact powers of ten for `round` (every one is representable in f64; P1 bans `powi`).
+const POW10: [f64; 10] = [1.0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9];
+
+fn round(v: f64, digits: usize) -> f64 {
+    let k = POW10[digits];
     (v * k).round() / k
 }
 
@@ -247,7 +250,7 @@ pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &dyn ElevationSource, opt
     let o = samples[0].en;
     let every = ((opts.control_every_m / cl.spacing_m).round() as usize).max(1);
     let mut picks: Vec<usize> = (0..samples.len()).step_by(every).collect();
-    if *picks.last().unwrap() != samples.len() - 1 {
+    if picks.last() != Some(&(samples.len() - 1)) {
         picks.push(samples.len() - 1);
     }
     let points: Vec<Value> = picks
@@ -265,7 +268,7 @@ pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &dyn ElevationSource, opt
 
     let origin = g.frame.en_to_geo(o);
     let (min_h, max_h) = profile.filtered.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), &h| (a.min(h), b.max(h)));
-    let length = samples.last().unwrap().s;
+    let length = samples[samples.len() - 1].s; // non-empty: samples[0] was read above
     let json = json!({
         "id": opts.id,
         "name": opts.name,
