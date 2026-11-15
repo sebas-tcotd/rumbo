@@ -38,6 +38,7 @@ import {
 import { verifyReplay } from './verify-replay';
 
 import { FixedClock } from './clock';
+import { parseEdgeError } from './edge-error.js';
 import { SnapshotPool } from './pool';
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
@@ -268,7 +269,7 @@ function devSeekReplay(json: string, tick: number) {
     next = Lab.from_replay(trackJson, json, tick);
   } catch (cause) {
     if (typeof cause !== 'string') throw cause;
-    post({ type: 'verifyError', code: 'INVALID_REPLAY', message: cause });
+    post({ type: 'verifyError', code: 'INVALID_REPLAY', message: parseEdgeError(cause)?.detail ?? cause });
     return;
   }
   paused = true;
@@ -284,19 +285,29 @@ function devSeekReplay(json: string, tick: number) {
 }
 
 let failed = false;
-function fatal(cause: unknown) {
+function fatal(cause: unknown, code: 'SIM_FAILED' | 'WASM_LOAD_FAILED' = 'SIM_FAILED') {
   if (failed) return;
   failed = true;
   try {
     post({
       type: 'fatal',
-      code: 'SIM_FAILED',
-      message: (cause instanceof Error ? cause.message : String(cause)) || 'SIM_FAILED',
+      code,
+      message: (parseEdgeError(cause)?.detail ?? (cause instanceof Error ? cause.message : String(cause))) || code,
     });
   } catch {
     // The channel itself failed; closing the worker makes the host's onerror/terminate path take over.
   } finally {
     ctx.close();
+  }
+}
+
+async function loadWasm() {
+  try {
+    initialization ??= init();
+    return await initialization;
+  } catch (cause) {
+    fatal(cause, 'WASM_LOAD_FAILED');
+    return null;
   }
 }
 
@@ -355,9 +366,8 @@ ctx.onmessage = async (ev: MessageEvent<CommandMessage>) => {
     }
     if (msg.type === 'hashContent') {
       // Stateless: not tied to a session, so it is answered whatever the current generation is.
-      initialization ??= init();
-      await initialization;
-      if (!failed) post({ type: 'contentHash', requestId: msg.requestId, hash: hash_content(msg.bytes) });
+      if ((await loadWasm()) && !failed)
+        post({ type: 'contentHash', requestId: msg.requestId, hash: hash_content(msg.bytes) });
       return;
     }
     if (msg.type === 'load' || msg.type === 'newSession') {
@@ -379,9 +389,8 @@ ctx.onmessage = async (ev: MessageEvent<CommandMessage>) => {
         hasState = false;
         resetPending = restartPending = autopilot = false;
         input = { steer: 0, throttle: 0, brake: 0, handbrake: false };
-        initialization ??= init();
-        const wasm = await initialization;
-        if (failed || generation !== msg.generation) return;
+        const wasm = await loadWasm();
+        if (!wasm || failed || generation !== msg.generation) return;
         memory = wasm.memory;
         trackJson = msg.track;
         hz = tick_hz();

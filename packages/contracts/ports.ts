@@ -1,3 +1,4 @@
+import type { Result } from './errors.js';
 import type { InputFrame, ReadyMsg, SimCommand } from './protocol.js';
 import type { StateIndex } from './snapshot.js';
 import type { Settings } from './settings.js';
@@ -20,7 +21,8 @@ export interface Challenge {
   replay: Uint8Array;
   routeMeta: RouteMeta;
 }
-export type CapabilityResult<T> = { ok: true; value: T } | { ok: false; code: 'UNSUPPORTED_CAPABILITY' };
+/** An operation that depends on a simulation capability. */
+export type CapabilityResult<T> = Result<T, { code: 'UNSUPPORTED_CAPABILITY' }>;
 /** Byte encoding and content identity are owned by the Rust adapter. */
 export interface LinkCodecPort {
   encodeChallenge(challenge: Challenge): Promise<CapabilityResult<Uint8Array>>;
@@ -48,7 +50,7 @@ export interface InputSourcePort {
   dispose(): void;
 }
 /** Outcome of a write that may fail without breaking the app. */
-export type SaveResult = { ok: true } | { ok: false; code: 'STORAGE_UNAVAILABLE' };
+export type SaveResult = Result<void, { code: 'STORAGE_UNAVAILABLE' }>;
 /**
  * Player settings persistence (AR19). The UI reads and saves settings only through this port, never
  * through localStorage. load() never throws: missing, corrupt or unreadable data yields defaults.

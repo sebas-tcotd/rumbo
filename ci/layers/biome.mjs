@@ -91,7 +91,13 @@ export function biomeConfig(policy = TS) {
   return {
     files: { includes: FILES },
     linter: { rules: { preset: 'none' } },
-    overrides: overrides(policy),
+    overrides: [
+      ...overrides(policy),
+      {
+        includes: ['packages/**', 'apps/**', '!**/*.test.mjs'],
+        linter: { rules: { suspicious: { noConsole: 'error' } } },
+      },
+    ],
     formatter: { indentStyle: 'space', indentWidth: 2, lineWidth: 110, lineEnding: 'lf' },
     javascript: { formatter: { quoteStyle: 'single' } },
   };

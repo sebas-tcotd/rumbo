@@ -1,8 +1,20 @@
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 const repo = fileURLToPath(new URL('../..', import.meta.url));
+
+function buildId(): string {
+  if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA.slice(0, 12);
+  try {
+    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: repo, stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim();
+  } catch {
+    return 'dev';
+  }
+}
 
 /**
  * Devtools are a build-time feature flag: on in `vite dev`, in `vite build --mode lab` (output
@@ -21,9 +33,13 @@ export default defineConfig(({ command, mode }) => {
       // Two React roots (ui and devtools) on purpose, but one React copy.
       dedupe: ['react', 'react-dom'],
     },
-    define: { 'import.meta.env.RUMBO_DEVTOOLS': JSON.stringify(devtools) },
+    define: {
+      'import.meta.env.RUMBO_DEVTOOLS': JSON.stringify(devtools),
+      'import.meta.env.RUMBO_BUILD': JSON.stringify(buildId()),
+    },
     worker: { format: 'es' },
     server: { fs: { allow: [repo] } },
-    build: { target: 'es2022', outDir: lab ? 'dist-lab' : 'dist', emptyOutDir: true },
+    // Safari 15.4 can run the capability checks and display the minimum-version message.
+    build: { target: ['es2022', 'safari15.4'], outDir: lab ? 'dist-lab' : 'dist', emptyOutDir: true },
   };
 });

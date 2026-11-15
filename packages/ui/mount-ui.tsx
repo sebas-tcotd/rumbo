@@ -4,13 +4,14 @@ import { createRoot } from 'react-dom/client';
 import { I18nextProvider } from 'react-i18next';
 import { createI18n } from './i18n/create-i18n.ts';
 import { UiRoot } from './UiRoot.tsx';
-import type { ExternalStore, UiSnapshot } from './ui-snapshot.ts';
+import type { ExternalStore, FatalActions, UiSnapshot } from './ui-snapshot.ts';
 import './ui.css';
 
 /** What `mountUi` needs, injected by the composition root. */
 export interface UiDeps {
   store: ExternalStore<UiSnapshot>;
   settings: SettingsStorePort;
+  fatal: FatalActions;
 }
 
 /** Handle returned by {@link mountUi}. */
@@ -28,7 +29,7 @@ export function mountUi(container: HTMLElement, deps: UiDeps): MountedUi {
   root.render(
     <StrictMode>
       <I18nextProvider i18n={i18n}>
-        <UiRoot store={deps.store} />
+        <UiRoot store={deps.store} fatal={deps.fatal} />
       </I18nextProvider>
     </StrictMode>,
   );

@@ -1,4 +1,15 @@
-import type { ProfileFile, ReadyMsg, StateIndex, StateMsg } from '@rumbo/contracts';
+import type { FatalCode, ProfileFile, ReadyMsg, RequiredCapability, StateIndex, StateMsg } from '@rumbo/contracts';
+
+/** Player-facing error state without technical details. */
+export type FatalView = { code: FatalCode; missing?: RequiredCapability[] };
+
+/** Host actions available from the fatal screen. */
+export interface FatalActions {
+  retry(): void;
+  diagnostic(): string;
+  copy(text: string): Promise<boolean>;
+  supportedBrowsersUrl: string;
+}
 
 /** Codes of non-fatal notices; the UI translates them as `errors.<code>`. */
 export type UiNoticeCode = 'SIM_NOT_READY' | 'INVALID_PROFILE' | 'EXPORT_FAILED' | 'UNSUPPORTED_OPERATION';
@@ -26,8 +37,7 @@ export interface UiSnapshot {
   /** False until the renderer finished `init()`. */
   rendererReady: boolean;
   notice: UiNotice | null;
-  /** Technical message of a fatal error, shown as is until the Fatal screen of 0.8. */
-  error: string | null;
+  error: FatalView | null;
 }
 
 /** Minimal external store (the shape `useSyncExternalStore` consumes). */

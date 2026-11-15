@@ -10,6 +10,7 @@ import {
   STATE_BYTES,
   SNAPSHOT_VERSION,
   PROTOCOL_VERSION,
+  SIM_EDGE_ERROR_CODES,
   DEV_SEEK_MAX_TICKS,
   protocolDescriptor,
   validateSnapshotDescriptor,
@@ -35,6 +36,11 @@ test('native Rust and TypeScript independently produce and reject parity fixture
   );
   const native = JSON.parse(execFileSync(peer, { encoding: 'utf8' }));
   const wasm = await init({ module_or_path: read('crates/sim-wasm/pkg/sim_wasm_bg.wasm') });
+  assert.throws(() => new Lab('{', default_profile(), 7), (cause) => typeof cause === 'string' && cause.startsWith('INVALID_TRACK: '));
+  assert.throws(
+    () => new Lab(read('assets/tracks/test-loop.json').toString(), '{', 7),
+    (cause) => typeof cause === 'string' && cause.startsWith('INVALID_PROFILE: '),
+  );
   const lab = new Lab(read('assets/tracks/test-loop.json').toString(), default_profile(), 7);
   try {
     lab.step(-31, 200, 3, 1);
@@ -55,6 +61,7 @@ test('native Rust and TypeScript independently produce and reject parity fixture
       layout,
       bits,
       protocol: protocolDescriptor(),
+      edgeErrorCodes: SIM_EDGE_ERROR_CODES,
       input: ((1 << 24) | (3 << 16) | (200 << 8) | 225) >>> 0,
       envelope,
       hash: hash_content(Uint8Array.from(envelope)),

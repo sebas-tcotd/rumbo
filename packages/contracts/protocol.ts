@@ -116,7 +116,7 @@ export type FromWorker =
   | { type: 'replay'; json: string; ticks: number }
   | { type: 'verify'; report: VerifyReport }
   | { type: 'verifyError'; code: 'INVALID_REPLAY'; message: string }
-  | { type: 'fatal'; code: 'SIM_FAILED'; message: string };
+  | { type: 'fatal'; code: 'SIM_FAILED' | 'WASM_LOAD_FAILED'; message: string };
 
 /** px, py, pz, qx, qy, qz, qw, s */
 export const GHOST_STRIDE = 8;
@@ -125,7 +125,7 @@ export const FLAG_HANDBRAKE = 1;
 export const FLAG_RESET = 2;
 export const FLAG_RESTART = 4;
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 export type InputFrame = Omit<Extract<ToWorker, { type: 'input' }>, 'type'>;
 
 /** Largest replay accepted by `devSeekReplay` (UTF-16 code units of the JSON). */

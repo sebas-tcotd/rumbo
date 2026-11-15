@@ -64,7 +64,7 @@ test('the store saves under rumbo.settings.v1 and reloads', () => {
   const storage = memoryStorage();
   const store = createLocalSettingsStore(storage);
   assert.deepEqual(store.load(), DEFAULTS);
-  assert.deepEqual(store.save({ locale: 'es' }), { ok: true });
+  assert.deepEqual(store.save({ locale: 'es' }), { ok: true, value: undefined });
   assert.equal(storage.map.get(SETTINGS_KEY), '{"version":1,"locale":"es"}');
   assert.deepEqual(createLocalSettingsStore(storage).load(), { locale: 'es' });
 });
@@ -80,7 +80,7 @@ test('an inaccessible storage leaves defaults and never throws', () => {
   };
   const store = createLocalSettingsStore(throwing);
   assert.deepEqual(store.load(), DEFAULTS);
-  assert.deepEqual(store.save({ locale: 'es' }), { ok: false, code: 'STORAGE_UNAVAILABLE' });
+  assert.deepEqual(store.save({ locale: 'es' }), { ok: false, error: { code: 'STORAGE_UNAVAILABLE' } });
   const none = createLocalSettingsStore(null);
   assert.deepEqual(none.load(), DEFAULTS);
   assert.equal(none.save(DEFAULTS).ok, false);

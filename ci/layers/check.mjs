@@ -102,7 +102,7 @@ export function checkTs(packages, policy = TS) {
 export function checkMessages(config) {
   const errors = [];
   for (const entry of config.overrides) {
-    for (const { message } of entry.linter.rules.style.noRestrictedImports.options.patterns) {
+    for (const { message } of entry.linter.rules.style?.noRestrictedImports?.options.patterns ?? []) {
       if (!ADR.test(message)) errors.push(`${entry.includes[0]}: Biome message does not cite an ADR: ${message}`);
     }
   }

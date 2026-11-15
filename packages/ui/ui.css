@@ -19,12 +19,41 @@
 
 .fatal {
   background: var(--concrete);
-  gap: 4px;
+  gap: 12px;
+  pointer-events: auto;
+  overflow: auto;
+  place-content: safe center;
 }
 
-.fatal p {
+.fatal :is(h1, p, ul) {
   margin: 0;
-  color: var(--muted);
+}
+
+.fatal ul {
+  justify-self: center;
+  text-align: start;
+}
+
+.fatal a {
+  color: inherit;
+}
+
+.fatal-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.fatal :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.fatal textarea {
+  width: min(100%, 32rem);
+  min-height: 6rem;
+  justify-self: center;
 }
 
 /* ── HUD ── */

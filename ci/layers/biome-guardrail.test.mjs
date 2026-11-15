@@ -63,6 +63,16 @@ function assertRejected(result, label) {
 
 const RULED = Object.entries(TS).filter(([, layer]) => !layer.tooling && !layer.generated);
 
+test('product code uses an injected logger and tests can use the console', () => {
+  withScratch('packages/ui', (lint) => {
+    const violation = lint('case.ts', 'console.log("unexpected");');
+    assert.equal(violation.status, 1);
+    assert.match(violation.stderr, /noConsole/);
+    assertPasses(lint('control.ts', 'export const sink = console;'), 'injecting a console sink');
+    assertPasses(lint('control.test.mjs', 'console.log("test");'), 'test console');
+  });
+});
+
 for (const [name, layer] of RULED) {
   test(name + ' rejects cross-layer imports', () => {
     // A subfolder one level deep: a `../` import back into the package must stay legal there.

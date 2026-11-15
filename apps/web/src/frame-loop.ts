@@ -16,6 +16,8 @@ export interface FrameLoopDeps {
 export interface FrameLoop {
   /** Forgets the last sent input so the next sample is sent again (new session, tab shown again). */
   resetInput(): void;
+  /** Average renderer time in milliseconds since the previous counter sample. */
+  takeFrameMs(): number;
   stop(): void;
 }
 
@@ -32,6 +34,8 @@ export function startFrameLoop({ session, renderer, input, isHidden }: FrameLoop
   let throttle = 0;
   let brake = 0;
   let handbrake = false;
+  let frameTotal = 0;
+  let frameCount = 0;
 
   const sendInput = () => {
     // A hidden tab sends nothing and forgets the last input, so the car does not keep it on return.
@@ -50,9 +54,7 @@ export function startFrameLoop({ session, renderer, input, isHidden }: FrameLoop
     session.send({ type: 'input', steer: i.steer, throttle: i.throttle, brake: i.brake, handbrake: i.handbrake });
   };
 
-  const frame = () => {
-    raf = requestAnimationFrame(frame);
-    sendInput();
+  const draw = () => {
     const msg = session.latest;
     const ready = session.getSnapshot().ready;
     if (!msg || !ready) {
@@ -62,9 +64,22 @@ export function startFrameLoop({ session, renderer, input, isHidden }: FrameLoop
     const alpha = interpolationAlpha(performance.timeOrigin + performance.now(), msg.at, ready.tickHz);
     renderer.frame(msg.prev, msg.curr, alpha);
   };
+  const frame = () => {
+    raf = requestAnimationFrame(frame);
+    sendInput();
+    const before = performance.now();
+    draw();
+    frameTotal += performance.now() - before;
+    frameCount++;
+  };
   raf = requestAnimationFrame(frame);
 
   return {
+    takeFrameMs: () => {
+      const mean = frameCount ? frameTotal / frameCount : 0;
+      frameTotal = frameCount = 0;
+      return mean;
+    },
     resetInput: () => {
       hasSent = false;
     },

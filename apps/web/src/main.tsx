@@ -2,11 +2,12 @@
 // dependencies here through its factory; nothing is a singleton or looked up globally.
 
 import defaultProfile from '@assets/profiles/hatch-arcade.json';
-import type { ProfileFile } from '@rumbo/contracts';
-import { createWebPlatform, safeLocalStorage } from '@rumbo/platform-web';
+import { createCounterRing, createLogger, formatDiagnostic, PROTOCOL_VERSION, type LogChannel, type ProfileFile,
+  type RequiredCapability } from '@rumbo/contracts';
+import { copyText, createLocalSettingsStore, createWebPlatform, missingRequired, probeCapabilities, safeLocalStorage } from '@rumbo/platform-web';
 import { createThreeRenderer } from '@rumbo/render-three';
 import { createWorkerSim } from '@rumbo/sim-worker';
-import { mountUi } from '@rumbo/ui';
+import { mountUi, type FatalActions, type FatalView, type UiSnapshot } from '@rumbo/ui';
 import { type FrameLoop, startFrameLoop } from './frame-loop.ts';
 import { createLabController } from './lab-controller.ts';
 import { LabSession } from './lab-session.ts';
@@ -35,18 +36,101 @@ function buildLayout(root: HTMLElement) {
   return { lab, renderHost, uiRoot, toolbar, panel };
 }
 
+// Story 0.12 can point this link to the project's own domain.
+const supportedBrowsersUrl = 'https://github.com/sebas-tcotd/rumbo#navegadores-soportados';
+const capabilityChannels: Record<RequiredCapability, LogChannel> = {
+  webgl2: 'render', wasm: 'sim', compressionStream: 'net', moduleWorker: 'sim', indexedDb: 'storage',
+};
+
+function startupDiagnostics() {
+  const logger = createLogger({ capacity: 256, consoleLevel: import.meta.env.DEV ? 'debug' : 'warn', sink: console,
+    now: () => performance.now() });
+  const capabilities = probeCapabilities(window);
+  const counters = createCounterRing({ capacity: 60 });
+  return { logger, capabilities, counters };
+}
+
+type Diagnostics = ReturnType<typeof startupDiagnostics>;
+
+function fatalActions(diagnostics: Diagnostics, read: () => { error: FatalView | null; backend: string; physicsVersion?: string }): FatalActions {
+  return {
+    retry: () => window.location.reload(),
+    copy: (text) => copyText(window, text),
+    supportedBrowsersUrl,
+    diagnostic: () => {
+      const { error, backend, physicsVersion } = read();
+      const log = diagnostics.logger.records();
+      const code = error?.code ?? 'SIM_FAILED';
+      const record = log.filter((entry) => entry.code === code).at(-1);
+      return formatDiagnostic({
+        build: import.meta.env.RUMBO_BUILD, copiedAt: new Date().toISOString(), code,
+        channel: record?.channel ?? 'game', detail: record?.fields.detail?.toString(), physicsVersion,
+        protocolVersion: PROTOCOL_VERSION, backend, browser: window.navigator.userAgent,
+        capabilities: diagnostics.capabilities, log, counters: diagnostics.counters.samples(),
+      });
+    },
+  };
+}
+
+function mountStartupFatal(root: HTMLElement, uiRoot: HTMLElement, error: FatalView, diagnostics: Diagnostics) {
+  const snapshot: UiSnapshot = {
+    error, ready: null, index: null, state: null, appliedProfile: null, ghost: null,
+    autopilot: false, paused: false, rendererReady: false, notice: null,
+  };
+  const ui = mountUi(uiRoot, {
+    store: { getSnapshot: () => snapshot, subscribe: () => () => {} },
+    settings: createLocalSettingsStore(safeLocalStorage()),
+    fatal: fatalActions(diagnostics, () => ({ error, backend: 'none' })),
+  });
+  return () => { ui.unmount(); root.replaceChildren(); };
+}
+
 /** Wires the lab and returns its teardown. */
 function start(root: HTMLElement): () => void {
+  const diagnostics = startupDiagnostics();
+  const { logger, capabilities } = diagnostics;
+  const dom = buildLayout(root);
+  const missing = missingRequired(capabilities);
+  if (missing.length) {
+    logger.log('error', 'game', 'BROWSER_UNSUPPORTED', { missing });
+    for (const name of missing) logger.log('warn', capabilityChannels[name], 'REQUIRED_CAPABILITY_MISSING', { name });
+    dom.lab.classList.add('panel-hidden');
+    return mountStartupFatal(root, dom.uiRoot, { code: 'BROWSER_UNSUPPORTED', missing }, diagnostics);
+  }
+  return startLab(root, dom, diagnostics);
+}
+
+function startLab(root: HTMLElement, dom: ReturnType<typeof buildLayout>, diagnostics: Diagnostics): () => void {
+  const { logger, counters } = diagnostics;
   const track = selectedTrack();
   const profile = defaultProfile as ProfileFile;
-  const dom = buildLayout(root);
-  const renderer = createThreeRenderer(dom.renderHost);
-  const session = new LabSession((receive) => createWorkerSim(receive));
+  let renderer: ReturnType<typeof createThreeRenderer>;
+  try {
+    renderer = createThreeRenderer(dom.renderHost);
+  } catch (detail) {
+    logger.log('error', 'render', 'RENDER_INIT_FAILED', { detail });
+    return mountStartupFatal(root, dom.uiRoot, { code: 'RENDER_INIT_FAILED' }, diagnostics);
+  }
+  let session: LabSession;
+  try {
+    session = new LabSession((receive) => createWorkerSim(receive, logger), logger);
+  } catch (detail) {
+    renderer.dispose();
+    logger.log('error', 'sim', 'SIM_FAILED', { detail });
+    return mountStartupFatal(root, dom.uiRoot, { code: 'SIM_FAILED' }, diagnostics);
+  }
   const controller = createLabController({ session, renderer, switchTrack });
-  const platform = createWebPlatform({ window, storage: safeLocalStorage(), onKeyAction: controller.handleKey });
+  const platform = createWebPlatform({ window, storage: safeLocalStorage(), onKeyAction: controller.handleKey,
+    gamepadFailure: diagnostics.capabilities.gamepadFailure, logger });
   let loop: FrameLoop | null = null;
   let devtools: { unmount(): void } | null = null;
   let disposed = false;
+  const timer = window.setInterval(() => {
+    counters.push({
+      t: performance.now(), simMs: session.latest?.stepMs ?? 0, simHz: session.latest?.simHz ?? 0,
+      frameMs: loop?.takeFrameMs() ?? 0,
+    });
+  }, 1000);
 
   session.onReady = (ready, index) => {
     loop?.resetInput();
@@ -56,8 +140,15 @@ function start(root: HTMLElement): () => void {
   // A seek runs the replay's profile: the car's rest height follows whatever profile is running.
   session.onProfile = (p) => renderer.setSuspensionRest(p.params.suspension_rest_m);
   // A fatal error stops drawing and sampling input behind the error screen.
-  session.onFatal = () => loop?.stop();
   const stopVisibility = platform.visibility.subscribe((hidden) => session.setHidden(hidden));
+  const stopActivity = () => {
+    loop?.stop();
+    window.clearInterval(timer);
+    stopVisibility();
+    platform.dispose();
+    renderer.dispose();
+  };
+  session.onFatal = stopActivity;
   session.setHidden(platform.visibility.hidden);
   // Without devtools there is no panel: the viewport takes the whole width.
   const syncLayout = () =>
@@ -70,14 +161,21 @@ function start(root: HTMLElement): () => void {
     () => {
       // The simulation may have failed while the renderer was starting: no loop behind the error.
       if (disposed || session.getSnapshot().error !== null) return;
+      if (renderer.backend === 'WebGL 2') logger.log('warn', 'render', 'WEBGPU_UNAVAILABLE');
       session.patch({ rendererReady: true, backend: renderer.backend });
       loop = startFrameLoop({ session, renderer, input: platform.input, isHidden: () => platform.visibility.hidden });
     },
     (error: unknown) => {
-      if (!disposed) session.fail(error instanceof Error ? error.message : String(error));
+      if (!disposed) session.fail('RENDER_INIT_FAILED', error);
     },
   );
-  const ui = mountUi(dom.uiRoot, { store: session, settings: platform.settings });
+  const ui = mountUi(dom.uiRoot, { store: session, settings: platform.settings,
+    fatal: fatalActions(diagnostics, () => ({
+      error: session.getSnapshot().error,
+      physicsVersion: session.getSnapshot().ready?.physicsVersion,
+      backend: renderer.backend === 'iniciando' ? 'none' : renderer.backend,
+    })),
+  });
 
   if (import.meta.env.RUMBO_DEVTOOLS) {
     import('@rumbo/devtools').then(
@@ -90,7 +188,7 @@ function start(root: HTMLElement): () => void {
       },
       (error: unknown) => {
         // The lab keeps driving without its panel; say why instead of leaving an empty column.
-        console.error('DEVTOOLS_LOAD_FAILED', error);
+        logger.log('error', 'game', 'DEVTOOLS_LOAD_FAILED', { detail: error });
         if (!disposed) dom.panel.textContent = 'No se pudieron cargar las herramientas del laboratorio.';
       },
     );
@@ -98,13 +196,10 @@ function start(root: HTMLElement): () => void {
 
   return () => {
     disposed = true;
-    loop?.stop();
+    stopActivity();
     devtools?.unmount();
     ui.unmount();
     stopLayout();
-    stopVisibility();
-    platform.dispose();
-    renderer.dispose();
     session.dispose();
     root.replaceChildren();
   };

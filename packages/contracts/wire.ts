@@ -132,7 +132,7 @@ const responses = {
   replay: fields({ json: string, ticks: integer }),
   verify: fields({ report }),
   verifyError: fields({ code: (v) => v === 'INVALID_REPLAY', message: string }),
-  fatal: fields({ code: (v) => v === 'SIM_FAILED', message: string }),
+  fatal: fields({ code: (v) => v === 'SIM_FAILED' || v === 'WASM_LOAD_FAILED', message: string }),
   unsupported: fields({ code: (v) => v === 'UNSUPPORTED_CAPABILITY', operation: string }),
 } satisfies Record<ResponseMessage['type'], Check>;
 

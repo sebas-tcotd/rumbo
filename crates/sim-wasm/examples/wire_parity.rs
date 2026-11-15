@@ -51,12 +51,13 @@ fn fixture() -> Result<Value, Box<dyn std::error::Error>> {
         "layout":{"version":1, "stride":STATE_LEN * size_of::<f32>(), "fields":fields},
         "bits": values.into_iter().map(f32::to_bits).collect::<Vec<_>>(),
         "protocol":protocol(), "input": frame.pack(), "envelope": envelope, "hash":track_format::hash::content_hash(&envelope).hex(),
-        "load":{"type":"load","zone":null,"race":null,"track":"track","profile":"profile","protocolVersion":1,"generation":2},
-        "fatal":{"type":"fatal","code":"SIM_FAILED","message":"trap","protocolVersion":1,"generation":2},
+        "edgeErrorCodes": sim_wasm::RumboError::CODES,
+        "load":{"type":"load","zone":null,"race":null,"track":"track","profile":"profile","protocolVersion":2,"generation":2},
+        "fatal":{"type":"fatal","code":"SIM_FAILED","message":"trap","protocolVersion":2,"generation":2},
         // AR28 dev commands (story 0.6): shapes only; behaviour lives in sim_core::replay::resimulate_until
         // and Simulation::teleport_to_s, reached through Lab::from_replay and Lab::teleport.
-        "devTeleport":{"type":"devTeleport","s":120.5,"protocolVersion":1,"generation":2},
-        "devSeekReplay":{"type":"devSeekReplay","json":"{}","tick":sim_core::replay::MAX_SEEK_TICKS,"protocolVersion":1,"generation":2},
+        "devTeleport":{"type":"devTeleport","s":120.5,"protocolVersion":2,"generation":2},
+        "devSeekReplay":{"type":"devSeekReplay","json":"{}","tick":sim_core::replay::MAX_SEEK_TICKS,"protocolVersion":2,"generation":2},
         "header":{"format":"rumbo-replay/2","physicsVersion":sim_core::PHYSICS_VERSION,"trackHash":"t","raceHash":"r","profileRef":{"id":"p","hash":"h"},"seed":u64::MAX.to_string()},
         "link":"#v1.i.YQ", "codec":{"encodeChallenge":["race","replay","routeMeta"],"decodeChallenge":["bytes"],"hashContent":["bytes"],"routeMeta":{"name":"Lima","durationEstimate":60}}
     }))
