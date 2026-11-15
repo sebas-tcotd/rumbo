@@ -16,7 +16,7 @@ export interface DebugPanelProps {
   debug: RenderDebugPort;
   overlays: Record<OverlayKind, boolean>;
   onOverlays: (next: Record<OverlayKind, boolean>) => void;
-  /** Exports the current session as `<track>.<caseName>.json` (golden replay format). */
+  /** Exports the current session as `<track>.<caseName>.bin` (`rumbo-replay/2`, the golden format). */
   onRecordGolden: (caseName: string) => void;
 }
 
@@ -90,7 +90,7 @@ function RecordGolden({ snap, onRecordGolden }: Pick<DebugPanelProps, 'snap' | '
       <p className="note">
         {snap.altered
           ? 'Esta sesión está alterada (teletransporte o salto): no sirve como dorado. Reinicia la sesión.'
-          : 'Descarga el replay de esta sesión como <pista>.<caso>.json, en el formato de crates/sim-core/tests/golden/. Sumarlo al set (CASES en golden.rs) es un cambio aparte.'}
+          : 'Descarga el replay de esta sesión como <pista>.<caso>.bin (rumbo-replay/2), el formato de crates/sim-core/tests/golden/. Sumarlo al set (CASES en golden.rs) es un cambio aparte, en un commit physics:.'}
       </p>
       {!valid && <p className="error">El caso usa minúsculas, dígitos y guiones.</p>}
     </section>

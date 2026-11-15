@@ -8,11 +8,14 @@ use crate::input::InputFrame;
 use crate::mathx::{basis_to_quat, is_finite3, Quat, Vec3};
 use crate::profile::{ProfileFile, VehicleProfile};
 use crate::race::{LapEvent, LapTimer};
-use crate::replay::{Recorder, ReplayManifest, StateCheck, CHECK_EVERY, REPLAY_FORMAT_V1};
+use crate::replay::{legacy_race, legacy_track_hash, Recorder, VehicleRef, CHECK_EVERY_TICKS, REPLAY_FORMAT_V2};
 use crate::track::{CompiledTrack, TrackDef};
 use crate::vehicle::{Vehicle, WHEEL_RADIUS};
 use crate::TICK_HZ;
 use rapier3d::prelude::*;
+use track_format::domain::replay_v2::{ControlHash, ReplayHeader, ReplayV2, MVP_PLAYERS};
+use track_format::hash::ContentHash;
+use track_format::version::TICKS_PER_FRAME;
 
 /// Nombres de los campos del estado exportado, en orden. El front los lee de aquí
 /// (vía `state_layout`) para no duplicar índices a mano.
@@ -86,6 +89,8 @@ pub struct Simulation {
     seed: u64,
     recorder: Recorder,
     last_event: LapEvent,
+    /// Frame of the current pair of ticks (D7): taken on the first tick, held on the second.
+    pair_frame: InputFrame,
 }
 
 /// Vista de solo lectura para quien consume el estado (autopiloto, pruebas).
@@ -154,6 +159,7 @@ impl Simulation {
             seed,
             recorder: Recorder::default(),
             last_event: LapEvent::None,
+            pair_frame: InputFrame::default(),
         })
     }
 
@@ -175,9 +181,36 @@ impl Simulation {
         (pos, basis_to_quat(right, up, fwd))
     }
 
-    /// Avanza exactamente un tick con la entrada dada.
+    /// Whether the next `step` takes a new input frame: the first tick of each pair (D7, P1).
+    pub fn accepts_frame(&self) -> bool {
+        self.tick.is_multiple_of(TICKS_PER_FRAME)
+    }
+
+    /// Advances exactly one tick under the canonical 60 Hz input (D7, P1).
+    ///
+    /// On the first tick of a pair (`accepts_frame`) `input` becomes the pair's frame and is recorded.
+    /// On the second tick `input` is **ignored**: the pair's frame is applied again with its event flags
+    /// (`RESET`, `RESTART`) removed; axes and the held handbrake act on both ticks. Callers that sample
+    /// one-shot events must only consume them when `accepts_frame` is true, or they are lost.
     pub fn step(&mut self, input: InputFrame) {
-        self.recorder.push(input);
+        let applied = if self.accepts_frame() {
+            self.pair_frame = input;
+            self.recorder.push(input);
+            input
+        } else {
+            self.pair_frame.held()
+        };
+        self.advance(applied);
+    }
+
+    /// Migration only (story 0.10): applies `input` on this tick exactly as `race-lab-replay/1` did
+    /// (one input per tick, flags on every tick), bypassing the 60 Hz pairing. The frame is not recorded,
+    /// so the session's `replay()` is meaningless. Used by the v1 → v2 tool to reproduce v1 runs.
+    pub fn step_legacy_v1(&mut self, input: InputFrame) {
+        self.advance(input);
+    }
+
+    fn advance(&mut self, input: InputFrame) {
         if input.restart() {
             self.restart();
         } else if input.reset() {
@@ -214,9 +247,9 @@ impl Simulation {
         self.last_event = self.timer.update(&self.track, self.s, new_s, self.tick);
         self.s = new_s;
 
-        if self.tick.is_multiple_of(CHECK_EVERY) {
-            let hash = self.state_hash_hex();
-            self.recorder.checks.push(StateCheck { tick: self.tick, hash });
+        if self.tick.is_multiple_of(CHECK_EVERY_TICKS) {
+            let hash = self.state_hash();
+            self.recorder.checks.push(ControlHash { tick: self.tick, hash });
         }
     }
 
@@ -279,6 +312,11 @@ impl Simulation {
     pub fn track(&self) -> &CompiledTrack {
         &self.track
     }
+    /// The session's profile file (clamped parameters). The replay does not carry it (D17), so a host
+    /// that verifies the session passes it back to `verify_replay`.
+    pub fn profile_file(&self) -> &ProfileFile {
+        &self.profile_file
+    }
     pub fn profile(&self) -> &VehicleProfile {
         &self.profile
     }
@@ -308,6 +346,12 @@ impl Simulation {
 
     pub fn track_hash_hex(&self) -> String {
         self.track.track_hash_hex()
+    }
+
+    /// Track identity written in the replay header (E0: derived from the legacy FNV, see
+    /// `legacy_track_hash`; story 2.5 replaces it with the `Track` content hash).
+    pub fn track_content_hash(&self) -> ContentHash {
+        legacy_track_hash(self.track.hash)
     }
 
     pub fn profile_hash_hex(&self) -> String {
@@ -392,24 +436,23 @@ impl Simulation {
         out[..n].copy_from_slice(&vals[..n]);
     }
 
-    /// Replay de toda la sesión hasta el tick actual.
-    pub fn replay(&self) -> ReplayManifest {
-        ReplayManifest {
-            format: REPLAY_FORMAT_V1.into(),
-            physics_version: crate::PHYSICS_VERSION.into(),
-            compiler_version: crate::COMPILER_VERSION.into(),
-            tick_hz: TICK_HZ,
-            track_id: self.track.id.clone(),
-            track_hash: self.track_hash_hex(),
-            profile: self.profile_file.clone(),
-            profile_hash: self.profile_hash_hex(),
-            seed: self.seed,
+    /// `rumbo-replay/2` of the whole session up to the current tick. In E0 the race and vehicle are the
+    /// `LEGACY_RACE` and `LEGACY_VEHICLE` sentinels (stories 1.1, 1.3 and 2.5 bring the real ones).
+    pub fn replay(&self) -> ReplayV2 {
+        ReplayV2 {
+            header: ReplayHeader {
+                format: REPLAY_FORMAT_V2.into(),
+                physics_version: crate::PHYSICS_VERSION.into(),
+                track_hash: self.track_content_hash(),
+                race_hash: legacy_race(),
+                vehicle_ref: VehicleRef::legacy(),
+                seed: self.seed,
+                players: MVP_PLAYERS,
+            },
             ticks: self.tick,
             inputs: self.recorder.runs.clone(),
             checks: self.recorder.checks.clone(),
-            final_state_hash: self.state_hash_hex(),
-            laps_ticks: self.timer.completed.clone(),
-            invalid: self.invalid,
+            final_hash: self.state_hash(),
         }
     }
 }

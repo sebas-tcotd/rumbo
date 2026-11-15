@@ -5,7 +5,7 @@
 )]
 #![allow(clippy::unwrap_used, clippy::expect_used, reason = "test code: a panic is the failure report")]
 use sim_core::replay::{resimulate_until, MAX_SEEK_TICKS};
-use sim_core::{ProfileFile, ReplayManifest, Simulation, TrackDef};
+use sim_core::{ProfileFile, ReplayV2, Simulation, TrackDef};
 use std::path::PathBuf;
 
 fn root() -> PathBuf {
@@ -16,58 +16,50 @@ fn track(id: &str) -> TrackDef {
     TrackDef::from_json(&std::fs::read_to_string(root().join(format!("assets/tracks/{id}.json"))).unwrap()).unwrap()
 }
 
-fn golden(name: &str) -> ReplayManifest {
-    ReplayManifest::from_json(
-        &std::fs::read_to_string(root().join(format!("crates/sim-core/tests/golden/{name}.json"))).unwrap(),
-    )
-    .unwrap()
+fn golden(name: &str) -> ReplayV2 {
+    ReplayV2::decode(&std::fs::read(root().join(format!("crates/sim-core/tests/golden/{name}.bin"))).unwrap()).unwrap()
+}
+
+fn profile() -> ProfileFile {
+    ProfileFile::default()
 }
 
 #[test]
 fn resimulating_a_golden_reaches_its_checkpoint_hashes() {
-    let manifest = golden("test-loop.scripted");
+    let replay = golden("test-loop.scripted");
     let def = track("test-loop");
-    for check in manifest.checks.iter().take(3) {
-        let sim = resimulate_until(&manifest, &def, check.tick).unwrap();
+    for check in replay.checks.iter().take(3) {
+        let sim = resimulate_until(&replay, &def, &profile(), check.tick).unwrap();
         assert_eq!(sim.tick(), check.tick);
-        assert_eq!(sim.state_hash_hex(), check.hash, "tick {}", check.tick);
+        assert_eq!(sim.state_hash(), check.hash, "tick {}", check.tick);
     }
-    let end = resimulate_until(&manifest, &def, manifest.ticks).unwrap();
-    assert_eq!(end.state_hash_hex(), manifest.final_state_hash);
-    assert_eq!(resimulate_until(&manifest, &def, 0).unwrap().tick(), 0);
+    let end = resimulate_until(&replay, &def, &profile(), replay.ticks).unwrap();
+    assert_eq!(end.state_hash(), replay.final_hash);
+    assert_eq!(end.replay(), replay, "the re-simulated session records the same frames");
+    assert_eq!(resimulate_until(&replay, &def, &profile(), 0).unwrap().tick(), 0);
+}
+
+#[test]
+fn resimulation_stops_on_an_odd_tick_inside_a_pair() {
+    let replay = golden("test-loop.scripted");
+    let sim = resimulate_until(&replay, &track("test-loop"), &profile(), 1201).unwrap();
+    assert_eq!(sim.tick(), 1201);
+    assert!(!sim.accepts_frame());
 }
 
 #[test]
 fn resimulation_rejects_out_of_range_ticks_and_foreign_replays() {
-    let manifest = golden("test-loop.autopilot");
+    let replay = golden("test-loop.autopilot");
     let def = track("test-loop");
-    assert!(resimulate_until(&manifest, &def, manifest.ticks + 1).is_err());
-    assert!(MAX_SEEK_TICKS >= manifest.ticks);
-    let mut long = manifest.clone();
+    assert!(resimulate_until(&replay, &def, &profile(), replay.ticks + 1).is_err());
+    assert!(MAX_SEEK_TICKS >= replay.ticks);
+    let mut long = replay.clone();
     long.ticks = MAX_SEEK_TICKS + 1;
-    assert!(resimulate_until(&long, &def, MAX_SEEK_TICKS + 1).is_err());
-    assert!(resimulate_until(&manifest, &track("costa-verde-sprint"), 10).is_err());
-    let mut other = manifest.clone();
-    other.format = "otro/1".into();
-    assert!(resimulate_until(&other, &def, 10).is_err());
-    let mut physics = manifest.clone();
-    physics.physics_version = "0.0.0".into();
-    assert!(resimulate_until(&physics, &def, 10).is_err());
-}
-
-#[test]
-fn resimulation_is_bounded_by_the_recorded_inputs_not_the_declared_ticks() {
-    let def = track("test-loop");
-    let mut truncated = golden("test-loop.scripted");
-    let recorded: u64 = truncated.inputs.iter().map(|run| u64::from(run[0])).sum();
-    // Declares more ticks than it records: a seek past the inputs is refused, never short.
-    truncated.ticks = recorded + 500;
-    assert!(resimulate_until(&truncated, &def, recorded + 1).is_err());
-    assert_eq!(resimulate_until(&truncated, &def, recorded).unwrap().tick(), recorded);
-    // Declares fewer ticks than it records: a tick inside the inputs is still reachable.
-    let mut short = golden("test-loop.scripted");
-    short.ticks = recorded / 2;
-    assert_eq!(resimulate_until(&short, &def, recorded - 1).unwrap().tick(), recorded - 1);
+    assert!(resimulate_until(&long, &def, &profile(), MAX_SEEK_TICKS + 1).is_err());
+    assert!(resimulate_until(&replay, &track("costa-verde-sprint"), &profile(), 10).is_err());
+    let mut physics = replay.clone();
+    physics.header.physics_version = "0.0.0".into();
+    assert!(resimulate_until(&physics, &def, &profile(), 10).is_err());
 }
 
 #[test]

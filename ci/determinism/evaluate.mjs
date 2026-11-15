@@ -87,7 +87,7 @@ export function evaluateCase(fixture, reference, result) {
 /**
  * Evaluate the whole matrix.
  * @param envs      parsed `results-*.json` files (each `{ browser, userAgent, physics, error, results }`).
- * @param fixtures  `listCases(root)`.
+ * @param fixtures  `listCases(root, reference)`.
  * @param reference parsed native reference `{ physicsVersion, cases: [{ name, ticks, trace }] }` or undefined.
  * @param opts      `{ requiredEnvs, requiredCases }` (defaults: the six environments and eight goldens).
  * @returns `{ ok, problems, cases, envs, cells }` where cells[case][env] = evaluateCase(...).

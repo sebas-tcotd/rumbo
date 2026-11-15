@@ -1,6 +1,6 @@
 //! Shared versions of the deterministic contracts and the independently versioned binary envelope.
-/// Experimental handling contract; older replay hashes are incompatible.
-pub const PHYSICS_VERSION: &str = "0.5.0";
+/// Experimental handling contract; older replay hashes are incompatible. 0.6.0: canonical 60 Hz input (D7).
+pub const PHYSICS_VERSION: &str = "0.6.0";
 /// Unchanged compiler contract.
 pub const COMPILER_VERSION: &str = "0.2.0";
 /// Fixed simulation rate (NFR2).

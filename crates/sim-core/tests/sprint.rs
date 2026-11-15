@@ -110,6 +110,6 @@ fn sprint_replays_exactly() {
         }
         sim.step(i);
     }
-    let report = sim_core::verify_replay(&sim.replay(), &s_track()).unwrap();
+    let report = sim_core::verify_replay(&sim.replay(), &s_track(), &ProfileFile::default()).unwrap();
     assert!(report.ok, "{}", report.message);
 }

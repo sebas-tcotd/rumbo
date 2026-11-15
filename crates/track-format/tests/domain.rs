@@ -46,7 +46,7 @@ fn input_profile_and_full_replay_roundtrip() {
     assert_eq!(codec::decode::<InputFrame>(&codec::encode(&i).unwrap()).unwrap(), i);
     let p = ProfileFile::default();
     assert_eq!(codec::decode::<ProfileFile>(&codec::encode(&p).unwrap()).unwrap(), p);
-    let m = ReplayManifest::from_json(include_str!("../../sim-core/tests/golden/test-loop.scripted.json")).unwrap();
+    let m = ReplayManifest::from_json(include_str!("../../sim-core/tests/golden-v1/test-loop.scripted.json")).unwrap();
     assert_eq!(codec::decode::<ReplayManifest>(&codec::encode(&m).unwrap()).unwrap(), m);
 }
 
@@ -55,7 +55,7 @@ fn input_wire_fixture_and_legacy_versions() {
     use track_format::version::*;
     assert_eq!(
         (PHYSICS_VERSION, COMPILER_VERSION, TICK_HZ, REPLAY_FORMAT_V1),
-        ("0.5.0", "0.2.0", 120, "race-lab-replay/1")
+        ("0.6.0", "0.2.0", 120, "race-lab-replay/1")
     );
     assert_eq!((REPLAY_FORMAT_V2, INPUT_HZ, TICKS_PER_FRAME, CHECK_EVERY_TICKS), ("rumbo-replay/2", 60, 2, 1200));
     let input = InputFrame { steer: 0, throttle: 200, brake: 3, flags: 7 };
@@ -73,5 +73,20 @@ fn real_source_tracks_roundtrip_without_runtime() {
         let bytes = codec::encode(&t).unwrap();
         assert_eq!(codec::decode::<TrackDef>(&bytes).unwrap(), t);
         assert!(codec::decode::<TrackDef>(&bytes[..bytes.len() - 1]).is_err());
+    }
+}
+
+/// Decoding and re-encoding a real `rumbo-replay/2` gives the same bytes: the format is canonical.
+#[test]
+fn golden_v2_bytes_are_canonical() {
+    use track_format::domain::replay_v2::{ReplayV2, VehicleRef};
+    for bytes in [
+        include_bytes!("../../sim-core/tests/golden/test-loop.scripted.bin").as_slice(),
+        include_bytes!("../../sim-core/tests/golden/costa-verde-sprint.autopilot.bin").as_slice(),
+    ] {
+        let replay = ReplayV2::decode(bytes).unwrap();
+        assert_eq!(replay.encode().unwrap(), bytes);
+        assert_eq!(replay.header.vehicle_ref, VehicleRef::legacy());
+        assert!(bytes.starts_with(b"RTF\0\x01\0"));
     }
 }

@@ -39,7 +39,10 @@ export interface VerifyReport {
   expectedFinal: string;
   actualFinal: string;
   firstMismatchTick: number | null;
-  lapsMatch: boolean;
+  /** Every control hash was reached in order and matched (the lap timer is part of the state hash). */
+  checksMatch: boolean;
+  /** False while replays carry `LEGACY_VEHICLE`: the profile came from the host and was not checked. */
+  profileVerified: boolean;
   message: string;
 }
 
@@ -68,7 +71,8 @@ export type ToWorker =
   | { type: 'autopilot'; on: boolean }
   | { type: 'pause'; on: boolean }
   | { type: 'exportReplay' }
-  | { type: 'verifyReplay'; json: string };
+  /** `rumbo-replay/2` bytes; the worker verifies them with the session's current profile. */
+  | { type: 'verifyReplay'; bytes: Uint8Array };
 
 export interface ReadyMsg {
   type: 'ready';
@@ -113,7 +117,8 @@ export type FromWorker =
   | StateMsg
   | LapMsg
   | { type: 'session'; hashes: Hashes }
-  | { type: 'replay'; json: string; ticks: number }
+  /** `rumbo-replay/2` bytes of the session (transferred). */
+  | { type: 'replay'; bytes: Uint8Array; ticks: number }
   | { type: 'verify'; report: VerifyReport }
   | { type: 'verifyError'; code: 'INVALID_REPLAY'; message: string }
   | { type: 'fatal'; code: 'SIM_FAILED' | 'WASM_LOAD_FAILED'; message: string };
@@ -125,11 +130,12 @@ export const FLAG_HANDBRAKE = 1;
 export const FLAG_RESET = 2;
 export const FLAG_RESTART = 4;
 
-export const PROTOCOL_VERSION = 2;
+/** 3: replays travel as `rumbo-replay/2` bytes (story 0.10). */
+export const PROTOCOL_VERSION = 3;
 export type InputFrame = Omit<Extract<ToWorker, { type: 'input' }>, 'type'>;
 
-/** Largest replay accepted by `devSeekReplay` (UTF-16 code units of the JSON). */
-export const DEV_SEEK_MAX_CHARS = 16 * 1024 * 1024;
+/** Largest replay accepted by `devSeekReplay` and `verifyReplay`, in bytes of `rumbo-replay/2`. */
+export const DEV_SEEK_MAX_BYTES = 4 * 1024 * 1024;
 /** Largest tick accepted by `devSeekReplay`: 30 min at 120 Hz, as `MAX_SEEK_TICKS` in sim-core. */
 export const DEV_SEEK_MAX_TICKS = 30 * 60 * 120;
 /**
@@ -137,10 +143,12 @@ export const DEV_SEEK_MAX_TICKS = 30 * 60 * 120;
  * them outside devtools. A session that receives one no longer reproduces its replay: the host marks it
  * as altered.
  * - `devTeleport`: car at rest on the centerline at lap distance `s`; drops the current attempt.
- * - `devSeekReplay`: replaces the session with `json` re-simulated up to `tick` and pauses there.
- *   Rejections arrive as `verifyError` (INVALID_REPLAY).
+ * - `devSeekReplay`: replaces the session with the `rumbo-replay/2` `bytes` re-simulated up to `tick`
+ *   (with the session's current profile) and pauses there. Rejections arrive as `verifyError` (INVALID_REPLAY).
  */
-export type DevCommand = { type: 'devTeleport'; s: number } | { type: 'devSeekReplay'; json: string; tick: number };
+export type DevCommand =
+  | { type: 'devTeleport'; s: number }
+  | { type: 'devSeekReplay'; bytes: Uint8Array; tick: number };
 export type SimCommand =
   | DevCommand
   | Exclude<ToWorker, { type: 'init' | 'input' | 'pause' }>

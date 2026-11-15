@@ -1,5 +1,5 @@
-// Casos: cada replay dorado y la pista con la que se grabó (por su id).
-import { readFileSync, readdirSync } from 'node:fs';
+// Casos: cada replay dorado (`rumbo-replay/2`, `<pista>.<caso>.bin`) y la pista con la que se grabó.
+import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 // Story 0.9: the eight golden replays, by identity. The matrix is validated against this list, not against
@@ -16,20 +16,31 @@ export const REQUIRED_CASES = Object.freeze([
   'test-loop.scripted',
 ]);
 
-export function listCases(root) {
+/**
+ * The golden fixtures found on disk. Since story 0.10 they are binary `rumbo-replay/2`: the track id is the
+ * file name prefix, and ticks, control hashes and the final hash come from the fixture's own summary, which
+ * Rust decodes into the native reference (`summary` of each case, see crates/sim-wasm/examples/
+ * trace_reference.rs). JavaScript never decodes postcard (D15, D16). A fixture without a summary keeps
+ * `ticks: NaN` so the evaluation reports it instead of skipping it.
+ * @param root      repository root.
+ * @param reference parsed `reference/native.json` (or undefined when unreadable).
+ */
+export function listCases(root, reference) {
   const dir = join(root, 'crates/sim-core/tests/golden');
+  const summaries = new Map((reference?.cases ?? []).map((c) => [c.name, c.summary]));
   return readdirSync(dir)
-    .filter((f) => f.endsWith('.json'))
+    .filter((f) => f.endsWith('.bin'))
     .sort()
     .map((f) => {
-      const manifest = JSON.parse(readFileSync(join(dir, f), 'utf8'));
+      const name = f.replace(/\.bin$/, '');
+      const summary = summaries.get(name);
       return {
-        name: f.replace(/\.json$/, ''),
+        name,
         replay: `/crates/sim-core/tests/golden/${f}`,
-        track: `/assets/tracks/${manifest.trackId}.json`,
-        expected: manifest.finalStateHash,
-        ticks: manifest.ticks,
-        checks: manifest.checks ?? [],
+        track: `/assets/tracks/${name.split('.')[0]}.json`,
+        expected: summary?.finalHash,
+        ticks: summary?.ticks ?? Number.NaN,
+        checks: summary?.checks ?? [],
       };
     });
 }

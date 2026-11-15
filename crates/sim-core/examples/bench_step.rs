@@ -1,7 +1,7 @@
 //! Story 0.9 (D9, NFR3): native release benchmark of `Simulation::step`, reported by CI on every push/PR.
 //!
-//! Fixed scenario: track `test-loop`, the profile, seed and recorded inputs of the golden
-//! `test-loop.autopilot` replay (7200 ticks). File loading, input expansion and `Simulation::new` stay
+//! Fixed scenario: track `test-loop`, the default profile (the replay carries `LEGACY_VEHICLE`), and the
+//! seed and recorded 60 Hz frames of the golden `test-loop.autopilot` replay (7200 ticks, `rumbo-replay/2`). File loading, input expansion and `Simulation::new` stay
 //! outside the timed window, as do the first `WARMUP_TICKS`. The remaining ticks are timed in batches of
 //! `SAMPLE_TICKS`, `RUNS` times from a fresh simulation. A run is valid only if it ends on the replay's
 //! final state hash, so the measure is of the real simulation and not of a short-circuit.
@@ -16,7 +16,7 @@
     clippy::disallowed_types,
     reason = "benchmark harness outside the core: it reads fixtures from disk and times with the wall clock"
 )]
-use sim_core::{InputFrame, ReplayManifest, Simulation, TrackDef};
+use sim_core::{InputFrame, ProfileFile, ReplayV2, Simulation, TrackDef};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Instant;
@@ -62,19 +62,18 @@ fn run() -> Result<(serde_json::Value, String), String> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let read = |p: PathBuf| std::fs::read_to_string(&p).map_err(|e| format!("{}: {e}", p.display()));
     let track = TrackDef::from_json(&read(root.join(format!("assets/tracks/{TRACK}.json")))?)?;
-    let manifest = ReplayManifest::from_json(&read(root.join(format!("crates/sim-core/tests/golden/{REPLAY}.json")))?)?;
-    let inputs: Vec<InputFrame> = manifest
-        .inputs
-        .iter()
-        .flat_map(|run| std::iter::repeat_n(InputFrame::unpack(run[1]), run[0] as usize))
-        .collect();
+    let golden = root.join(format!("crates/sim-core/tests/golden/{REPLAY}.bin"));
+    let bytes = std::fs::read(&golden).map_err(|e| format!("{}: {e}", golden.display()))?;
+    let manifest = ReplayV2::decode(&bytes).map_err(|e| e.to_string())?;
+    let profile = ProfileFile::default();
+    let inputs: Vec<InputFrame> = manifest.tick_frames().collect();
     if inputs.len() as u64 != manifest.ticks || inputs.len() <= WARMUP_TICKS {
         return Err(format!("escenario inválido: {} entradas para {} ticks", inputs.len(), manifest.ticks));
     }
     let timed = &inputs[WARMUP_TICKS..];
     let mut samples = Vec::new();
     for _ in 0..RUNS {
-        let mut sim = Simulation::new(&track, &manifest.profile, manifest.seed)?;
+        let mut sim = Simulation::new(&track, &profile, manifest.header.seed)?;
         for input in &inputs[..WARMUP_TICKS] {
             sim.step(*input);
         }
@@ -85,19 +84,19 @@ fn run() -> Result<(serde_json::Value, String), String> {
             }
             samples.push(t0.elapsed().as_secs_f64() * 1e6 / batch.len() as f64);
         }
-        if sim.tick() != manifest.ticks || sim.state_hash_hex() != manifest.final_state_hash {
+        if sim.tick() != manifest.ticks || sim.state_hash() != manifest.final_hash {
             return Err(format!(
-                "la corrida no reprodujo el replay: tick {} hash {} (esperado {} {})",
+                "la corrida no reprodujo el replay: tick {} hash {} (esperado {} {:016x})",
                 sim.tick(),
                 sim.state_hash_hex(),
                 manifest.ticks,
-                manifest.final_state_hash
+                manifest.final_hash
             ));
         }
     }
     let s = stats(samples)?;
     let json = serde_json::json!({
-        "scenario": { "track": TRACK, "replay": REPLAY, "seed": manifest.seed, "profile": manifest.profile.id,
+        "scenario": { "track": TRACK, "replay": REPLAY, "seed": manifest.header.seed, "profile": profile.id,
             "ticks": manifest.ticks, "warmupTicks": WARMUP_TICKS, "sampleTicks": SAMPLE_TICKS, "runs": RUNS },
         "cars": CARS,
         "samples": s.samples,
@@ -112,7 +111,7 @@ fn run() -> Result<(serde_json::Value, String), String> {
          | {CARS} | {} | {:.1} µs | {:.1} µs | {:.1} µs | {:.1} µs | {:.1} µs |\n\n\
          Dato del runner, línea base de **un auto** en E0. D9 fija ≤ 2 ms por tick para **cuatro** autos en carrera: \
          esta medición no certifica ese presupuesto; el escenario compartido se mide cuando exista (E3).",
-        manifest.profile.id, manifest.seed, manifest.ticks, s.samples, s.min, s.median, s.p95, s.max, s.mean
+        profile.id, manifest.header.seed, manifest.ticks, s.samples, s.min, s.median, s.p95, s.max, s.mean
     );
     Ok((json, md))
 }

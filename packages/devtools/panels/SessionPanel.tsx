@@ -16,7 +16,8 @@ export interface SessionPanelProps {
   onCamera: () => void;
   onExport: () => void;
   onVerifyCurrent: () => void;
-  onVerifyFile: (json: string) => void;
+  /** A `rumbo-replay/2` file chosen by the user. */
+  onVerifyFile: (bytes: Uint8Array) => void;
   onRestart: () => void;
   /** AR28: tick of the first mismatch of the last verified file, when it can be re-simulated here. */
   seekTick: number | null;
@@ -142,11 +143,11 @@ export function SessionPanel(p: SessionPanelProps) {
         <input
           ref={fileRef}
           type="file"
-          accept="application/json"
+          accept=".bin,application/octet-stream"
           hidden
           onChange={async (e) => {
             const f = e.target.files?.[0];
-            if (f) p.onVerifyFile(await f.text());
+            if (f) p.onVerifyFile(new Uint8Array(await f.arrayBuffer()));
             e.target.value = '';
           }}
         />

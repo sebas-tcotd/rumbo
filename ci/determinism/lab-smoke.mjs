@@ -8,6 +8,12 @@ import { join } from 'node:path';
 const root = fileURLToPath(new URL('../../apps/web/', import.meta.url));
 const requireWeb = createRequire(new URL('../../apps/web/package.json', import.meta.url));
 const { preview, createServer } = await import(pathToFileURL(requireWeb.resolve('vite')).href);
+// Exported replays are `rumbo-replay/2` bytes: their metadata is read through the Rust codec (WASM), never in JS.
+const { default: initSim, replay_summary } = await import(
+  pathToFileURL(fileURLToPath(new URL('../../crates/sim-wasm/pkg/sim_wasm.js', import.meta.url))).href
+);
+await initSim({ module_or_path: await readFile(new URL('../../crates/sim-wasm/pkg/sim_wasm_bg.wasm', import.meta.url)) });
+const summaryOf = async (download) => JSON.parse(replay_summary(await readFile(await download.path())));
 const dev = process.argv.includes('--dev');
 const physicsVersion = /PHYSICS_VERSION: &str = "([^"]+)"/.exec(
   await readFile(new URL('../../crates/track-format/src/version.rs', import.meta.url), 'utf8'),
@@ -40,24 +46,27 @@ const waitTelemetry = (page, label, accept, arg) =>
     [label, accept, arg],
   );
 
-/** AR28 on test-loop: record a golden, jump to the first mismatch of an altered replay, teleport. */
+/**
+ * AR28 on test-loop: record a golden, jump to the first mismatch of a replay, teleport. The lab runs a tuned
+ * profile at this point (the caller applied one), and a `rumbo-replay/2` does not carry its profile (D17):
+ * verifying the default-profile golden with the lab's profile diverges, as an altered replay would.
+ */
 async function devtoolsAr28(page) {
   await page.getByRole('tab', { name: 'Depuración' }).click();
   const golden = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Grabar dorado' }).click();
   const file = await golden;
-  assert.equal(file.suggestedFilename(), 'test-loop.lab.json');
-  assert.equal(JSON.parse(await readFile(await file.path(), 'utf8')).format, 'race-lab-replay/1');
+  assert.equal(file.suggestedFilename(), 'test-loop.lab.bin');
+  assert.equal((await summaryOf(file)).header.format, 'rumbo-replay/2');
 
-  // A golden with one input run changed on purpose diverges; the lab re-simulates up to that tick.
-  const source = new URL('../../crates/sim-core/tests/golden/test-loop.scripted.json', import.meta.url);
-  const replay = JSON.parse(await readFile(source, 'utf8'));
-  const k = Math.floor(replay.inputs.length / 2);
-  replay.inputs[k][1] = (replay.inputs[k][1] ^ 0x7f) >>> 0;
+  // The golden diverges under the lab's tuned profile; the lab re-simulates up to the first mismatch.
+  const source = new URL('../../crates/sim-core/tests/golden/test-loop.scripted.bin', import.meta.url);
+  const bytes = await readFile(source);
+  const replay = JSON.parse(replay_summary(bytes));
   await page.getByRole('tab', { name: 'Sesión' }).click();
   await page
     .locator('input[type=file]')
-    .setInputFiles({ name: 'altered.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(replay)) });
+    .setInputFiles({ name: 'test-loop.scripted.bin', mimeType: 'application/octet-stream', buffer: bytes });
   const seek = page.getByRole('button', { name: /^Ir al tick \d+$/ });
   await seek.waitFor();
   const tick = Number((await seek.innerText()).match(/\d+/)[0]);
@@ -170,7 +179,7 @@ async function checkGamepadFallback(page, url, transient) {
   // Keep the successful driving path and exercise diagnostic export through a simulated worker fault.
   await page.evaluate(() => {
     const data = { type: 'fatal', code: 'SIM_FAILED', message: String.raw`open \\example.invalid\share\Alice Doe\replay.json at [::]`,
-      generation: 1, protocolVersion: 2 };
+      generation: 1, protocolVersion: 3 };
     window.testSimWorker.dispatchEvent(new MessageEvent('message', { data }));
   });
   await fatal(page).getByText('La simulación se detuvo.', { exact: false }).waitFor();
@@ -297,7 +306,7 @@ try {
     await page.getByLabel('Piloto automático').check();
     await page
       .locator('input[type=file]')
-      .setInputFiles({ name: 'invalid.json', mimeType: 'application/json', buffer: Buffer.from('{') });
+      .setInputFiles({ name: 'invalid.bin', mimeType: 'application/octet-stream', buffer: Buffer.from('{') });
     await page.locator('.verify.bad').waitFor();
     assert.equal(await page.locator('.fatal').count(), 0);
     await page.getByRole('button', { name: 'Verificar esta sesión' }).click();
@@ -326,7 +335,7 @@ try {
       const ticks = async () => {
         const file = page.waitForEvent('download');
         await page.getByRole('button', { name: 'Descargar replay' }).click();
-        return JSON.parse(await readFile(await (await file).path(), 'utf8')).ticks;
+        return (await summaryOf(await file)).ticks;
       };
       const visibility = (hidden) =>
         page.evaluate((hidden) => {

@@ -30,7 +30,7 @@ for (const failure of ['onerror', 'onmessageerror', 'fatal', 'wasm', 'dispose'])
       worker.onmessage({
         data: {
           type: 'fatal', code: failure === 'wasm' ? 'WASM_LOAD_FAILED' : 'SIM_FAILED',
-          message: 'trap', generation: 0, protocolVersion: 2,
+          message: 'trap', generation: 0, protocolVersion: 3,
         },
       });
     else worker[failure]({ message: 'transport failed' });
