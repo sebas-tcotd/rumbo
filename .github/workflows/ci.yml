@@ -1,5 +1,6 @@
-# Repo-wide checks. Story 0.7 adds the layers job (Biome, tsc -b, clippy, guardrails); story 0.9
-# completes this workflow (rustfmt, all tests, size budgets, golden rule).
+# Repo-wide checks. Story 0.7 adds the layers job (Biome, tsc -b, clippy, guardrails); story 0.9 completes
+# this workflow: rustfmt, every Rust and TS test (Rust↔TS parity included), the WASM size budget, the native
+# per-tick benchmark and the P1 golden rule. Cross-environment determinism lives in determinism.yml.
 name: CI
 
 on:
@@ -44,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # Installs exactly the toolchain in rust-toolchain.toml (clippy is one of its components).
+      # Installs exactly the toolchain in rust-toolchain.toml (rustfmt and clippy are components).
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
       # typecheck of @rumbo/sim-worker needs the @rumbo/sim-wasm package (wasm-pack build).
@@ -58,6 +59,8 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Story 0.9: formatting is only checked here (rustfmt.toml); nothing is rewritten in CI.
+      - run: cargo fmt --all -- --check
       # Every pnpm package and Cargo member declared in ci/layers/policy.mjs; deps == references;
       # [lints] inherited; canonical core clippy.toml; biome.json generated from the policy.
       - run: node ci/layers/check.mjs
@@ -67,6 +70,72 @@ jobs:
       - run: pnpm --filter rumbo-layers test
       - name: Clippy (blocking; pedantic is reported below)
         run: cargo clippy --workspace --all-targets --locked -- -D warnings -A clippy::pedantic
+      - name: Clippy with the S4 harness feature (blocking)
+        run: cargo clippy -p sim-wasm --features harness --all-targets --locked -- -D warnings -A clippy::pedantic
       - run: pnpm --filter rumbo-layers run test:clippy
       - name: Clippy pedantic report (not blocking)
         run: cargo clippy --workspace --all-targets --locked --message-format=json | node ci/layers/pedantic-summary.mjs >> "$GITHUB_STEP_SUMMARY"
+
+  # Story 0.9 (AC 1): every test, the publication bundle checks, the WASM budget and the native benchmark.
+  tests:
+    name: Tests, bundle and benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Installs exactly the toolchain in rust-toolchain.toml (wasm32 target included).
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack@0.15.1
+      # No `version:`: pnpm/action-setup reads it from `packageManager`. Corepack is not used.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: rustc --version && cargo --version && node --version && wasm-pack --version
+      - run: pnpm install --frozen-lockfile
+      # Packages, apps/web (dist/ and dist-lab/), the S4 harness WASM and the native per-tick reference.
+      - run: pnpm turbo run build
+      # Every workspace test: TS packages (sim-worker includes the Rust↔TS parity.test.mjs), the ci/*
+      # packages, the goldens in Node tick by tick, and the root `cargo test --release --workspace --locked`.
+      - run: pnpm turbo run test --force
+      # The harness trace has the per-tick semantics pinned by sim-core/tests/per_tick.rs.
+      - run: cargo test --release --locked -p sim-wasm --features harness
+      # CI scripts outside the Turbo graph.
+      - run: node --test ci/bundle/check-devtools.test.mjs ci/bundle/check-wasm-size.test.mjs ci/determinism/summary.test.mjs ci/golden-rule/check.test.mjs
+      # Story 0.6, AC 7: devtools absent from the publication build (dist/), present in the lab build (dist-lab/).
+      - run: node ci/bundle/check-devtools.mjs
+      # NFR3/D9: the served simulation WASM ≤ 1 500 000 bytes gzip -9, without the harness export.
+      - name: WASM budget
+        shell: bash
+        run: node ci/bundle/check-wasm-size.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+      - run: pnpm --filter rumbo-determinism exec playwright install --with-deps chromium
+      - run: node --test ci/determinism/worker-integration.test.mjs
+      - run: node ci/determinism/lab-smoke.mjs
+      - run: node ci/determinism/lab-smoke.mjs --dev
+      # D9: one-car baseline of Simulation::step, published as a runner measurement (fails if invalid).
+      - name: Native step benchmark
+        shell: bash
+        run: cargo run --release --locked -p sim-core --example bench_step -- --json bench-step.json | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bench-step
+          path: bench-step.json
+
+  # Story 0.9 (AC 3, P1): a commit that touches a golden replay needs `physics:` and a PHYSICS_VERSION bump.
+  golden-rule:
+    name: P1 golden rule
+    runs-on: ubuntu-latest
+    steps:
+      # Full history so every introduced commit and its parents resolve; the PR merge ref stays checked out.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          # Nothing is installed here, so there is no pnpm store to cache.
+          package-manager-cache: false
+      - run: node ci/golden-rule/check.mjs

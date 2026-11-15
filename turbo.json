@@ -75,7 +75,8 @@
     },
     "rumbo-determinism#test": {
       "dependsOn": [
-        "^build"
+        "^build",
+        "build"
       ],
       "inputs": [
         "$TURBO_DEFAULT$",
@@ -111,6 +112,27 @@
     },
     "rumbo-layers#test": {
       "cache": false
+    },
+    "rumbo-determinism#build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!wasm/**",
+        "!reference/**",
+        "$TURBO_ROOT$/crates/**",
+        "!$TURBO_ROOT$/crates/sim-wasm/pkg/**",
+        "!$TURBO_ROOT$/crates/*/.turbo/**",
+        "$TURBO_ROOT$/Cargo.lock",
+        "$TURBO_ROOT$/Cargo.toml",
+        "$TURBO_ROOT$/rust-toolchain.toml",
+        "$TURBO_ROOT$/assets/tracks/**"
+      ],
+      "outputs": [
+        "wasm/**",
+        "reference/**"
+      ]
     }
   }
 }

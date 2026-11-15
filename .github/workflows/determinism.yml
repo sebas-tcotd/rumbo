@@ -1,5 +1,6 @@
-# S4 · Determinismo: los replays dorados (grabados en nativo) se re-simulan con el WASM en
-# Node, Chromium, Firefox, WebKit y Safari, y tienen que dar exactamente los mismos hashes.
+# S4 · Determinismo (story 0.9): los ocho replays dorados se re-simulan con un único WASM de prueba en Node,
+# Chromium, Microsoft Edge, Firefox, WebKit y Safari real, y el hash canónico del estado tiene que coincidir
+# en cada tick con la referencia nativa. El resumen valida la matriz completa (seis entornos, ocho casos).
 name: Determinismo
 
 on:
@@ -7,24 +8,18 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: determinism-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  native:
-    name: Pruebas nativas
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      # Installs exactly the toolchain in rust-toolchain.toml.
-      - run: rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
-      - run: rustc --version && cargo --version
-      - run: cargo test --release --workspace
-
-  wasm:
-    name: Compilar WASM y verificar en Node
+  # Built once: the harness WASM (sim-wasm --features harness) and the native per-tick reference.
+  # Every environment below runs these exact bytes.
+  prepare:
+    name: WASM de prueba y referencia nativa
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -42,69 +37,64 @@ jobs:
           cache: pnpm
       - run: rustc --version && cargo --version && node --version && wasm-pack --version
       - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo run build
-      - run: pnpm turbo run test --filter "./packages/*" --force
-      # Story 0.6, AC 7: devtools absent from the publication build (dist/), present in the lab build (dist-lab/).
-      - run: node --test ci/bundle/check-devtools.test.mjs
-      - run: node ci/bundle/check-devtools.mjs
-      - run: pnpm --filter rumbo-determinism exec playwright install --with-deps chromium
-      - run: node --test ci/determinism/worker-integration.test.mjs
-      - run: node ci/determinism/lab-smoke.mjs
-      - run: node ci/determinism/lab-smoke.mjs --dev
-      - run: node run.mjs --browser node --out results
-        working-directory: ci/determinism
+      - run: pnpm turbo run build --filter rumbo-determinism
       - uses: actions/upload-artifact@v7
         with:
-          name: sim-wasm-pkg
-          path: crates/sim-wasm/pkg
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: results-node
-          path: ci/determinism/results
+          name: determinism-inputs
+          path: |
+            ci/determinism/wasm
+            ci/determinism/reference
+          if-no-files-found: error
 
-  browsers:
-    name: ${{ matrix.browser }}
-    needs: wasm
+  envs:
+    name: ${{ matrix.env }}
+    needs: prepare
     runs-on: ${{ matrix.os }}
     strategy:
+      # Keep the evidence of every other environment when one fails.
       fail-fast: false
       matrix:
         include:
-          - { browser: chromium, os: ubuntu-latest }
-          - { browser: firefox, os: ubuntu-latest }
-          - { browser: webkit, os: macos-latest }
-          - { browser: safari, os: macos-latest }
+          - { env: node, os: ubuntu-latest }
+          - { env: chromium, os: ubuntu-latest }
+          - { env: edge, os: ubuntu-latest }
+          - { env: firefox, os: ubuntu-latest }
+          - { env: webkit, os: macos-latest }
+          - { env: safari, os: macos-latest }
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
-          name: sim-wasm-pkg
-          path: crates/sim-wasm/pkg
+          name: determinism-inputs
+          path: ci/determinism
       # No `version:`: pnpm/action-setup reads it from `packageManager`. Corepack is not used.
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      # pkg/ comes from the artifact above and is not rebuilt; the link to @rumbo/sim-wasm builds nothing.
+      # Only Playwright and Selenium; the WASM comes from the artifact and nothing is rebuilt.
       - run: pnpm install --frozen-lockfile --filter rumbo-determinism
-      - if: matrix.browser != 'safari'
-        run: pnpm exec playwright install --with-deps ${{ matrix.browser }}
+      - if: contains(fromJSON('["chromium", "firefox", "webkit"]'), matrix.env)
+        run: pnpm exec playwright install --with-deps ${{ matrix.env }}
         working-directory: ci/determinism
-      - if: matrix.browser == 'safari'
+      # Stable Microsoft Edge, launched through Playwright's `msedge` channel; installed only if the image lacks it.
+      - if: matrix.env == 'edge'
+        run: microsoft-edge-stable --version || pnpm exec playwright install --with-deps msedge
+        working-directory: ci/determinism
+      - if: matrix.env == 'safari'
         run: sudo safaridriver --enable
-      - run: node run.mjs --browser ${{ matrix.browser }} --out results
+      - run: node run.mjs --browser ${{ matrix.env }} --out results
         working-directory: ci/determinism
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: results-${{ matrix.browser }}
+          name: results-${{ matrix.env }}
           path: ci/determinism/results
 
   summary:
     name: Resumen
-    needs: [wasm, browsers]
+    needs: [prepare, envs]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -113,9 +103,16 @@ jobs:
         with:
           pattern: results-*
           path: all-results
+      # A failed `prepare` leaves no reference; the summary still runs and reports it as a failure.
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: determinism-inputs
+          path: ci/determinism
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           # Nothing is installed here, so there is no pnpm store to cache.
           package-manager-cache: false
-      - run: node ci/determinism/summary.mjs all-results | tee -a "$GITHUB_STEP_SUMMARY"
+      # Writes the table to the step summary itself (no pipe), so the step keeps the script's exit code.
+      - run: node ci/determinism/summary.mjs all-results --step-summary "$GITHUB_STEP_SUMMARY"

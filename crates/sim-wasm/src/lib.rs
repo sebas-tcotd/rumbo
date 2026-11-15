@@ -9,6 +9,8 @@ use wasm_bindgen::prelude::*;
 
 mod error;
 pub use error::RumboError;
+#[cfg(feature = "harness")]
+pub mod harness;
 
 /// Una sesión del laboratorio: pista + perfil congelado + auto.
 #[wasm_bindgen]

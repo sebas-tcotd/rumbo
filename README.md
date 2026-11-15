@@ -12,7 +12,7 @@ Spikes del PoC, en orden de riesgo:
 
 - **S3 · Intersecciones:** cruces en T y de cuatro brazos conducibles, con calles laterales.
   Responde: ¿cuánto cuesta de verdad una intersección? Ver [S3](#s3--intersecciones).
-- **S4 · Determinismo:** los mismos replays dan los mismos hashes en nativo, Node y cinco navegadores.
+- **S4 · Determinismo:** los mismos replays dan el mismo hash en cada tick en nativo, Node y cinco navegadores.
   Responde: ¿se puede confiar un tiempo entre jugadores? Ver [S4](#s4--determinismo).
 
 **El PoC está cerrado** (ver [Estado del PoC](#estado-del-poc)). Compartir (S5) y la identidad visual (S6)
@@ -60,15 +60,15 @@ Cada mínimo lo fija la API más nueva que el juego necesita (datos de
 - Al arrancar, Rumbo comprueba las APIs obligatorias por función. Si falta alguna, la pantalla
   «Algo falló» enumera las funciones ausentes y permite reintentar o copiar un diagnóstico.
 - WebGPU es opcional: se usa si está disponible y, si no, el render cae a WebGL 2.
-- En las versiones actuales de cada navegador se verifica el determinismo en CI (Chromium, Firefox, WebKit
-  y Safari real; ver [S4](#s4--determinismo)).
+- En las versiones actuales de cada navegador se verifica el determinismo en CI (Chromium, Microsoft Edge,
+  Firefox, WebKit y Safari real; ver [S4](#s4--determinismo)).
 
 ## Arrancar
 
 ```bash
 pnpm install
-pnpm turbo run build                 # compila el WASM (cacheado por Turbo), los paquetes y la app (dist/ y dist-lab/)
-pnpm turbo run test                  # cargo test --release --workspace + dorados en Node + exact-versions
+pnpm turbo run build                 # compila el WASM (cacheado por Turbo), los paquetes, la app (dist/ y dist-lab/) y el arnés S4
+pnpm turbo run test                  # cargo test --release --workspace --locked + paridad + dorados en Node tick a tick + exact-versions
 pnpm --filter @rumbo/web dev         # compila WASM y paquetes (predev, cacheado) e inicia Vite con devtools
 ```
 
@@ -107,7 +107,7 @@ Tres slots de 328 bytes transportan los estados anterior y actual (41 f32 cada u
 
 `hashContent` usa BLAKE3-128 de Rust. La codificación de retos con Race, Replay y RouteMeta y la carga de fantasmas externos devuelven `UNSUPPORTED_CAPABILITY`. Las fixtures prospectivas comprueban la cabecera de replay v2 y el prefijo de link inline. La semilla se expresa como decimal u64 en la fixture JSON. La escritura de ambos formatos corresponde a 0.10 y 6.7.
 
-`pnpm turbo run build` compila los paquetes. `pnpm turbo run test --force` ejecuta paridad, transferencias y negativos de capas. Para revisar Biome usa `pnpm exec biome lint` (paquetes y `apps/`). Con Chromium instalado en Playwright, `node ci/determinism/lab-smoke.mjs` prueba los bundles (laboratorio en `dist-lab/` y publicación en `dist/`) y `node ci/determinism/lab-smoke.mjs --dev` prueba Vite. `node ci/bundle/check-devtools.mjs` comprueba que `@rumbo/devtools` no está en `dist/` y sí en `dist-lab/`.
+`pnpm turbo run build` compila los paquetes. `pnpm turbo run test --force` ejecuta paridad, transferencias, negativos de capas y el resto de las pruebas (ver [CI](#ci)). Para revisar Biome usa `pnpm exec biome lint` (paquetes y `apps/`). Con Chromium instalado en Playwright, `node ci/determinism/lab-smoke.mjs` prueba los bundles (laboratorio en `dist-lab/` y publicación en `dist/`) y `node ci/determinism/lab-smoke.mjs --dev` prueba Vite. `node ci/bundle/check-devtools.mjs` comprueba que `@rumbo/devtools` no está en `dist/` y sí en `dist-lab/`.
 
 ## Front: paquetes y composition root
 
@@ -246,7 +246,8 @@ Incluyen:
 - **Determinismo:** mismas entradas dan el mismo hash; una entrada alterada se detecta en el siguiente control (cada 600 ticks).
 - **Replays dorados:** los 8 de `crates/sim-core/tests/golden/` (ver [S4](#s4--determinismo)) se reproducen
   bit a bit. Regenéralos con `UPDATE_GOLDEN=1 cargo test -p sim-core --release --test golden` cuando cambie la
-  física (y sube `PHYSICS_VERSION` en `track-format/src/version.rs`).
+  física, en un commit `physics:` que suba `PHYSICS_VERSION` en `track-format/src/version.rs` (ver
+  [Regla de dorados](#regla-de-dorados-p1)).
 - **Casos adversos:** choques a fondo, volante al tope y resets repetidos; el estado nunca deja de ser finito.
 - **Prueba de manejo automática:** el piloto automático da varias vueltas; falla ante golpes verticales,
   ruedas en el aire o contacto con el muro.
@@ -259,7 +260,8 @@ Incluyen:
 pnpm turbo run test --filter rumbo-determinism
 ```
 
-Corre los replays dorados con el binario WASM en Node. Si coincide, nativo y WASM son deterministas entre sí.
+Corre los replays dorados con el WASM de prueba en Node y compara el hash de estado de cada tick con la
+referencia nativa. Si coincide, nativo y WASM son deterministas entre sí.
 En el navegador, **Sesión → Verificar esta sesión** re-simula todo lo que manejaste y compara hashes.
 
 `cargo run -p sim-core --release --example drift_entry` compara frenar en curva contra derrapar con freno de mano.
@@ -486,9 +488,10 @@ deja ver para lo que falta:
 
 ## S4 · Determinismo
 
-Ocho replays dorados se graban en nativo (`crates/sim-core/tests/golden.rs`) y se re-simulan con el binario
-WASM en cada entorno. Cada replay guarda un hash del estado cada 5 s: el resultado tiene que coincidir en todos,
-no solo el final.
+Ocho replays dorados se graban en nativo (`crates/sim-core/tests/golden.rs`) y se re-simulan con un único
+WASM de prueba en cada entorno. Se compara el hash canónico del estado (`Simulation::state_hash()`, un `u64`
+en 16 dígitos hex) **después de cada tick** con la referencia nativa, y además se conservan los controles del
+replay (cada 5 s), el hash final y las vueltas.
 
 | Pista | Casos |
 |---|---|
@@ -501,14 +504,62 @@ freno de mano, resets y reinicios.
 
 ```bash
 pnpm install
-pnpm turbo run build --filter @rumbo/sim-wasm    # compila el WASM
+pnpm --filter rumbo-determinism build   # WASM de prueba (sim-wasm --features harness) + referencia nativa
 cd ci/determinism
-node run.mjs --browser node          # o chromium, firefox, webkit (Playwright), safari (safaridriver)
+node run.mjs --browser node          # o chromium, edge, firefox, webkit (Playwright), safari (safaridriver)
+node summary.mjs results             # valida la matriz: falla si falta alguno de los seis entornos
 ```
 
-En GitHub Actions (`.github/workflows/determinism.yml`), cada push corre las pruebas nativas, compila el WASM,
-lo verifica en Node y en Chromium y Firefox (Linux), WebKit y Safari real (macOS), y publica la tabla en el
-resumen del run.
+- El WASM de prueba (`ci/determinism/wasm/`) es `sim-wasm` con la feature `harness`, que exporta
+  `trace_replay`. El binario de publicación no la lleva: `ci/bundle/check-wasm-size.mjs` falla si aparece.
+- La referencia nativa (`ci/determinism/reference/native.json`) sale de
+  `cargo run --release --locked -p sim-wasm --features harness --example trace_reference`, con la misma
+  función que exporta el WASM. `cargo test --release --locked -p sim-wasm --features harness` comprueba que esa
+  traza reproduce las huellas fijadas en `crates/sim-core/tests/per_tick.rs`.
+- Edge se lanza con Playwright y el canal `msedge` (Edge estable del sistema). Safari usa Selenium y
+  `safaridriver --enable` en macOS.
+
+En GitHub Actions (`.github/workflows/determinism.yml`), `prepare` compila una vez el WASM de prueba y la
+referencia nativa. Seis jobs independientes (`fail-fast: false`) los usan en Node, Chromium, Edge y Firefox
+(Linux), y WebKit y Safari real (macOS). `Resumen` corre aunque fallen y exige los seis entornos y los ocho
+replays por identidad (`REQUIRED_CASES` en `cases.mjs`): falla ante un resultado ausente, inesperado,
+duplicado, incompleto o con error. Un desvío informa entorno, replay y primer tick distinto.
+
+### CI
+
+`.github/workflows/ci.yml` corre en cada push y PR:
+
+- **Layers:** `cargo fmt --all -- --check` (con `rustfmt.toml`), Biome, `tsc -b`, Clippy de todo el workspace
+  con `--all-targets -D warnings` (también con la feature `harness`) y el reporte informativo de `pedantic`.
+- **Tests, bundle and benchmark:** `pnpm turbo run test --force` (todos los tests TS, la paridad Rust↔TS,
+  los dorados en Node y `cargo test --release --workspace --locked`), las pruebas de los scripts de CI, el
+  humo del laboratorio, de publicación y de Vite dev, la integración del worker, y:
+  - **Presupuesto del WASM:** `node ci/bundle/check-wasm-size.mjs` mide el `sim_wasm_bg-*.wasm` que sirve
+    `apps/web/dist/` con gzip nivel 9. El tope es de 1 500 000 bytes, inclusivo. Falla si el binario falta,
+    supera el tope o exporta el arnés.
+  - **Benchmark nativo:** `cargo run --release --locked -p sim-core --example bench_step` mide
+    `Simulation::step` sobre `test-loop` con las entradas, el perfil y la semilla de `test-loop.autopilot`. Usa
+    1200 ticks de calentamiento y 5 corridas en muestras de 600 ticks. Falla si la corrida no reproduce el hash
+    final del replay. Es la línea base de **un auto** en E0 y queda como dato del runner. No certifica el
+    presupuesto de D9 (≤ 2 ms por tick con cuatro autos), que se medirá con la carrera compartida de E3.
+- **P1 golden rule:** ver abajo.
+
+### Regla de dorados (P1)
+
+Un commit que agrega, borra, edita o renombra un archivo de `crates/sim-core/tests/golden/` necesita el
+asunto `physics: …` y subir `PHYSICS_VERSION` en ese mismo commit. La subida se compara de forma numérica
+(`MAJOR.MINOR.PATCH`). `node ci/golden-rule/check.mjs` lo verifica commit por commit:
+
+- En un PR revisa los commits de `head` que no están en `base`. En un push revisa los que van de `before` a
+  `after`. Un push forzado revisa lo que la nueva punta introduce sobre la anterior y trae `before` por SHA
+  si falta. Una rama nueva revisa los commits que no están en otras ramas. Un rango que no se puede resolver
+  es un error explícito.
+- Un merge solo responde por los cambios de su propia resolución. Una edición revertida después sigue
+  sujeta a P1.
+- Una bajada de versión, un cambio cosmético, una constante ausente o una subida en otro commit no autorizan
+  el cambio. Desde la 1.1 también lo autorizará un cambio del hash canónico del asset de reglas versionado.
+
+Localmente: `node ci/golden-rule/check.mjs --base origin/main --head HEAD`.
 
 ### Resultado
 
