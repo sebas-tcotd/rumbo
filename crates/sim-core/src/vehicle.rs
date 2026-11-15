@@ -330,7 +330,11 @@ impl Vehicle {
         let reversing = brake > 0.1 && throttle < 0.1 && v_fwd < 1.0;
         let top = p.top_speed_kmh / 3.6;
         let drive_total = if reversing {
-            if v_fwd > -7.0 { -0.45 * p.drive_force_n * brake } else { 0.0 }
+            if v_fwd > -7.0 {
+                -0.45 * p.drive_force_n * brake
+            } else {
+                0.0
+            }
         } else {
             let k = (v_fwd.max(0.0) / top).min(1.0);
             p.drive_force_n * throttle * (1.0 - k * k)
@@ -362,11 +366,8 @@ impl Vehicle {
             let vt = vp.dot(rc);
 
             // Longitudinal.
-            let (axle_drive, axle_count) = if front {
-                (p.front_drive_ratio, grounded_front)
-            } else {
-                (1.0 - p.front_drive_ratio, grounded_rear)
-            };
+            let (axle_drive, axle_count) =
+                if front { (p.front_drive_ratio, grounded_front) } else { (1.0 - p.front_drive_ratio, grounded_rear) };
             let drive = drive_total * axle_drive / axle_count.max(1.0);
             let bias = if front { p.brake_front_bias } else { 1.0 - p.brake_front_bias };
             let roll_sign = (vl / 0.5).clamp(-1.0, 1.0);
@@ -481,7 +482,13 @@ impl Vehicle {
 
     pub fn hash_into(&self, h: &mut Fnv64) {
         h.f32(self.steer).f32(self.steer_angle).u32(self.drift as u32).f32(self.drift_dir).f32(self.drift_time);
-        h.f32(self.prev_beta).f32(self.prev_brake).f32(self.brake_time).u32(self.prev_handbrake as u32).f32(self.handbrake_time).f32(self.prev_v_heading).u32(self.touching_wall as u32);
+        h.f32(self.prev_beta)
+            .f32(self.prev_brake)
+            .f32(self.brake_time)
+            .u32(self.prev_handbrake as u32)
+            .f32(self.handbrake_time)
+            .f32(self.prev_v_heading)
+            .u32(self.touching_wall as u32);
         for c in self.compression {
             h.f32(c);
         }

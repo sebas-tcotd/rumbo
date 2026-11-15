@@ -1,6 +1,10 @@
 //! Depuración: lista los giros de más de 100° de la ruta más corta pura entre puntos.
 //! Uso: cargo run -p compiler-cli --release --example turns -- <grafo.json> lat,lon lat,lon [...]
-#![allow(clippy::unwrap_used, clippy::expect_used, reason = "example: a diagnostic tool where a panic is the error report")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "example: a diagnostic tool where a panic is the error report"
+)]
 use track_compiler_core::graph::RoadGraph;
 use track_compiler_core::routing::{route, RouteOptions};
 use track_compiler_core::GeoPoint;
@@ -15,7 +19,16 @@ fn main() {
             let id = &steps[i + 1][1..];
             let e = g.edges.iter().find(|e| e.id == id).unwrap();
             let v = &g.vertices[if steps[i + 1].starts_with('+') { e.from } else { e.to }];
-            println!("{:.0}° entre {} y {} en {:.6},{:.6} ({:?}, {:?})", t, steps[i], steps[i + 1], v.lat, v.lon, e.name, e.oneway);
+            println!(
+                "{:.0}° entre {} y {} en {:.6},{:.6} ({:?}, {:?})",
+                t,
+                steps[i],
+                steps[i + 1],
+                v.lat,
+                v.lon,
+                e.name,
+                e.oneway
+            );
         }
     }
     println!("pasos: {} … {}", steps[0], steps[steps.len() - 1]);

@@ -1,12 +1,15 @@
-// S4 · Re-simula los replays dorados (grabados en nativo) con el binario WASM y exige los
-// mismos hashes de control en cada entorno.
+// S4 · Re-simula los replays dorados (grabados en nativo) con el binario WASM de prueba y exige, en cada
+// tick, el mismo hash de estado que la referencia nativa. Conserva la verificación heredada (controles,
+// hash final y vueltas) de `verify_replay`.
 //
-// Uso: node run.mjs --browser node|chromium|firefox|webkit|safari [--out dir]
-// Requiere el WASM compilado en crates/sim-wasm/pkg (pnpm turbo run build --filter @rumbo/sim-wasm).
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+// Uso: node run.mjs --browser node|chromium|edge|firefox|webkit|safari [--out dir] [--reference file]
+// Requiere `pnpm --filter rumbo-determinism build` (o `pnpm turbo run build`): el WASM de prueba en
+// ci/determinism/wasm/ (sim-wasm con la feature `harness`) y la referencia nativa en reference/native.json.
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { listCases } from './cases.mjs';
+import { evaluateMatrix, REQUIRED_ENVS } from './evaluate.mjs';
 import { serve } from './server.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -17,33 +20,53 @@ const arg = (k, d) => {
 };
 const browser = arg('--browser', 'node');
 const outDir = resolve(arg('--out', join(here, 'results')));
-const cases = listCases(root);
+const referencePath = resolve(arg('--reference', join(here, 'reference/native.json')));
+const wasmDir = join(here, 'wasm');
 const TIMEOUT_MS = 20 * 60 * 1000;
 
+if (!REQUIRED_ENVS.includes(browser)) {
+  console.error(`entorno desconocido: ${browser} (válidos: ${REQUIRED_ENVS.join(', ')})`);
+  process.exit(2);
+}
+for (const [what, path] of [['WASM de prueba', join(wasmDir, 'sim_wasm_bg.wasm')], ['referencia nativa', referencePath]]) {
+  if (!existsSync(path)) {
+    console.error(`falta ${what}: ${path}. Ejecuta \`pnpm --filter rumbo-determinism build\`.`);
+    process.exit(2);
+  }
+}
+const cases = listCases(root);
+const reference = JSON.parse(readFileSync(referencePath, 'utf8'));
+
 async function runNode() {
-  const pkg = join(root, 'crates/sim-wasm/pkg');
-  const { default: init, verify_replay, physics_version } = await import(pathToFileURL(join(pkg, 'sim_wasm.js')).href);
-  await init({ module_or_path: readFileSync(join(pkg, 'sim_wasm_bg.wasm')) });
+  const { default: init, verify_replay, trace_replay, physics_version } = await import(pathToFileURL(join(wasmDir, 'sim_wasm.js')).href);
+  await init({ module_or_path: readFileSync(join(wasmDir, 'sim_wasm_bg.wasm')) });
   const results = cases.map((c) => {
     const t0 = performance.now();
-    const rep = JSON.parse(verify_replay(readFileSync(join(root, c.track), 'utf8'), readFileSync(join(root, c.replay), 'utf8')));
-    return {
-      case: c.name, ok: rep.ok, message: rep.message, ticks: rep.ticks, expected: c.expected,
-      actual: rep.actualFinal, firstMismatch: rep.firstMismatchTick ?? null, ms: Math.round(performance.now() - t0),
-    };
+    const track = readFileSync(join(root, c.track), 'utf8');
+    const replay = readFileSync(join(root, c.replay), 'utf8');
+    try {
+      const report = JSON.parse(verify_replay(track, replay));
+      const { ticks, trace } = JSON.parse(trace_replay(track, replay));
+      return { case: c.name, report, ticks, trace, ms: Math.round(performance.now() - t0) };
+    } catch (e) {
+      return { case: c.name, error: String(e), ms: Math.round(performance.now() - t0) };
+    }
   });
   return { userAgent: `Node ${process.version}`, physics: physics_version(), results };
 }
 
 async function runPlaywright(name, url) {
   const pw = await import('playwright');
-  const b = await pw[name].launch();
+  // Edge is Chromium with the `msedge` channel: the stable Microsoft Edge installed on the runner.
+  const b = name === 'edge' ? await pw.chromium.launch({ channel: 'msedge' }) : await pw[name].launch();
   try {
     const page = await b.newPage();
     page.on('pageerror', (e) => console.error('error en la página:', e.message));
     await page.goto(url);
     await page.waitForFunction(() => window.__determinism, null, { timeout: TIMEOUT_MS, polling: 1000 });
-    return await page.evaluate(() => window.__determinism);
+    const out = await page.evaluate(() => window.__determinism);
+    if (name === 'edge') out.browserVersion = b.version();
+    return out;
   } finally {
     await b.close();
   }
@@ -67,29 +90,32 @@ async function runSafari(url) {
 }
 
 let out;
-if (browser === 'node') {
-  out = await runNode();
-} else {
-  const srv = await serve(root, cases, join(here, 'page.html'));
-  try {
-    out = browser === 'safari' ? await runSafari(srv.url) : await runPlaywright(browser, srv.url);
-  } finally {
-    srv.close();
+try {
+  if (browser === 'node') {
+    out = await runNode();
+  } else {
+    const srv = await serve(root, cases, join(here, 'page.html'));
+    try {
+      out = browser === 'safari' ? await runSafari(srv.url) : await runPlaywright(browser, srv.url);
+    } finally {
+      srv.close();
+    }
   }
+} catch (e) {
+  out = { userAgent: '?', error: String(e?.stack || e), results: [] };
 }
 
 mkdirSync(outDir, { recursive: true });
-writeFileSync(join(outDir, `results-${browser}.json`), JSON.stringify({ browser, ...out }, null, 2));
-console.log(`${browser} · ${out.userAgent} · física ${out.physics ?? '?'}`);
-if (out.error) console.error(out.error);
-let failed = out.error ? 1 : 0;
-for (const r of out.results) {
-  console.log(`${r.ok ? 'OK   ' : 'FALLA'} ${r.case.padEnd(36)} ${String(r.actual ?? '').padEnd(16)} ${r.ms} ms${r.ok ? '' : ` · ${r.message} (primer desvío en el tick ${r.firstMismatch})`}`);
-  if (!r.ok) failed++;
+const environment = { ...out, browser };
+writeFileSync(join(outDir, `results-${browser}.json`), JSON.stringify(environment));
+console.log(`${browser} · ${out.userAgent}${out.browserVersion ? ` (${out.browserVersion})` : ''} · física ${out.physics ?? '?'}`);
+const matrix = evaluateMatrix([environment], cases, reference, { requiredEnvs: [browser] });
+const results = Array.isArray(out.results) ? out.results : [];
+for (const name of matrix.cases) {
+  const result = results.find((r) => r?.case === name);
+  const { ok } = matrix.cells[name][browser];
+  console.log(`${ok ? 'OK   ' : 'FALLA'} ${name.padEnd(36)} ${String(result?.report?.actualFinal ?? '').padEnd(16)} ${result?.ms ?? '?'} ms`);
 }
-if (out.results.length !== cases.length) {
-  console.error(`solo ${out.results.length} de ${cases.length} casos`);
-  failed++;
-}
-console.log(failed ? `${failed} problemas` : `los ${cases.length} replays dan los mismos hashes que en nativo`);
-process.exit(failed ? 1 : 0);
+for (const problem of matrix.problems) console.error(problem);
+console.log(matrix.ok ? `los ${matrix.cases.length} replays dan el mismo hash que nativo en cada tick` : `${matrix.problems.length} problemas`);
+process.exit(matrix.ok ? 0 : 1);

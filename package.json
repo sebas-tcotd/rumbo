@@ -6,7 +6,7 @@
   },
   "packageManager": "pnpm@11.28.11",
   "scripts": {
-    "test": "cargo test --release --workspace"
+    "test": "cargo test --release --workspace --locked"
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",

@@ -1,0 +1,4 @@
+# Story 0.9: CI checks formatting with `cargo fmt --all -- --check`.
+# Width and heuristics follow the existing wide style so the one-time mechanical reformat stays small.
+max_width = 120
+use_small_heuristics = "Max"

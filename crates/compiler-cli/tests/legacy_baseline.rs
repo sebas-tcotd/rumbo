@@ -9,20 +9,12 @@ use track_compiler_core::{
 #[test]
 fn hashes_match_pre_extraction_baseline() {
     let ex = Extract::from_overpass_json(include_str!("fixtures/mini-grid.overpass.json")).unwrap();
-    let g = RoadGraph::build(
-        &ex,
-        &BuildOptions {
-            region: "fixture".into(),
-            origin: Some(GeoPoint::new(-12.12, -77.03)),
-        },
-    )
-    .unwrap();
+    let g =
+        RoadGraph::build(&ex, &BuildOptions { region: "fixture".into(), origin: Some(GeoPoint::new(-12.12, -77.03)) })
+            .unwrap();
     let r = route(
         &g,
-        &[
-            GeoPoint::new(-12.12, -77.03),
-            GeoPoint::new(-12.12 + 200.0 / 110580.0, -77.03 + 200.0 / 108840.0),
-        ],
+        &[GeoPoint::new(-12.12, -77.03), GeoPoint::new(-12.12 + 200.0 / 110580.0, -77.03 + 200.0 / 108840.0)],
         RouteOptions::default(),
     )
     .unwrap();
@@ -31,10 +23,7 @@ fn hashes_match_pre_extraction_baseline() {
     assert_eq!(r.descriptor_route(), expected);
     let mut h = Fnv64::default();
     assert_eq!(h.str_u64_len("legacy/1").hex(), "c46940799d17a32e");
-    let p = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../data/raw/Copernicus_DSM_COG_10_S13_00_W078_00_DEM.tif"
-    );
+    let p = concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/raw/Copernicus_DSM_COG_10_S13_00_W078_00_DEM.tif");
     if std::path::Path::new(p).exists() {
         assert_eq!(compiler_cli::adapters::geotiff::from_path(p).unwrap().hash, "f99b95c07027ea2a");
     }

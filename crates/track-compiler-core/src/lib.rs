@@ -32,7 +32,7 @@ pub mod trackgen;
 
 pub use diagnostics::{Diagnostic, Severity};
 pub use geo::{GeoPoint, LocalFrame};
-pub use graph::{RoadGraph, BuildOptions};
+pub use graph::{BuildOptions, RoadGraph};
 pub use routing::{ResolvedRoute, RouteOptions};
 
 pub use track_format::version::COMPILER_VERSION;

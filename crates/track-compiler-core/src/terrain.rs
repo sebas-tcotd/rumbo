@@ -9,8 +9,8 @@
 //! suavizado gaussiano. Sirve para terreno sin acantilados, como San Borja; la Costa Verde
 //! sigue usando el perfil a lo largo del eje de S2.
 
-use crate::ports::ElevationSource;
 use crate::geo::LocalFrame;
+use crate::ports::ElevationSource;
 
 #[derive(Clone, Copy, Debug)]
 pub struct TerrainOptions {
@@ -42,7 +42,13 @@ pub struct HeightField {
 
 impl HeightField {
     /// Campo que cubre la caja `[min, max]` (este, norte) con margen.
-    pub fn build(dem: &dyn ElevationSource, frame: &LocalFrame, min: [f64; 2], max: [f64; 2], opts: &TerrainOptions) -> Result<Self, String> {
+    pub fn build(
+        dem: &dyn ElevationSource,
+        frame: &LocalFrame,
+        min: [f64; 2],
+        max: [f64; 2],
+        opts: &TerrainOptions,
+    ) -> Result<Self, String> {
         let margin = opts.radius_m + 3.0 * opts.sigma_m + opts.step_m;
         let (e0, n0) = (min[0] - margin, min[1] - margin);
         let w = ((max[0] - min[0] + 2.0 * margin) / opts.step_m).ceil() as usize + 1;
@@ -61,8 +67,10 @@ impl HeightField {
 
         // Percentil bajo dentro de un disco.
         let r = (opts.radius_m / opts.step_m).round() as isize;
-        let offsets: Vec<(isize, isize)> =
-            (-r..=r).flat_map(|dj| (-r..=r).map(move |di| (di, dj))).filter(|(di, dj)| di * di + dj * dj <= r * r).collect();
+        let offsets: Vec<(isize, isize)> = (-r..=r)
+            .flat_map(|dj| (-r..=r).map(move |di| (di, dj)))
+            .filter(|(di, dj)| di * di + dj * dj <= r * r)
+            .collect();
         let mut low = vec![0.0; w * h];
         let mut buf = Vec::with_capacity(offsets.len());
         for j in 0..h as isize {

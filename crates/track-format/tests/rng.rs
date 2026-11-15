@@ -29,18 +29,9 @@ fn stream_consumption_is_independent() {
 #[test]
 fn subsystem_vectors_are_frozen() {
     let mut r = Pcg32::for_subsystem(7, Subsystem::Bots);
-    assert_eq!(
-        (0..4).map(|_| r.next_u32()).collect::<Vec<_>>(),
-        [0x840d99ca, 0x12c757de, 0x7481b420, 0xfa13115f]
-    );
+    assert_eq!((0..4).map(|_| r.next_u32()).collect::<Vec<_>>(), [0x840d99ca, 0x12c757de, 0x7481b420, 0xfa13115f]);
     let mut r = Pcg32::for_subsystem(7, Subsystem::Start);
-    assert_eq!(
-        (0..4).map(|_| r.next_u32()).collect::<Vec<_>>(),
-        [0x97aef5d4, 0x2ffeb853, 0x99f5940e, 0x94502745]
-    );
+    assert_eq!((0..4).map(|_| r.next_u32()).collect::<Vec<_>>(), [0x97aef5d4, 0x2ffeb853, 0x99f5940e, 0x94502745]);
     let mut r = Pcg32::for_subsystem(7, Subsystem::Rules);
-    assert_eq!(
-        (0..4).map(|_| r.next_u32()).collect::<Vec<_>>(),
-        [0xdb7b2723, 0xbde0071c, 0x62a7a91c, 0x8bc19702]
-    );
+    assert_eq!((0..4).map(|_| r.next_u32()).collect::<Vec<_>>(), [0xdb7b2723, 0xbde0071c, 0x62a7a91c, 0x8bc19702]);
 }

@@ -31,7 +31,8 @@ fn load() -> Option<(RoadGraph, String)> {
     };
     let text = std::fs::read_to_string(&path).expect("no se pudo leer el extracto");
     let ex = Extract::from_overpass_json(&text).expect("extracto inválido");
-    let g = RoadGraph::build(&ex, &BuildOptions { region: "real".into(), origin: None }).expect("no se pudo construir el grafo");
+    let g = RoadGraph::build(&ex, &BuildOptions { region: "real".into(), origin: None })
+        .expect("no se pudo construir el grafo");
     Some((g, text))
 }
 

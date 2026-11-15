@@ -20,9 +20,9 @@
 //! o donde el perfil se aparta mucho de los datos: allí la altura es una estimación.
 
 use crate::centerline::CenterSample;
-use crate::ports::ElevationSource;
 use crate::diagnostics::{Diagnostic, Severity};
 use crate::geo::LocalFrame;
+use crate::ports::ElevationSource;
 
 /// Altura conocida en un punto (p. ej. "la vía está a 8 m aquí"), en metros.
 #[derive(Clone, Copy, Debug)]
@@ -121,7 +121,11 @@ fn median(window: &[f64]) -> f64 {
     let mut w = window.to_vec();
     w.sort_by(|a, b| a.total_cmp(b));
     let n = w.len();
-    if n % 2 == 1 { w[n / 2] } else { (w[n / 2 - 1] + w[n / 2]) * 0.5 }
+    if n % 2 == 1 {
+        w[n / 2]
+    } else {
+        (w[n / 2 - 1] + w[n / 2]) * 0.5
+    }
 }
 
 /// Limita la pendiente: pasada hacia adelante y hacia atrás, y el promedio de ambas
@@ -177,7 +181,14 @@ fn percentile(v: &mut [f64], p: f64) -> f64 {
 }
 
 /// Muestra `n` alturas a lo ancho, entre `-reach` y `reach` metros del eje.
-fn across(dem: &dyn ElevationSource, frame: &LocalFrame, en: [f64; 2], right: [f64; 2], reach: f64, step: f64) -> Vec<f64> {
+fn across(
+    dem: &dyn ElevationSource,
+    frame: &LocalFrame,
+    en: [f64; 2],
+    right: [f64; 2],
+    reach: f64,
+    step: f64,
+) -> Vec<f64> {
     let n = (reach / step).round() as i32;
     (-n..=n)
         .filter_map(|k| {
@@ -187,7 +198,12 @@ fn across(dem: &dyn ElevationSource, frame: &LocalFrame, en: [f64; 2], right: [f
         .collect()
 }
 
-pub fn profile(samples: &[CenterSample], dem: &dyn ElevationSource, frame: &LocalFrame, opts: &ElevationOptions) -> Result<Profile, String> {
+pub fn profile(
+    samples: &[CenterSample],
+    dem: &dyn ElevationSource,
+    frame: &LocalFrame,
+    opts: &ElevationOptions,
+) -> Result<Profile, String> {
     let mut diags = Vec::new();
     let mut outside = 0usize;
     let n = samples.len();
@@ -200,7 +216,10 @@ pub fn profile(samples: &[CenterSample], dem: &dyn ElevationSource, frame: &Loca
         let l = libm::hypot(dx, dy).max(1e-9);
         let right = [dy / l, -dx / l];
         let probe = across(dem, frame, c.en, right, opts.wall_probe_m, 3.0);
-        spread.push(probe.iter().copied().fold(f64::NEG_INFINITY, f64::max) - probe.iter().copied().fold(f64::INFINITY, f64::min));
+        spread.push(
+            probe.iter().copied().fold(f64::NEG_INFINITY, f64::max)
+                - probe.iter().copied().fold(f64::INFINITY, f64::min),
+        );
         if c.bridge || c.tunnel {
             center.push(None);
             raw.push(None);

@@ -94,17 +94,11 @@ impl MeshPart {
             self.positions.extend_from_slice(&[p.x, p.y, p.z]);
             self.surfaces.push(surface as u8);
         }
-        self.indices
-            .extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+        self.indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
     }
 
     pub fn vertices(&self) -> Vec<Vec3> {
-        self.positions
-            .as_chunks::<3>()
-            .0
-            .iter()
-            .map(|c| Vec3::new(c[0], c[1], c[2]))
-            .collect()
+        self.positions.as_chunks::<3>().0.iter().map(|c| Vec3::new(c[0], c[1], c[2])).collect()
     }
 
     pub fn triangles(&self) -> Vec<[u32; 3]> {
@@ -177,11 +171,7 @@ pub fn compile_track(def: &TrackDef) -> Result<CompiledTrack, String> {
     let closed = def.closed;
     let n = def.points.len();
     let p = |i: isize| -> [f32; 5] {
-        let idx = if closed {
-            i.rem_euclid(n as isize)
-        } else {
-            i.clamp(0, n as isize - 1)
-        };
+        let idx = if closed { i.rem_euclid(n as isize) } else { i.clamp(0, n as isize - 1) };
         let c = &def.points[idx as usize];
         [c.x, c.y, c.z, c.width.unwrap_or(def.default_width), c.bank]
     };
@@ -251,9 +241,7 @@ pub fn compile_track(def: &TrackDef) -> Result<CompiledTrack, String> {
         }
     };
     let at = |i: isize| pos(&raw[wrap(i)]);
-    let tangents: Vec<Vec3> = (0..m as isize)
-        .map(|i| norm(at(i + 1) - at(i - 1)))
-        .collect();
+    let tangents: Vec<Vec3> = (0..m as isize).map(|i| norm(at(i + 1) - at(i - 1))).collect();
     let world_up = Vec3::Y;
     let flat_right = |t: Vec3| norm(t.cross(world_up));
     // Curvatura suavizada en una ventana, para que el peralte no cambie de lado bruscamente.
@@ -264,11 +252,7 @@ pub fn compile_track(def: &TrackDef) -> Result<CompiledTrack, String> {
             let (ta, tb) = (tangents[ia], tangents[ib]);
             let d = tb - ta;
             let r = flat_right(tangents[i as usize]);
-            let span = if closed {
-                2.0 * W as f32
-            } else {
-                (ib - ia).max(1) as f32
-            };
+            let span = if closed { 2.0 * W as f32 } else { (ib - ia).max(1) as f32 };
             d.dot(r) / (span * spacing)
         })
         .collect();
@@ -277,11 +261,7 @@ pub fn compile_track(def: &TrackDef) -> Result<CompiledTrack, String> {
     let tight: Vec<f32> = (0..m as isize)
         .map(|i| {
             let (ia, ib) = (wrap(i - WT), wrap(i + WT));
-            let span = if closed {
-                2.0 * WT as f32
-            } else {
-                (ib - ia).max(1) as f32
-            };
+            let span = if closed { 2.0 * WT as f32 } else { (ib - ia).max(1) as f32 };
             (tangents[ib] - tangents[ia]).length() / (span * spacing)
         })
         .collect();
@@ -306,43 +286,24 @@ pub fn compile_track(def: &TrackDef) -> Result<CompiledTrack, String> {
         });
     }
 
-    let mut min_y = samples
-        .iter()
-        .map(|s| s.pos.y)
-        .fold(f32::INFINITY, f32::min);
+    let mut min_y = samples.iter().map(|s| s.pos.y).fold(f32::INFINITY, f32::min);
     if let Some(net) = &def.network {
         min_y = net.vertices.iter().map(|v| v[1]).fold(min_y, f32::min);
     }
     let ground_y = min_y - 0.6;
 
-    let length = if closed {
-        spacing * m as f32
-    } else {
-        spacing * (m - 1) as f32
-    };
+    let length = if closed { spacing * m as f32 } else { spacing * (m - 1) as f32 };
     // Sprint: líneas de salida y llegada separadas de los extremos para tener carrerilla.
     let (start_s, finish_s) = if closed {
         (0.0, 0.0)
     } else {
-        (
-            OPEN_START_M,
-            (length - OPEN_RUNOFF_M)
-                .max(OPEN_START_M + 50.0)
-                .min(length - 10.0),
-        )
+        (OPEN_START_M, (length - OPEN_RUNOFF_M).max(OPEN_START_M + 50.0).min(length - 10.0))
     };
     if !closed && finish_s <= start_s {
-        return Err(format!(
-            "el sprint mide {length:.0} m: hacen falta al menos {:.0} m",
-            OPEN_START_M + 60.0
-        ));
+        return Err(format!("el sprint mide {length:.0} m: hacen falta al menos {:.0} m", OPEN_START_M + 60.0));
     }
     let line_index = |s_line: f32| (s_line / spacing).round() as usize;
-    let lines: Vec<usize> = if closed {
-        vec![0]
-    } else {
-        vec![line_index(start_s), line_index(finish_s)]
-    };
+    let lines: Vec<usize> = if closed { vec![0] } else { vec![line_index(start_s), line_index(finish_s)] };
 
     // 4. Mallas.
     let mut drivable = MeshPart::default();
@@ -363,29 +324,14 @@ pub fn compile_track(def: &TrackDef) -> Result<CompiledTrack, String> {
         let hw = |s: &Sample| s.width * 0.5;
 
         // Franja entre dos desplazamientos laterales (lo < hi), cara hacia arriba.
-        let strip =
-            |part: &mut MeshPart, lo_a: f32, hi_a: f32, lo_b: f32, hi_b: f32, s: Surface| {
-                part.quad(
-                    edge(a, lo_a),
-                    edge(a, hi_a),
-                    edge(b, hi_b),
-                    edge(b, lo_b),
-                    s,
-                );
-            };
+        let strip = |part: &mut MeshPart, lo_a: f32, hi_a: f32, lo_b: f32, hi_b: f32, s: Surface| {
+            part.quad(edge(a, lo_a), edge(a, hi_a), edge(b, hi_b), edge(b, lo_b), s);
+        };
 
         // Calzada (la franja de cada línea de salida o meta se marca aparte).
-        let road = if lines.contains(&i) {
-            Surface::StartLine
-        } else {
-            Surface::Asphalt
-        };
+        let road = if lines.contains(&i) { Surface::StartLine } else { Surface::Asphalt };
         strip(&mut drivable, -hw(a), hw(a), -hw(b), hw(b), road);
-        let kerb = if (i / 2) % 2 == 0 {
-            Surface::KerbA
-        } else {
-            Surface::KerbB
-        };
+        let kerb = if (i / 2) % 2 == 0 { Surface::KerbA } else { Surface::KerbB };
         let (ka, kb) = (hw(a) + KERB_W, hw(b) + KERB_W);
         let (sa, sb) = (ka + SHOULDER_W, kb + SHOULDER_W);
         strip(&mut drivable, -ka, -hw(a), -kb, -hw(b), kerb);
@@ -402,9 +348,7 @@ pub fn compile_track(def: &TrackDef) -> Result<CompiledTrack, String> {
                 decals.positions.extend_from_slice(&[q.x, q.y, q.z]);
                 decals.surfaces.push(Surface::KerbB as u8);
             }
-            decals
-                .indices
-                .extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+            decals.indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
         }
 
         for side in [-1.0f32, 1.0] {
@@ -422,16 +366,11 @@ pub fn compile_track(def: &TrackDef) -> Result<CompiledTrack, String> {
                 let outward = norm(d.cross(Vec3::Y)) * side;
                 let top_y = ea.y.max(eb.y) + WALL_H;
                 let mid = (ea + eb) * 0.5;
-                let center =
-                    Vec3::new(mid.x, (ground_y + top_y) * 0.5, mid.z) + outward * (WALL_T * 0.5);
+                let center = Vec3::new(mid.x, (ground_y + top_y) * 0.5, mid.z) + outward * (WALL_T * 0.5);
                 let right_axis = norm(d.cross(Vec3::Y));
                 wall_boxes.push(WallBox {
                     center,
-                    half_extents: Vec3::new(
-                        WALL_T * 0.5,
-                        (top_y - ground_y) * 0.5,
-                        seg_len * 0.5 + 0.15,
-                    ),
+                    half_extents: Vec3::new(WALL_T * 0.5, (top_y - ground_y) * 0.5, seg_len * 0.5 + 0.15),
                     rotation: crate::mathx::basis_to_quat(right_axis, Vec3::Y, d),
                 });
             }
@@ -453,16 +392,7 @@ pub fn compile_track(def: &TrackDef) -> Result<CompiledTrack, String> {
     }
 
     if let Some(net) = &def.network {
-        build_network(
-            net,
-            &samples,
-            &lines,
-            ground_y,
-            &mut drivable,
-            &mut walls,
-            &mut wall_boxes,
-            &mut decals,
-        )?;
+        build_network(net, &samples, &lines, ground_y, &mut drivable, &mut walls, &mut wall_boxes, &mut decals)?;
     }
 
     // Muros transversales al principio y al final de un sprint.
@@ -494,11 +424,7 @@ pub fn compile_track(def: &TrackDef) -> Result<CompiledTrack, String> {
     }
 
     let checkpoints: Vec<f32> = if closed {
-        let mut c: Vec<f32> = def
-            .checkpoints
-            .iter()
-            .map(|f| (f.clamp(0.0, 0.999)) * length)
-            .collect();
+        let mut c: Vec<f32> = def.checkpoints.iter().map(|f| (f.clamp(0.0, 0.999)) * length).collect();
         c.sort_by(|a, b| a.total_cmp(b));
         if c.first().copied() != Some(0.0) {
             c.insert(0, 0.0);
@@ -522,9 +448,7 @@ pub fn compile_track(def: &TrackDef) -> Result<CompiledTrack, String> {
     };
 
     let mut h = Fnv64::new();
-    h.str_u32_len("compiled-track/1")
-        .str_u32_len(crate::COMPILER_VERSION)
-        .str_u32_len(&def.id);
+    h.str_u32_len("compiled-track/1").str_u32_len(crate::COMPILER_VERSION).str_u32_len(&def.id);
     if !closed {
         h.str_u32_len("open"); // solo en pistas abiertas: el hash de las cerradas no cambia
     }
@@ -583,22 +507,13 @@ pub fn compile_track(def: &TrackDef) -> Result<CompiledTrack, String> {
             .network
             .iter()
             .flat_map(|n| n.barriers.iter())
-            .map(|b| Barrier {
-                line: b.line.iter().map(|p| Vec3::new(p[0], p[1], p[2])).collect(),
-                arrow: b.arrow,
-            })
+            .map(|b| Barrier { line: b.line.iter().map(|p| Vec3::new(p[0], p[1], p[2])).collect(), arrow: b.arrow })
             .collect(),
     })
 }
 
 /// Muro sólido de `a` a `b` con la pista a la izquierda: caja de colisión y caras para el render.
-fn wall_segment(
-    a: Vec3,
-    b: Vec3,
-    ground_y: f32,
-    walls: &mut MeshPart,
-    wall_boxes: &mut Vec<WallBox>,
-) {
+fn wall_segment(a: Vec3, b: Vec3, ground_y: f32, walls: &mut MeshPart, wall_boxes: &mut Vec<WallBox>) {
     let along = Vec3::new(b.x - a.x, 0.0, b.z - a.z);
     let seg_len = along.length();
     if seg_len < 1e-3 {
@@ -624,7 +539,10 @@ fn wall_segment(
 }
 
 /// S3: superficie, muros y marcas a partir de la red compilada.
-#[allow(clippy::too_many_arguments, reason = "builds four mesh parts in one pass over the network; a struct would only wrap these same borrows")]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "builds four mesh parts in one pass over the network; a struct would only wrap these same borrows"
+)]
 fn build_network(
     net: &NetworkDef,
     samples: &[Sample],
@@ -653,16 +571,11 @@ fn build_network(
             drivable.positions.extend_from_slice(&[p.x, p.y, p.z]);
             drivable.surfaces.push(Surface::from_u8(s) as u8);
         }
-        drivable
-            .indices
-            .extend_from_slice(&[base, base + 1, base + 2]);
+        drivable.indices.extend_from_slice(&[base, base + 1, base + 2]);
     }
     for w in &net.walls {
         for seg in w.windows(2) {
-            let (a, b) = (
-                Vec3::new(seg[0][0], seg[0][1], seg[0][2]),
-                Vec3::new(seg[1][0], seg[1][1], seg[1][2]),
-            );
+            let (a, b) = (Vec3::new(seg[0][0], seg[0][1], seg[0][2]), Vec3::new(seg[1][0], seg[1][1], seg[1][2]));
             wall_segment(a, b, ground_y, walls, wall_boxes);
         }
     }
@@ -670,10 +583,7 @@ fn build_network(
     let mut hidden = MeshPart::default();
     for b in &net.barriers {
         for seg in b.line.windows(2) {
-            let (a, c) = (
-                Vec3::new(seg[0][0], seg[0][1], seg[0][2]),
-                Vec3::new(seg[1][0], seg[1][1], seg[1][2]),
-            );
+            let (a, c) = (Vec3::new(seg[0][0], seg[0][1], seg[0][2]), Vec3::new(seg[1][0], seg[1][1], seg[1][2]));
             wall_segment(a, c, ground_y, &mut hidden, wall_boxes);
         }
     }
@@ -693,9 +603,7 @@ fn build_network(
             decals.positions.extend_from_slice(&[q.x, q.y, q.z]);
             decals.surfaces.push(Surface::StartLine as u8);
         }
-        decals
-            .indices
-            .extend_from_slice(&[base, base + 2, base + 1, base, base + 3, base + 2]);
+        decals.indices.extend_from_slice(&[base, base + 2, base + 1, base, base + 3, base + 2]);
     }
     Ok(())
 }
@@ -703,11 +611,7 @@ fn build_network(
 impl CompiledTrack {
     pub fn sample(&self, i: isize) -> &Sample {
         let m = self.samples.len() as isize;
-        let idx = if self.closed {
-            i.rem_euclid(m)
-        } else {
-            i.clamp(0, m - 1)
-        };
+        let idx = if self.closed { i.rem_euclid(m) } else { i.clamp(0, m - 1) };
         &self.samples[idx as usize]
     }
 

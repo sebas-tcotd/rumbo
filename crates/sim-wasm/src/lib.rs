@@ -9,6 +9,8 @@ use wasm_bindgen::prelude::*;
 
 mod error;
 pub use error::RumboError;
+#[cfg(feature = "harness")]
+pub mod harness;
 
 /// Una sesión del laboratorio: pista + perfil congelado + auto.
 #[wasm_bindgen]
@@ -44,7 +46,8 @@ impl Lab {
         }
         let track = TrackDef::from_json(track_json).map_err(RumboError::InvalidTrack)?;
         let manifest = ReplayManifest::from_json(replay_json).map_err(RumboError::InvalidReplay)?;
-        let sim = sim_core::replay::resimulate_until(&manifest, &track, tick as u64).map_err(RumboError::InvalidReplay)?;
+        let sim =
+            sim_core::replay::resimulate_until(&manifest, &track, tick as u64).map_err(RumboError::InvalidReplay)?;
         Ok(Lab { sim, autopilot: Autopilot::default(), state: vec![0.0; STATE_LEN] })
     }
 
@@ -144,7 +147,9 @@ impl Lab {
     pub fn centerline(&self) -> Vec<f32> {
         let mut out = Vec::with_capacity(self.sim.track().samples.len() * 10);
         for s in &self.sim.track().samples {
-            out.extend_from_slice(&[s.pos.x, s.pos.y, s.pos.z, s.right.x, s.right.y, s.right.z, s.up.x, s.up.y, s.up.z, s.width]);
+            out.extend_from_slice(&[
+                s.pos.x, s.pos.y, s.pos.z, s.right.x, s.right.y, s.right.z, s.up.x, s.up.y, s.up.z, s.width,
+            ]);
         }
         out
     }
@@ -243,8 +248,10 @@ pub fn hash_content(bytes: &[u8]) -> String {
 /// Versioned ABI descriptor derived from the simulation's actual field order.
 #[wasm_bindgen]
 pub fn snapshot_descriptor() -> String {
-    let fields: Vec<_> = STATE_FIELDS.iter().enumerate().map(|(index, name)| {
-        serde_json::json!({"name": name, "type": "f32", "offset": index * size_of::<f32>()})
-    }).collect();
+    let fields: Vec<_> = STATE_FIELDS
+        .iter()
+        .enumerate()
+        .map(|(index, name)| serde_json::json!({"name": name, "type": "f32", "offset": index * size_of::<f32>()}))
+        .collect();
     serde_json::json!({"version": 1, "stride": STATE_LEN * size_of::<f32>(), "fields": fields}).to_string()
 }

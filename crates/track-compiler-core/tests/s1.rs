@@ -15,7 +15,8 @@ fn geo(e: f64, n: f64) -> GeoPoint {
 }
 
 fn graph() -> RoadGraph {
-    let ex = Extract::from_overpass_json(include_str!("../../compiler-cli/tests/fixtures/mini-grid.overpass.json")).unwrap();
+    let ex =
+        Extract::from_overpass_json(include_str!("../../compiler-cli/tests/fixtures/mini-grid.overpass.json")).unwrap();
     RoadGraph::build(&ex, &BuildOptions { region: "fixture".into(), origin: Some(GeoPoint::new(LAT0, LON0)) }).unwrap()
 }
 
@@ -171,7 +172,12 @@ fn route_within_a_single_edge() {
 #[test]
 fn closed_circuit_returns_to_the_start() {
     let g = graph();
-    let r = route(&g, &[geo(0.0, 0.0), geo(200.0, 0.0), geo(200.0, 200.0)], RouteOptions { closed: true, ..RouteOptions::default() }).unwrap();
+    let r = route(
+        &g,
+        &[geo(0.0, 0.0), geo(200.0, 0.0), geo(200.0, 200.0)],
+        RouteOptions { closed: true, ..RouteOptions::default() },
+    )
+    .unwrap();
     assert_eq!(r.legs.len(), 3);
     assert!(close(r.length_m, 800.0, 3.0), "{}", r.length_m);
     let (a, b) = (r.geo.first().unwrap(), r.geo.last().unwrap());
@@ -198,7 +204,10 @@ fn route_is_deterministic_and_describes_the_resolved_path() {
     assert_eq!(d["resolvedPath"]["graph"], format!("fixture@{}", g.hash));
     let edges = d["resolvedPath"]["edges"].as_array().unwrap();
     assert!(!edges.is_empty() && edges.iter().all(|e| e.as_str().unwrap().starts_with(['+', '-'])));
-    assert!(d["waypoints"][0]["lat"].is_number() && d["waypoints"][0]["lon"].is_number(), "puntos con campos con nombre");
+    assert!(
+        d["waypoints"][0]["lat"].is_number() && d["waypoints"][0]["lon"].is_number(),
+        "puntos con campos con nombre"
+    );
 }
 
 #[test]
@@ -221,7 +230,7 @@ fn ramp_graph() -> RoadGraph {
     let f = LocalFrame::new(GeoPoint::new(LAT0, LON0));
     let pts = [
         (1, 0.0, 0.0),
-        (2, 100.0, 0.0),   // J: empalme de la rampa
+        (2, 100.0, 0.0), // J: empalme de la rampa
         (3, 300.0, 0.0),
         (4, 600.0, 0.0),   // F
         (5, 250.0, 100.0), // R: final de la rampa

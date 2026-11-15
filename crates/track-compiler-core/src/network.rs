@@ -114,7 +114,11 @@ pub struct RefPoint {
 impl Corridor {
     /// Edge at the start (`at_start`) or at the end of the corridor. Corridors always have edges.
     fn end_edge(&self, at_start: bool) -> (usize, bool) {
-        if at_start { self.edges[0] } else { self.edges[self.edges.len() - 1] }
+        if at_start {
+            self.edges[0]
+        } else {
+            self.edges[self.edges.len() - 1]
+        }
     }
 }
 
@@ -311,11 +315,8 @@ pub fn build(g: &RoadGraph, r: &ResolvedRoute, opts: &NetworkOptions) -> Result<
         incident[e.to].push(i);
     }
     let degree = |v: usize| incident[v].len();
-    let junction_set: BTreeSet<usize> = route_edges
-        .iter()
-        .flat_map(|&e| [g.edges[e].from, g.edges[e].to])
-        .filter(|&v| degree(v) >= 3)
-        .collect();
+    let junction_set: BTreeSet<usize> =
+        route_edges.iter().flat_map(|&e| [g.edges[e].from, g.edges[e].to]).filter(|&v| degree(v) >= 3).collect();
     if junction_set.is_empty() {
         return Err("el circuito no pasa por ningún cruce".into());
     }
@@ -493,7 +494,10 @@ pub fn build(g: &RoadGraph, r: &ResolvedRoute, opts: &NetworkOptions) -> Result<
             }
         }
         let arc_center = corners.iter().map(|c| c.map(|(_, _, ac, _, _)| ac)).collect();
-        geoms.insert(v, JunctionGeom { center, arms: arms.clone(), mouths, inner, outer, setback, sector_deg, arc_center });
+        geoms.insert(
+            v,
+            JunctionGeom { center, arms: arms.clone(), mouths, inner, outer, setback, sector_deg, arc_center },
+        );
     }
 
     // 4. Estado de cada cruce.
@@ -558,7 +562,16 @@ pub fn build(g: &RoadGraph, r: &ResolvedRoute, opts: &NetworkOptions) -> Result<
                 g.edges[ei].id.clone()
             })
             .collect();
-        net.junctions.push(Junction { vertex: v, en: jg.center, kind, arms: n, min_angle_deg: min_angle, status, reason, arm_edges });
+        net.junctions.push(Junction {
+            vertex: v,
+            en: jg.center,
+            kind,
+            arms: n,
+            min_angle_deg: min_angle,
+            status,
+            reason,
+            arm_edges,
+        });
     }
 
     // 5. Mallas: cruces (calzada en abanico, veredas en bandas) y corredores.
@@ -600,7 +613,12 @@ pub fn build(g: &RoadGraph, r: &ResolvedRoute, opts: &NetworkOptions) -> Result<
                 let l = left(t);
                 let h = c.half;
                 let s = opts.sidewalk_m;
-                [add(pts[i], mul(l, -(h + s))), add(pts[i], mul(l, -h)), add(pts[i], mul(l, h)), add(pts[i], mul(l, h + s))]
+                [
+                    add(pts[i], mul(l, -(h + s))),
+                    add(pts[i], mul(l, -h)),
+                    add(pts[i], mul(l, h)),
+                    add(pts[i], mul(l, h + s)),
+                ]
             })
             .collect();
         sections[0] = mouth(&geoms, c.start, ci, true)?;
@@ -664,7 +682,10 @@ pub fn build(g: &RoadGraph, r: &ResolvedRoute, opts: &NetworkOptions) -> Result<
         net.diagnostics.push(Diagnostic::new(
             Severity::Info,
             "side-streets",
-            format!("{side} calles laterales conducibles; las que no llevan a otro cruce del circuito se cierran a {:.0} m", opts.stub_m),
+            format!(
+                "{side} calles laterales conducibles; las que no llevan a otro cruce del circuito se cierran a {:.0} m",
+                opts.stub_m
+            ),
         ));
     }
     Ok(net)
@@ -822,17 +843,32 @@ fn arm_index(jg: &JunctionGeom, corridor: usize, at_start: bool) -> Result<usize
         .ok_or_else(|| format!("red inválida: el corredor {corridor} no es brazo de su cruce"))
 }
 
-fn arm_of(geoms: &BTreeMap<usize, JunctionGeom>, v: usize, corridor: usize, at_start: bool) -> Result<(&JunctionGeom, usize), String> {
+fn arm_of(
+    geoms: &BTreeMap<usize, JunctionGeom>,
+    v: usize,
+    corridor: usize,
+    at_start: bool,
+) -> Result<(&JunctionGeom, usize), String> {
     let jg = &geoms[&v];
     Ok((jg, arm_index(jg, corridor, at_start)?))
 }
 
-fn arm_setback(geoms: &BTreeMap<usize, JunctionGeom>, v: usize, corridor: usize, at_start: bool) -> Result<f64, String> {
+fn arm_setback(
+    geoms: &BTreeMap<usize, JunctionGeom>,
+    v: usize,
+    corridor: usize,
+    at_start: bool,
+) -> Result<f64, String> {
     let (jg, k) = arm_of(geoms, v, corridor, at_start)?;
     Ok(jg.setback[k])
 }
 
-fn mouth(geoms: &BTreeMap<usize, JunctionGeom>, v: usize, corridor: usize, at_start: bool) -> Result<[[f64; 2]; 4], String> {
+fn mouth(
+    geoms: &BTreeMap<usize, JunctionGeom>,
+    v: usize,
+    corridor: usize,
+    at_start: bool,
+) -> Result<[[f64; 2]; 4], String> {
     let (jg, k) = arm_of(geoms, v, corridor, at_start)?;
     Ok(jg.mouths[k])
 }

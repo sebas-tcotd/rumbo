@@ -60,7 +60,6 @@ pub fn turn_angle_deg(a: [f64; 2], b: [f64; 2]) -> f64 {
     libm::atan2(cross, dot).abs().to_degrees()
 }
 
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snap {
@@ -161,7 +160,10 @@ pub fn snap(g: &RoadGraph, p: GeoPoint) -> Result<Snap, String> {
         // Si con lat y lon intercambiadas el punto sí cae en la región, casi seguro es eso.
         let swapped = GeoPoint::new(p.lon, p.lat);
         let hint = if (-90.0..=90.0).contains(&p.lon) && nearest_distance(g, swapped) <= MAX_SNAP_M {
-            format!(" ¿Está invertido el orden? Como lat,lon sería {:.5},{:.5}, que sí está en la región.", swapped.lat, swapped.lon)
+            format!(
+                " ¿Está invertido el orden? Como lat,lon sería {:.5},{:.5}, que sí está en la región.",
+                swapped.lat, swapped.lon
+            )
         } else {
             String::new()
         };
@@ -170,7 +172,14 @@ pub fn snap(g: &RoadGraph, p: GeoPoint) -> Result<Snap, String> {
             p.lat, p.lon, d
         ));
     }
-    Ok(Snap { edge: g.edges[ei].id.clone(), along_m: along, offset_m: d, point: g.frame.en_to_geo(pt), edge_index: ei, en: pt })
+    Ok(Snap {
+        edge: g.edges[ei].id.clone(),
+        along_m: along,
+        offset_m: d,
+        point: g.frame.en_to_geo(pt),
+        edge_index: ei,
+        en: pt,
+    })
 }
 
 #[derive(PartialEq)]
@@ -239,7 +248,11 @@ fn tangent_at(e: &crate::graph::Edge, along: f64, fwd: bool) -> [f64; 2] {
         }
         acc += seg;
     }
-    if fwd { d } else { [-d[0], -d[1]] }
+    if fwd {
+        d
+    } else {
+        [-d[0], -d[1]]
+    }
 }
 
 /// Un punto a menos de esto de un vértice cuenta como "en el cruce": se puede salir o
@@ -286,7 +299,11 @@ fn leg(
     let goal = b.en;
     let end_vertex = |s: usize| {
         let e = &g.edges[s / 2];
-        if s % 2 == 1 { e.to } else { e.from }
+        if s % 2 == 1 {
+            e.to
+        } else {
+            e.from
+        }
     };
     let h = |s: usize| dist(g.vertices[end_vertex(s)].en, goal);
     let mut open = BinaryHeap::new();

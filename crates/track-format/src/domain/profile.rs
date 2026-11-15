@@ -133,11 +133,7 @@ pub struct ProfileFile {
 
 impl Default for ProfileFile {
     fn default() -> Self {
-        Self {
-            id: "default".into(),
-            name: "Por defecto".into(),
-            params: VehicleProfile::default(),
-        }
+        Self { id: "default".into(), name: "Por defecto".into(), params: VehicleProfile::default() }
     }
 }
 
@@ -185,10 +181,7 @@ mod tests {
     #[test]
     fn hash_changes_with_values() {
         let a = VehicleProfile::default();
-        let b = VehicleProfile {
-            rear_grip: 1.61,
-            ..a
-        };
+        let b = VehicleProfile { rear_grip: 1.61, ..a };
         assert_ne!(a.hash(), b.hash());
     }
 }

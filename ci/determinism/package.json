@@ -2,14 +2,19 @@
   "name": "rumbo-determinism",
   "private": true,
   "type": "module",
-  "description": "S4: re-simula los replays dorados con el WASM en Node, Chromium, Firefox, WebKit y Safari.",
+  "description": "S4: re-simula los replays dorados con el WASM de prueba en Node, Chromium, Edge, Firefox, WebKit y Safari y los compara tick a tick con la referencia nativa.",
   "scripts": {
+    "build": "pnpm run build:wasm && pnpm run build:reference",
+    "build:wasm": "wasm-pack build ../../crates/sim-wasm --target web --release --no-pack --out-dir ../../ci/determinism/wasm -- --locked --features harness",
+    "build:reference": "cargo run --release --locked -p sim-wasm --features harness --example trace_reference -- reference/native.json",
     "test": "node run.mjs --browser node",
     "node": "node run.mjs --browser node",
     "chromium": "node run.mjs --browser chromium",
+    "edge": "node run.mjs --browser edge",
     "firefox": "node run.mjs --browser firefox",
     "webkit": "node run.mjs --browser webkit",
-    "safari": "node run.mjs --browser safari"
+    "safari": "node run.mjs --browser safari",
+    "summary": "node summary.mjs results"
   },
   "dependencies": {
     "@rumbo/sim-wasm": "workspace:*"

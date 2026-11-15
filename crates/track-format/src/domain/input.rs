@@ -21,10 +21,7 @@ pub struct InputFrame {
 
 impl InputFrame {
     pub fn pack(self) -> u32 {
-        (self.steer as u8 as u32)
-            | (self.throttle as u32) << 8
-            | (self.brake as u32) << 16
-            | (self.flags as u32) << 24
+        (self.steer as u8 as u32) | (self.throttle as u32) << 8 | (self.brake as u32) << 16 | (self.flags as u32) << 24
     }
 
     pub fn unpack(v: u32) -> Self {
@@ -67,12 +64,7 @@ mod tests {
 
     #[test]
     fn pack_roundtrip() {
-        let f = InputFrame {
-            steer: -127,
-            throttle: 200,
-            brake: 3,
-            flags: FLAG_HANDBRAKE,
-        };
+        let f = InputFrame { steer: -127, throttle: 200, brake: 3, flags: FLAG_HANDBRAKE };
         assert_eq!(InputFrame::unpack(f.pack()), f);
     }
 }

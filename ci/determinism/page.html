@@ -4,7 +4,8 @@
 <body>
 <pre id="log">Verificando replays…</pre>
 <script type="module">
-  import init, { verify_replay, physics_version } from '/crates/sim-wasm/pkg/sim_wasm.js';
+  // WASM de prueba (sim-wasm con la feature `harness`), nunca el binario de publicación.
+  import init, { verify_replay, trace_replay, physics_version } from '/ci/determinism/wasm/sim_wasm.js';
   const out = { userAgent: navigator.userAgent, results: [] };
   const log = document.getElementById('log');
   try {
@@ -14,18 +15,18 @@
     for (const c of cases) {
       const [track, replay] = await Promise.all([fetch(c.track).then((r) => r.text()), fetch(c.replay).then((r) => r.text())]);
       const t0 = performance.now();
-      let rep;
+      const res = { case: c.name };
       try {
-        rep = JSON.parse(verify_replay(track, replay));
+        res.report = JSON.parse(verify_replay(track, replay));
+        const t = JSON.parse(trace_replay(track, replay));
+        res.ticks = t.ticks;
+        res.trace = t.trace;
       } catch (e) {
-        rep = { ok: false, message: String(e) };
+        res.error = String(e);
       }
-      out.results.push({
-        case: c.name, ok: rep.ok, message: rep.message, ticks: rep.ticks,
-        expected: c.expected, actual: rep.actualFinal, firstMismatch: rep.firstMismatchTick ?? null,
-        ms: Math.round(performance.now() - t0),
-      });
-      log.textContent += `\n${rep.ok ? 'OK   ' : 'FALLA'} ${c.name} ${rep.actualFinal ?? ''}`;
+      res.ms = Math.round(performance.now() - t0);
+      out.results.push(res);
+      log.textContent += `\n${res.report?.ok ? 'OK   ' : 'FALLA'} ${c.name} ${res.report?.actualFinal ?? res.error ?? ''}`;
       await new Promise((r) => setTimeout(r, 0)); // deja respirar al hilo para el sondeo del driver
     }
   } catch (e) {

@@ -1,6 +1,10 @@
 //! Depuración: aristas que tocan unos vértices del grafo, con la dirección en que salen.
 //! Uso: --example vertex -- <grafo.json> <vértice> [<vértice> ...]
-#![allow(clippy::unwrap_used, clippy::expect_used, reason = "example: a diagnostic tool where a panic is the error report")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "example: a diagnostic tool where a panic is the error report"
+)]
 use track_compiler_core::graph::RoadGraph;
 fn main() {
     let a: Vec<String> = std::env::args().collect();
@@ -15,7 +19,12 @@ fn main() {
             let other = if out { e.to } else { e.from };
             println!(
                 "   {:>16} {:<28} sale a {:>3.0}° hacia v{} · {:.0} m · {:?}{}",
-                e.id, e.name.as_deref().unwrap_or("(sin nombre)"), bearing, other, e.length_m, e.oneway,
+                e.id,
+                e.name.as_deref().unwrap_or("(sin nombre)"),
+                bearing,
+                other,
+                e.length_m,
+                e.oneway,
                 if out { "" } else { " (llega)" }
             );
         }

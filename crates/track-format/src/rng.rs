@@ -24,10 +24,7 @@ pub struct Pcg32 {
 impl Pcg32 {
     /// Reference PCG seeding. Sequence uses its low 63 bits, as in pcg32_srandom_r.
     pub fn seeded(seed: u64, sequence: u64) -> Self {
-        let mut rng = Self {
-            state: 0,
-            increment: sequence.wrapping_shl(1) | 1,
-        };
+        let mut rng = Self { state: 0, increment: sequence.wrapping_shl(1) | 1 };
         rng.next_u32();
         rng.state = rng.state.wrapping_add(seed);
         rng.next_u32();
@@ -40,9 +37,7 @@ impl Pcg32 {
     /// Advance once and return the reference XSH-RR output permutation.
     pub fn next_u32(&mut self) -> u32 {
         let old = self.state;
-        self.state = old
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(self.increment);
+        self.state = old.wrapping_mul(6364136223846793005).wrapping_add(self.increment);
         let shifted = (((old >> 18) ^ old) >> 27) as u32;
         shifted.rotate_right((old >> 59) as u32)
     }

@@ -7,6 +7,10 @@ crates/sim-wasm/pkg/
 data/graphs/*.json
 data/graphs/*.geojson
 ci/determinism/results/
+# Story 0.9: harness WASM (sim-wasm --features harness) and native per-tick reference,
+# built by `pnpm --filter rumbo-determinism build`.
+ci/determinism/wasm/
+ci/determinism/reference/
 
 ### BMAD ###
 _bmad/

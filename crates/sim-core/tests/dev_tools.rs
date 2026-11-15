@@ -1,5 +1,8 @@
 //! AR28 dev tools: teleport and re-simulation up to a tick. Neither changes the normal tick.
-#![allow(clippy::disallowed_methods, reason = "test harness outside the core: it reads fixtures from disk (golden.rs also honours an env var to record them)")]
+#![allow(
+    clippy::disallowed_methods,
+    reason = "test harness outside the core: it reads fixtures from disk (golden.rs also honours an env var to record them)"
+)]
 #![allow(clippy::unwrap_used, clippy::expect_used, reason = "test code: a panic is the failure report")]
 use sim_core::replay::{resimulate_until, MAX_SEEK_TICKS};
 use sim_core::{ProfileFile, ReplayManifest, Simulation, TrackDef};
@@ -14,8 +17,10 @@ fn track(id: &str) -> TrackDef {
 }
 
 fn golden(name: &str) -> ReplayManifest {
-    ReplayManifest::from_json(&std::fs::read_to_string(root().join(format!("crates/sim-core/tests/golden/{name}.json"))).unwrap())
-        .unwrap()
+    ReplayManifest::from_json(
+        &std::fs::read_to_string(root().join(format!("crates/sim-core/tests/golden/{name}.json"))).unwrap(),
+    )
+    .unwrap()
 }
 
 #[test]

@@ -16,3 +16,16 @@ serde_json.workspace = true  # igual en nativo y WASM
 
 [lints]
 workspace = true
+
+[features]
+# S4 harness (story 0.9): exports `trace_replay` (per-tick state hashes). Only the CI test binary and the
+# native reference enable it; the publication build (`pkg/`) must not (ci/bundle/check-wasm-size.mjs).
+harness = []
+
+[[example]]
+name = "trace_reference"
+required-features = ["harness"]
+
+[[test]]
+name = "harness"
+required-features = ["harness"]
