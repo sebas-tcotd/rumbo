@@ -1,4 +1,5 @@
 import type { VerifyReport } from '@rumbo/contracts';
+import { parseEdgeError } from './edge-error.js';
 
 type Verification =
   | { type: 'verify'; report: VerifyReport }
@@ -16,7 +17,7 @@ export function verifyReplay(
   } catch (cause) {
     // sim-wasm maps Rust Result::Err to a primitive JS string via JsValue::from_str.
     if (typeof cause !== 'string') throw cause;
-    return { type: 'verifyError', code: 'INVALID_REPLAY', message: cause };
+    return { type: 'verifyError', code: 'INVALID_REPLAY', message: parseEdgeError(cause)?.detail ?? cause };
   }
   return { type: 'verify', report: JSON.parse(result) as VerifyReport };
 }

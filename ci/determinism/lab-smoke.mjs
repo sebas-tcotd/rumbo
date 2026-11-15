@@ -1,8 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
-import { chromium } from 'playwright';
+import { chromium, firefox, webkit } from 'playwright';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { join } from 'node:path';
 
 const root = fileURLToPath(new URL('../../apps/web/', import.meta.url));
 const requireWeb = createRequire(new URL('../../apps/web/package.json', import.meta.url));
@@ -78,12 +79,185 @@ async function devtoolsAr28(page) {
   await page.keyboard.press('Escape');
 }
 
+const fatal = (page) => page.getByRole('alertdialog', { name: 'Algo falló' });
+const retry = (page) => page.getByRole('button', { name: 'Reintentar' });
+const copy = (page) => page.getByRole('button', { name: 'Copiar diagnóstico' }).click();
+
+async function inFreshPage(browser, run) {
+  const context = await browser.newContext();
+  try {
+    await run(await context.newPage(), context);
+  } finally {
+    await context.close();
+  }
+}
+
+async function screenshot(page, file) {
+  if (process.env.RUMBO_SMOKE_SCREENSHOTS) {
+    await page.screenshot({ path: join(process.env.RUMBO_SMOKE_SCREENSHOTS, file) });
+  }
+}
+
+async function checkWasmFailure(page, context, url) {
+  await page.route('**/*.wasm', (route) => route.abort());
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto(url);
+  await fatal(page).getByText('No se pudo cargar la simulación.').waitFor();
+  assert.equal(await retry(page).evaluate((button) => button === document.activeElement), true);
+  await screenshot(page, '0-8-wasm-fatal.png');
+  await copy(page);
+  await page.getByRole('status').getByText('Diagnóstico copiado.').waitFor();
+  const diagnostic = await page.evaluate(() => navigator.clipboard.readText());
+  assert.match(diagnostic, /error: WASM_LOAD_FAILED \(fatal, channel sim\)/);
+  assert.match(diagnostic, /build: [\da-f]{7,}|build: dev/);
+  assert.match(diagnostic, /detail: Failed to fetch/);
+  await Promise.all([page.waitForEvent('framenavigated'), retry(page).click()]);
+  await fatal(page).getByText('No se pudo cargar la simulación.').waitFor();
+}
+
+async function checkMissingApi(page, url, capability) {
+  const workers = [];
+  const wasm = [];
+  page.on('worker', (worker) => workers.push(worker.url()));
+  page.on('request', (request) => { if (request.url().endsWith('.wasm')) wasm.push(request.url()); });
+  await page.addInitScript((missing) => {
+    if (missing === 'compressionStream') Object.defineProperty(window, 'CompressionStream', { value: undefined });
+    if (missing === 'webgl2') {
+      const getContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (name, ...args) {
+        return name === 'webgl2' ? null : getContext.call(this, name, ...args);
+      };
+    }
+  }, capability);
+  await page.goto(url);
+  const label = capability === 'webgl2' ? 'WebGL 2' : 'Compresión y descompresión (deflate-raw)';
+  await fatal(page).getByText(label, { exact: true }).waitFor();
+  await fatal(page).getByRole('link', { name: 'Ver navegadores soportados' }).waitFor();
+  assert.equal(await page.locator('.render-host canvas').count(), 0);
+  assert.equal(await fatal(page).evaluate((dialog) => dialog.clientHeight), await page.evaluate(() => innerHeight));
+  assert.deepEqual(workers, []);
+  assert.deepEqual(wasm, []);
+  if (capability === 'compressionStream') await screenshot(page, '0-8-browser-unsupported.png');
+}
+
+async function checkGamepadFallback(page, url, transient) {
+  await page.addInitScript((transient) => {
+    let calls = 0;
+    Object.defineProperty(navigator, 'getGamepads', { value: transient ? () => {
+      if (++calls === 1) throw new Error('blocked during capability check');
+      return [];
+    } : undefined });
+    const requestFrame = window.requestAnimationFrame.bind(window);
+    window.testFrameRequests = 0;
+    window.requestAnimationFrame = (callback) => {
+      window.testFrameRequests++;
+      return requestFrame(callback);
+    };
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: () => Promise.reject(new Error('denied')) } });
+    const BrowserWorker = window.Worker;
+    window.Worker = class extends BrowserWorker {
+      constructor(...args) {
+        super(...args);
+        window.testSimWorker = this;
+      }
+    };
+  }, transient);
+  await page.goto(url);
+  await page.locator('.hud .speed-unit').waitFor();
+  await page.keyboard.down('w');
+  await page.waitForFunction(() => Number(document.querySelector('.speed-value')?.textContent) > 5);
+  await page.keyboard.up('w');
+  // Keep the successful driving path and exercise diagnostic export through a simulated worker fault.
+  await page.evaluate(() => {
+    const data = { type: 'fatal', code: 'SIM_FAILED', message: String.raw`open \\example.invalid\share\Alice Doe\replay.json at [::]`,
+      generation: 1, protocolVersion: 2 };
+    window.testSimWorker.dispatchEvent(new MessageEvent('message', { data }));
+  });
+  await fatal(page).getByText('La simulación se detuvo.', { exact: false }).waitFor();
+  assert.equal(await page.locator('.hud').count(), 0);
+  await copy(page);
+  const manual = page.getByRole('textbox', { name: 'Diagnóstico para copiar a mano' });
+  await manual.waitFor();
+  const diagnostic = await manual.inputValue();
+  assert.match(diagnostic, new RegExp(`input GAMEPAD_UNAVAILABLE reason=${transient ? 'blocked' : 'missing'}`));
+  assert.equal((diagnostic.match(/GAMEPAD_UNAVAILABLE/g) ?? []).length, 1);
+  assert.match(diagnostic, /gamepad=no/);
+  assert.doesNotMatch(diagnostic, /example\.invalid|Alice Doe|\[::\]/);
+  await copy(page);
+  await page.waitForFunction(() => {
+    const area = document.querySelector('.fatal textarea');
+    return area?.readOnly && area === document.activeElement && area.selectionEnd === area.value.length && area.selectionStart === 0;
+  });
+  const frameRequests = await page.evaluate(async () => {
+    const before = window.testFrameRequests;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    return window.testFrameRequests - before;
+  });
+  assert.equal(frameRequests, 0, 'the host and renderer stop requesting frames in Fatal');
+}
+
+async function checkRendererFailure(page, url) {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'gpu', { value: undefined });
+    const getContext = HTMLCanvasElement.prototype.getContext;
+    let webgl2Requests = 0;
+    HTMLCanvasElement.prototype.getContext = function (name, ...args) {
+      if (name === 'webgl2' && ++webgl2Requests > 1) return null;
+      return getContext.call(this, name, ...args);
+    };
+  });
+  await page.goto(url);
+  await fatal(page).getByText('No se pudo iniciar la vista 3D.').waitFor();
+  assert.equal(await page.locator('.render-host canvas').count(), 0);
+}
+
+async function checkModuleWorkerProbe(engine, url) {
+  const browser = await engine.launch();
+  try {
+    await inFreshPage(browser, async (page) => {
+      const workers = [];
+      page.on('worker', (worker) => workers.push(worker.url()));
+      await page.addInitScript(() => {
+        Object.defineProperty(window, 'CompressionStream', { value: undefined });
+        Object.defineProperty(navigator, 'clipboard', { value: undefined });
+      });
+      await page.goto(url);
+      await fatal(page).getByText('Compresión y descompresión (deflate-raw)').waitFor();
+      await copy(page);
+      const diagnostic = await page.getByRole('textbox', { name: 'Diagnóstico para copiar a mano' }).inputValue();
+      assert.match(diagnostic, /moduleWorker=yes/);
+      assert.deepEqual(workers, []);
+    });
+    console.log('OK module worker capability probe:', engine.name());
+  } finally {
+    await browser.close();
+  }
+}
+
+async function fatalSmoke(browser, url) {
+  await inFreshPage(browser, (page, context) => checkWasmFailure(page, context, url));
+  for (const api of ['compressionStream', 'webgl2']) {
+    await inFreshPage(browser, (page) => checkMissingApi(page, url, api));
+  }
+  await inFreshPage(browser, (page) => checkRendererFailure(page, url));
+  for (const transient of [false, true]) {
+    await inFreshPage(browser, (page) => checkGamepadFallback(page, url, transient));
+  }
+  console.log('OK Fatal: WASM, browser capabilities, keyboard fallback and diagnostics');
+}
+
 const server = dev ? await createServer(config('development')) : await preview(config('lab'));
 if (dev) await server.listen();
 const publication = dev ? null : await preview(config('production'));
 let browser;
 try {
   browser = await chromium.launch();
+  await fatalSmoke(browser, (publication ?? server).resolvedUrls.local[0] + '?pista=test-loop');
+  if (publication) {
+    const url = publication.resolvedUrls.local[0] + '?pista=test-loop';
+    const engines = process.argv.includes('--capability-matrix') ? [chromium, firefox, webkit] : [chromium];
+    for (const engine of engines) await checkModuleWorkerProbe(engine, url);
+  }
   const page = await browser.newPage({ acceptDownloads: true });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));

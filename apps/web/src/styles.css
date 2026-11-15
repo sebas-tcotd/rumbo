@@ -57,6 +57,10 @@ input {
   grid-template-columns: 1fr;
 }
 
+.lab.panel-hidden > .devtools-panel-slot {
+  display: none;
+}
+
 .viewport {
   position: relative;
   overflow: hidden;
@@ -75,7 +79,7 @@ input {
 }
 
 @media (max-width: 860px) {
-  .lab {
+  .lab:not(.panel-hidden) {
     grid-template-columns: 1fr;
     grid-template-rows: 62vh 1fr;
   }

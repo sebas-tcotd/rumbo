@@ -111,6 +111,7 @@ dependencies = [
  "libm",
  "serde_json",
  "sim-core",
+ "thiserror",
  "tiff",
  "track-compiler-core",
 ]
@@ -676,6 +677,7 @@ version = "0.1.0"
 dependencies = [
  "serde_json",
  "sim-core",
+ "thiserror",
  "track-format",
  "wasm-bindgen",
 ]

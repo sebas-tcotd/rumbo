@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, type SaveResult, type Settings, type SettingsStorePort } from '@rumbo/contracts';
+import { DEFAULT_SETTINGS, err, ok, type SaveResult, type Settings, type SettingsStorePort } from '@rumbo/contracts';
 import { type MigratedSettings, migrateSettings, SETTINGS_KEY, serializeSettings } from './settings-schema.ts';
 
 /** The subset of Web Storage the store uses (injectable for tests). */
@@ -31,12 +31,12 @@ export function createLocalSettingsStore(
     load: loadOnce,
     save(next: Settings): SaveResult {
       if (writable === null) loadOnce();
-      if (!writable || !storage) return { ok: false, code: 'STORAGE_UNAVAILABLE' };
+      if (!writable || !storage) return err({ code: 'STORAGE_UNAVAILABLE' });
       try {
         storage.setItem(SETTINGS_KEY, serializeSettings(next));
-        return { ok: true };
+        return ok(undefined);
       } catch {
-        return { ok: false, code: 'STORAGE_UNAVAILABLE' };
+        return err({ code: 'STORAGE_UNAVAILABLE' });
       }
     },
   };

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import init, { Lab, default_profile, verify_replay } from '../../crates/sim-wasm/pkg/sim_wasm.js';
-import { verifyReplay } from './verify-replay.ts';
+import { verifyReplay } from './dist/verify-replay.js';
 
 const read = (path) => readFileSync(new URL(path, import.meta.url));
 await init({ module_or_path: read('../../crates/sim-wasm/pkg/sim_wasm_bg.wasm') });
@@ -12,7 +12,9 @@ test('a malformed replay allows retry on the same live session', () => {
   const lab = new Lab(track, default_profile(), 1);
   try {
     lab.step(0, 0, 0, 0);
-    assert.equal(verifyReplay(verify_replay, track, '{').code, 'INVALID_REPLAY');
+    const rejected = verifyReplay(verify_replay, track, '{');
+    assert.equal(rejected.code, 'INVALID_REPLAY');
+    assert.doesNotMatch(rejected.message, /^INVALID_REPLAY:/);
     lab.step(0, 0, 0, 0);
     assert.equal(lab.tick(), 2);
     assert.equal(verifyReplay(verify_replay, track, lab.replay_json()).report.ok, true);

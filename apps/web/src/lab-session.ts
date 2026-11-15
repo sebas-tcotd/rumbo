@@ -7,8 +7,10 @@ import {
   DEV_SEEK_MAX_CHARS,
   DEV_SEEK_MAX_TICKS,
   type DevCommand,
+  type FatalCode,
   type Hashes,
   type LapMsg,
+  type LogPort,
   type ProfileFile,
   type ReadyMsg,
   type SimPort,
@@ -19,7 +21,7 @@ import {
   type VerifyReport,
 } from '@rumbo/contracts';
 import type { CameraMode } from '@rumbo/render-three';
-import type { UiNotice } from '@rumbo/ui';
+import type { FatalView, UiNotice } from '@rumbo/ui';
 
 /** A completed lap of the current session. */
 export interface LapRecord {
@@ -39,8 +41,8 @@ export interface LabView {
   ghost: Float32Array | null;
   verify: VerifyReport | null;
   verifyError: string | null;
-  /** Technical message of a fatal error (simulation or renderer start-up). */
-  error: string | null;
+  /** Player-facing fatal error (simulation or renderer start-up). */
+  error: FatalView | null;
   /** Non-fatal rejection of a command (invalid profile, unsupported load, failed export). */
   notice: UiNotice | null;
   sessionNumber: number;
@@ -133,7 +135,7 @@ export class LabSession {
   /** Called once when the lab stops with a fatal error, so the host can stop its frame loop. */
   onFatal: () => void = () => {};
 
-  constructor(connect: ConnectSim) {
+  constructor(connect: ConnectSim, private readonly logger: LogPort) {
     this.worker = connect((msg) => this.handle(msg));
   }
 
@@ -214,12 +216,16 @@ export class LabSession {
     this.send({ type: 'newSession', profileJson: JSON.stringify(profile) });
   }
 
-  /** Stops the lab with a fatal message (e.g. no WebGPU/WebGL). */
-  fail(error: string): void {
-    const first = !this.disposed;
+  /** Stops the lab on the first fatal error and records its technical detail. */
+  fail(code: Exclude<FatalCode, 'BROWSER_UNSUPPORTED'>, detail: unknown): void {
+    if (this.disposed) return;
     this.dispose();
-    this.patch({ error: error || 'SIM_FAILED' });
-    if (first) this.onFatal();
+    try {
+      this.logger.log('error', code === 'RENDER_INIT_FAILED' ? 'render' : 'sim', code, { detail });
+    } finally {
+      this.onFatal();
+      this.patch({ error: { code } });
+    }
   }
 
   private handle(msg: SimResponse): void {
@@ -257,7 +263,7 @@ export class LabSession {
         this.onCommandError(msg.operation);
         break;
       case 'fatal':
-        this.fail(msg.message);
+        this.fail(msg.code, msg.message);
         break;
     }
   }
@@ -270,7 +276,7 @@ export class LabSession {
       this.syncPause();
       if (this.autopilot) this.worker.send({ type: 'autopilot', on: true });
     } catch (e) {
-      this.fail(e instanceof Error ? e.message : String(e));
+      this.fail('RENDER_INIT_FAILED', e);
     }
   }
 

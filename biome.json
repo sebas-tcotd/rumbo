@@ -2043,6 +2043,20 @@
           }
         }
       }
+    },
+    {
+      "includes": [
+        "packages/**",
+        "apps/**",
+        "!**/*.test.mjs"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "error"
+          }
+        }
+      }
     }
   ],
   "formatter": {

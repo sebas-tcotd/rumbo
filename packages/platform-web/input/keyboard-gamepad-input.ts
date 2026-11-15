@@ -58,12 +58,33 @@ function standardPad(pads: readonly (Gamepad | null)[] | undefined): Gamepad | n
  * gamepad. `onKeyAction(code)` fires on each non-repeated key press (and on gamepad action-button
  * edges); the lab key map lives in the composition root.
  */
-export function createKeyboardGamepadInput(target: Window, onKeyAction: (code: string) => void): KeyboardGamepadInput {
+export function createKeyboardGamepadInput(
+  target: Window,
+  onKeyAction: (code: string) => void,
+  onDegraded?: (reason: 'missing' | 'blocked') => void,
+): KeyboardGamepadInput {
   const keys = new Set<string>();
   const lastPad = PAD_ACTIONS.map(() => false);
   const kb: InputFrame = { steer: 0, throttle: 0, brake: 0, handbrake: false };
   const pv: InputFrame = { steer: 0, throttle: 0, brake: 0, handbrake: false };
   let device: InputDevice = 'teclado';
+  let gamepadDisabled = false;
+  const degrade = (reason: 'missing' | 'blocked') => {
+    gamepadDisabled = true;
+    device = 'teclado';
+    onDegraded?.(reason);
+  };
+  const readPad = (): Gamepad | null => {
+    if (gamepadDisabled) return null;
+    try {
+      if (typeof target.navigator.getGamepads === 'function') return standardPad(target.navigator.getGamepads());
+    } catch {
+      degrade('blocked');
+      return null;
+    }
+    degrade('missing');
+    return null;
+  };
   const down = (e: KeyboardEvent) => {
     if (isTyping(e)) return;
     if (DRIVE_KEYS.has(e.code)) e.preventDefault();
@@ -89,7 +110,7 @@ export function createKeyboardGamepadInput(target: Window, onKeyAction: (code: s
   /** Returns a frame owned by the adapter, overwritten by the next call: copy it to retain it. */
   const sample = (): InputFrame => {
     keyboardFrame(keys, kb);
-    const pad = standardPad(target.navigator.getGamepads?.());
+    const pad = readPad();
     if (!pad) return kb;
     padFrame(pad, pv);
     padActions(pad);

@@ -10,10 +10,11 @@
 //!   rumbo-compiler stats  <grafo.json>
 
 use std::process::ExitCode;
+use compiler_cli::RumboError;
 use track_compiler_core::export::{graph_geojson, route_geojson};
 use track_compiler_core::graph::{BuildOptions, RoadGraph};
 use compiler_cli::adapters::{fs::{read, write, FileZoneWriter}, geotiff, overpass::OverpassFile};
-use track_compiler_core::ports::{OsmSource, ZoneWriter};
+use track_compiler_core::ports::ZoneWriter;
 
 use track_compiler_core::elevation::Anchor;
 use track_compiler_core::routing::{route, ResolvedRoute, RouteOptions};
@@ -104,16 +105,20 @@ fn stats(g: &RoadGraph) {
     print_diagnostics(g);
 }
 
-fn route_from_args(args: &Args, g: &RoadGraph) -> Result<(ResolvedRoute, RouteOptions), String> {
-    let from = GeoPoint::parse(args.get("from").ok_or("falta --from")?)?;
-    let to = GeoPoint::parse(args.get("to").ok_or("falta --to")?)?;
+fn route_from_args(args: &Args, g: &RoadGraph) -> Result<(ResolvedRoute, RouteOptions), RumboError> {
+    let from = GeoPoint::parse(args.get("from").ok_or_else(|| RumboError::Usage("falta --from".into()))?)
+        .map_err(RumboError::Usage)?;
+    let to = GeoPoint::parse(args.get("to").ok_or_else(|| RumboError::Usage("falta --to".into()))?)
+        .map_err(RumboError::Usage)?;
     let mut pts = vec![from];
     for v in args.all("via") {
-        pts.push(GeoPoint::parse(v)?);
+        pts.push(GeoPoint::parse(v).map_err(RumboError::Usage)?);
     }
     pts.push(to);
-    let num = |k: &str, d: f64| -> Result<f64, String> {
-        args.get(k).map_or(Ok(d), |v| v.parse::<f64>().map_err(|_| format!("--{k} debe ser un número")))
+    let num = |k: &str, d: f64| -> Result<f64, RumboError> {
+        args.get(k).map_or(Ok(d), |v| {
+            v.parse::<f64>().map_err(|_| RumboError::Usage(format!("--{k} debe ser un número")))
+        })
     };
     let base = RouteOptions::default();
     let opts = RouteOptions {
@@ -125,29 +130,29 @@ fn route_from_args(args: &Args, g: &RoadGraph) -> Result<(ResolvedRoute, RouteOp
     Ok((route(g, &pts, opts)?, opts))
 }
 
-fn run(raw: Vec<String>) -> Result<(), String> {
+fn run(raw: Vec<String>) -> Result<(), RumboError> {
     let args = Args::parse(&raw);
-    let cmd = args.positional.first().map(String::as_str).ok_or(USAGE)?;
+    let cmd = args.positional.first().map(String::as_str).ok_or_else(|| RumboError::Usage(USAGE.into()))?;
     match cmd {
         "ingest" => {
-            let input = args.positional.get(1).ok_or(USAGE)?;
-            let region = args.get("region").ok_or("falta --region")?;
-            let out = args.get("out").ok_or("falta --out")?;
-            let origin = args.get("origin").map(GeoPoint::parse).transpose()?;
-            let ex = OverpassFile.load(input)?;
+            let input = args.positional.get(1).ok_or_else(|| RumboError::Usage(USAGE.into()))?;
+            let region = args.get("region").ok_or_else(|| RumboError::Usage("falta --region".into()))?;
+            let out = args.get("out").ok_or_else(|| RumboError::Usage("falta --out".into()))?;
+            let origin = args.get("origin").map(GeoPoint::parse).transpose().map_err(RumboError::Usage)?;
+            let ex = OverpassFile.load_file(input)?;
             let g = RoadGraph::build(&ex, &BuildOptions { region: region.into(), origin })?;
-            write(out, &serde_json::to_value(&g).map_err(|e| e.to_string())?, false)?;
+            write(out, &serde_json::to_value(&g).map_err(|e| e.to_string())?, false).map_err(RumboError::Io)?;
             stats(&g);
             println!("grafo escrito en {out}");
             if let Some(path) = args.get("geojson") {
-                write(path, &graph_geojson(&g), false)?;
+                write(path, &graph_geojson(&g), false).map_err(RumboError::Io)?;
                 println!("GeoJSON del grafo en {path} (arrástralo a geojson.io para revisarlo sobre el mapa)");
             }
             Ok(())
         }
         "route" => {
-            let input = args.positional.get(1).ok_or(USAGE)?;
-            let g = RoadGraph::from_json(&read(input)?)?;
+            let input = args.positional.get(1).ok_or_else(|| RumboError::Usage(USAGE.into()))?;
+            let g = RoadGraph::from_json(&read(input).map_err(RumboError::Io)?)?;
             let (r, opts) = route_from_args(&args, &g)?;
             println!(
                 "ruta de {:.0} m en {} tramos ({}){}",
@@ -174,22 +179,22 @@ fn run(raw: Vec<String>) -> Result<(), String> {
                 );
             }
             if let Some(path) = args.get("geojson") {
-                write(path, &route_geojson(&r), false)?;
+                write(path, &route_geojson(&r), false).map_err(RumboError::Io)?;
                 println!("GeoJSON de la ruta en {path}");
             }
             let descriptor = r.descriptor_route();
             if let Some(path) = args.get("descriptor") {
-                write(path, &descriptor, true)?;
+                write(path, &descriptor, true).map_err(RumboError::Io)?;
                 println!("fragmento de descriptor en {path}");
             }
             Ok(())
         }
         "track" => {
-            let input = args.positional.get(1).ok_or(USAGE)?;
-            let g = RoadGraph::from_json(&read(input)?)?;
-            let dem = geotiff::from_path(args.get("dem").ok_or("falta --dem")?)?;
-            let id = args.get("id").ok_or("falta --id")?;
-            let out = args.get("out").ok_or("falta --out")?;
+            let input = args.positional.get(1).ok_or_else(|| RumboError::Usage(USAGE.into()))?;
+            let g = RoadGraph::from_json(&read(input).map_err(RumboError::Io)?)?;
+            let dem = geotiff::from_path(args.get("dem").ok_or_else(|| RumboError::Usage("falta --dem".into()))?)?;
+            let id = args.get("id").ok_or_else(|| RumboError::Usage("falta --id".into()))?;
+            let out = args.get("out").ok_or_else(|| RumboError::Usage("falta --out".into()))?;
             let (r, _) = route_from_args(&args, &g)?;
             let mut opts = TrackOptions::new(id, args.get("name").unwrap_or(id));
             if args.has("network") {
@@ -198,14 +203,15 @@ fn run(raw: Vec<String>) -> Result<(), String> {
             for a in args.all("anchor") {
                 let parts: Vec<&str> = a.split(',').collect();
                 if parts.len() != 3 {
-                    return Err(format!("--anchor espera lat,lon,altura y recibió \"{a}\""));
+                    return Err(RumboError::Usage(format!("--anchor espera lat,lon,altura y recibió \"{a}\"")));
                 }
-                let at = GeoPoint::parse(&format!("{},{}", parts[0], parts[1]))?;
-                let height_m = parts[2].trim().parse::<f64>().map_err(|_| format!("altura inválida en --anchor {a}"))?;
+                let at = GeoPoint::parse(&format!("{},{}", parts[0], parts[1])).map_err(RumboError::Usage)?;
+                let height_m = parts[2].trim().parse::<f64>()
+                    .map_err(|_| RumboError::Usage(format!("altura inválida en --anchor {a}")))?;
                 opts.elevation.anchors.push(Anchor { at, height_m });
             }
             let t = generate(&g, &r, &dem, &opts)?;
-            FileZoneWriter(out).publish(&t.json)?;
+            FileZoneWriter(out).publish(&t.json).map_err(RumboError::Io)?;
             let st = &t.json["stats"];
             println!("pista {id} · {}", t.status.as_str());
             println!(
@@ -223,21 +229,22 @@ fn run(raw: Vec<String>) -> Result<(), String> {
             }
             println!("pista escrita en {out}");
             if let Some(path) = args.get("profile") {
-                std::fs::write(path, profile_csv(&t)).map_err(|e| format!("no se pudo escribir {path}: {e}"))?;
+                std::fs::write(path, profile_csv(&t))
+                    .map_err(|e| RumboError::Io(format!("no se pudo escribir {path}: {e}")))?;
                 println!("perfil de elevación en {path}");
             }
             if let Some(path) = args.get("geojson") {
-                write(path, &route_geojson(&r), false)?;
+                write(path, &route_geojson(&r), false).map_err(RumboError::Io)?;
                 println!("GeoJSON de la ruta en {path}");
             }
             Ok(())
         }
         "stats" => {
-            let input = args.positional.get(1).ok_or(USAGE)?;
-            stats(&RoadGraph::from_json(&read(input)?)?);
+            let input = args.positional.get(1).ok_or_else(|| RumboError::Usage(USAGE.into()))?;
+            stats(&RoadGraph::from_json(&read(input).map_err(RumboError::Io)?)?);
             Ok(())
         }
-        _ => Err(USAGE.into()),
+        _ => Err(RumboError::Usage(USAGE.into())),
     }
 }
 
@@ -245,7 +252,7 @@ fn main() -> ExitCode {
     match run(std::env::args().skip(1).collect()) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("{e}");
+            eprintln!("{}: {e}", e.code());
             ExitCode::FAILURE
         }
     }

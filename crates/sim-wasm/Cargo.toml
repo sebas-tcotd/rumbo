@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 track-format = { path = "../track-format" }
 sim-core = { path = "../sim-core" }
 wasm-bindgen.workspace = true
+thiserror.workspace = true
 serde_json.workspace = true  # igual en nativo y WASM
 
 [lints]

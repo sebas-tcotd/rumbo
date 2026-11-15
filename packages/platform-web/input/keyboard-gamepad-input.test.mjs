@@ -85,3 +85,17 @@ test('dispose removes every listener', () => {
   assert.equal(input.sample().throttle, 0);
   assert.deepEqual(actions, []);
 });
+
+for (const reason of ['missing', 'blocked']) {
+  test('keyboard remains active when gamepad access is ' + reason, () => {
+    const win = fakeWindow();
+    const seen = [];
+    win.navigator.getGamepads = reason === 'missing' ? undefined : () => { throw new Error('denied'); };
+    const input = createKeyboardGamepadInput(win, () => {}, (status) => seen.push(status));
+    win.dispatchEvent(key('keydown', 'KeyW'));
+    assert.equal(input.sample().throttle, 1);
+    assert.equal(input.sample().throttle, 1);
+    assert.deepEqual(seen, [reason]);
+    input.dispose();
+  });
+}

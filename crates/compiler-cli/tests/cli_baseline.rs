@@ -1,6 +1,8 @@
 use sim_core::{compile_track, TrackDef};
 use std::{fs, process::Command};
 
+const MINI_DEM: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/mini-grid.tif");
+
 #[test]
 fn mini_grid_preserves_compiled_identity() {
     let dir = std::env::temp_dir().join(format!("rumbo-cli-{}", std::process::id()));
@@ -37,7 +39,7 @@ fn mini_grid_preserves_compiled_identity() {
         "track",
         "graph.json",
         "--dem",
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/mini-grid.tif"),
+        MINI_DEM,
         "--from",
         "-12.12,-77.03",
         "--to",
@@ -80,23 +82,36 @@ fn mini_grid_preserves_compiled_identity() {
             > 100
     );
     fs::write(dir.join("invalid"), b"broken").unwrap();
-    for args in [
-        vec!["stats", "missing"],
-        vec!["stats", "invalid"],
-        vec!["track", "graph.json", "--dem", "invalid"],
-        vec![
-            "ingest",
-            concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/tests/fixtures/mini-grid.overpass.json"
-            ),
-            "--region",
-            "fixture",
-            "--out",
-            "invalid/graph",
-        ],
+    for (args, code) in [
+        (vec!["stats", "missing"], "IO_FAILED:"),
+        (vec!["stats", "invalid"], "COMPILE_FAILED:"),
+        (vec!["track", "graph.json", "--dem", "invalid"], "COMPILE_FAILED:"),
+        (vec!["track", "graph.json", "--dem", "missing"], "IO_FAILED:"),
+        (vec!["ingest", "invalid", "--region", "fixture", "--out", "unused.json"], "COMPILE_FAILED:"),
+        (vec!["ingest", "missing", "--region", "fixture", "--out", "unused.json"], "IO_FAILED:"),
+        (vec!["ingest", "invalid", "--region", "fixture", "--out", "unused.json", "--origin", "bad"], "USAGE:"),
+        (vec!["route", "graph.json", "--from", "-12.12,-77.03", "--to", "bad"], "USAGE:"),
+        (
+            vec![
+                "track", "graph.json", "--dem", MINI_DEM, "--id", "fixture", "--out", "unused.json",
+                "--from", "-12.12,-77.03", "--to", "-12.118191354675348,-77.02816244027932",
+                "--anchor", "-12.12,-77.03,bad",
+            ],
+            "USAGE:",
+        ),
+        (
+            vec![
+                "ingest",
+                concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/mini-grid.overpass.json"),
+                "--region", "fixture", "--out", "invalid/graph",
+            ],
+            "IO_FAILED:",
+        ),
     ] {
-        assert!(!invoke(&args).status.success());
+        let output = invoke(&args);
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.starts_with(code), "{args:?}: {stderr}");
     }
     fs::remove_dir_all(dir).unwrap();
 }
@@ -193,5 +208,17 @@ fn published_recipes_preserve_compiled_identities() {
             hash
         );
         fs::remove_dir_all(dir).unwrap();
+    }
+}
+#[test]
+fn cli_failures_expose_stable_codes() {
+    let bin = env!("CARGO_BIN_EXE_rumbo-compiler");
+    for (args, code) in [
+        (&["unknown"][..], "USAGE:"),
+        (&["stats", "nonexistent-0-8-graph.json"][..], "IO_FAILED:"),
+    ] {
+        let output = std::process::Command::new(bin).args(args).output().unwrap();
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).starts_with(code));
     }
 }

@@ -1,8 +1,12 @@
 # @rumbo/ui
 
-Player-facing UI over the 3D view: HUD, loading, notices and the provisional fatal state (the real Fatal
-screen is story 0.8). `mountUi(container, { store, settings })` is called once by `apps/web/src/main.tsx`;
-it creates its own React root (StrictMode) and its own i18next instance and returns `{ unmount }`.
+La interfaz muestra el HUD, la carga, los avisos y la pantalla «Algo falló».
+`apps/web/src/main.tsx` llama a `mountUi(container, { store, settings, fatal })`, que crea una raíz React
+en StrictMode y una instancia de i18next, y devuelve `{ unmount }`.
+
+La pantalla Fatal traduce `FatalView.code`, enumera las funciones requeridas ausentes y enfoca
+«Reintentar». El host inyecta la recarga, la generación del diagnóstico y el acceso al portapapeles.
+Si falla la copia, el diagnóstico queda seleccionado en un campo de solo lectura.
 
 - Reads the host through structural types (`UiSnapshot`, `ExternalStore`), never importing the app. The HUD
   uses the ~15 Hz state capture, never per-frame state.

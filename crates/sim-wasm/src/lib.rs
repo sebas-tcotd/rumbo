@@ -7,9 +7,8 @@ use sim_core::simulation::STATE_FIELDS;
 use sim_core::{InputFrame, ReplayManifest, Simulation, TrackDef, STATE_LEN};
 use wasm_bindgen::prelude::*;
 
-fn js_err(e: String) -> JsValue {
-    JsValue::from_str(&e)
-}
+mod error;
+pub use error::RumboError;
 
 /// Una sesión del laboratorio: pista + perfil congelado + auto.
 #[wasm_bindgen]
@@ -21,24 +20,31 @@ pub struct Lab {
 
 #[wasm_bindgen]
 impl Lab {
+    /// Build a laboratory session.
+    ///
+    /// # Errors
+    /// Returns a coded string when the track or profile is invalid.
     #[wasm_bindgen(constructor)]
     pub fn new(track_json: &str, profile_json: &str, seed: u32) -> Result<Lab, JsValue> {
-        let track = TrackDef::from_json(track_json).map_err(js_err)?;
+        let track = TrackDef::from_json(track_json).map_err(RumboError::InvalidTrack)?;
         let profile: ProfileFile =
-            serde_json::from_str(profile_json).map_err(|e| js_err(format!("perfil inválido: {e}")))?;
-        let sim = Simulation::new(&track, &profile, seed as u64).map_err(js_err)?;
+            serde_json::from_str(profile_json).map_err(|e| RumboError::InvalidProfile(e.to_string()))?;
+        let sim = Simulation::new(&track, &profile, seed as u64).map_err(RumboError::InvalidTrack)?;
         Ok(Lab { sim, autopilot: Autopilot::default(), state: vec![0.0; STATE_LEN] })
     }
 
     /// Dev tool (AR28): a session re-simulated from `replay_json` up to `tick`
-    /// (`sim_core::replay::resimulate_until`). Rejections are returned as strings, like `new`.
+    /// (`sim_core::replay::resimulate_until`).
+    ///
+    /// # Errors
+    /// Returns a coded string for an invalid track, replay, or seek tick.
     pub fn from_replay(track_json: &str, replay_json: &str, tick: f64) -> Result<Lab, JsValue> {
         if !(tick.is_finite() && tick >= 0.0 && tick.fract() == 0.0) {
-            return Err(js_err(format!("tick inválido: {tick}")));
+            return Err(RumboError::InvalidReplay(format!("tick inválido: {tick}")).into());
         }
-        let track = TrackDef::from_json(track_json).map_err(js_err)?;
-        let manifest = ReplayManifest::from_json(replay_json).map_err(js_err)?;
-        let sim = sim_core::replay::resimulate_until(&manifest, &track, tick as u64).map_err(js_err)?;
+        let track = TrackDef::from_json(track_json).map_err(RumboError::InvalidTrack)?;
+        let manifest = ReplayManifest::from_json(replay_json).map_err(RumboError::InvalidReplay)?;
+        let sim = sim_core::replay::resimulate_until(&manifest, &track, tick as u64).map_err(RumboError::InvalidReplay)?;
         Ok(Lab { sim, autopilot: Autopilot::default(), state: vec![0.0; STATE_LEN] })
     }
 
@@ -153,7 +159,7 @@ impl Lab {
     ///
     /// Devuelve el mensaje de serialización si el replay no puede codificarse.
     pub fn replay_json(&self) -> Result<String, JsValue> {
-        serde_json::to_string(&self.sim.replay()).map_err(|e| js_err(e.to_string()))
+        serde_json::to_string(&self.sim.replay()).map_err(|e| RumboError::ExportFailed(e.to_string()).into())
     }
 
     fn part(&self, name: &str) -> Option<&sim_core::track::MeshPart> {
@@ -174,9 +180,12 @@ pub fn state_layout() -> String {
 }
 
 /// Esquema de parámetros del perfil (JSON).
+///
+/// # Errors
+/// Returns a coded string if schema serialization fails.
 #[wasm_bindgen]
 pub fn profile_schema() -> Result<String, JsValue> {
-    profile::schema_json().map_err(|e| js_err(e.to_string()))
+    profile::schema_json().map_err(|e| RumboError::SchemaFailed(e.to_string()).into())
 }
 
 /// Perfil por defecto (JSON de `ProfileFile`).
@@ -191,12 +200,15 @@ pub fn default_profile() -> String {
 }
 
 /// Re-simula un replay y devuelve el informe (JSON de `VerifyReport`).
+///
+/// # Errors
+/// Returns a coded string when verification or report serialization fails.
 #[wasm_bindgen]
 pub fn verify_replay(track_json: &str, replay_json: &str) -> Result<String, JsValue> {
-    let track = TrackDef::from_json(track_json).map_err(js_err)?;
-    let manifest = ReplayManifest::from_json(replay_json).map_err(js_err)?;
-    let report = sim_core::verify_replay(&manifest, &track).map_err(js_err)?;
-    serde_json::to_string(&report).map_err(|e| js_err(e.to_string()))
+    let track = TrackDef::from_json(track_json).map_err(RumboError::InvalidTrack)?;
+    let manifest = ReplayManifest::from_json(replay_json).map_err(RumboError::InvalidReplay)?;
+    let report = sim_core::verify_replay(&manifest, &track).map_err(RumboError::InvalidReplay)?;
+    serde_json::to_string(&report).map_err(|e| RumboError::ExportFailed(e.to_string()).into())
 }
 
 /// Geometría del auto para el render: semiejes del chasis, radio de rueda y anclajes.

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ERROR_CATALOG, REQUIRED_CAPABILITIES } from '@rumbo/contracts';
 
 const pkg = fileURLToPath(new URL('../', import.meta.url));
 const es = JSON.parse(readFileSync(new URL('./es.json', import.meta.url), 'utf8'));
@@ -36,7 +37,7 @@ test('every key in es.json follows pantalla.elemento in camelCase and has text',
 
 test('every literal key used by the ui source exists in es.json', () => {
   // t('…') calls and the key literals returned by helpers such as idleKey().
-  const literal = /\bt\(\s*'([^'$]+)'|'((?:lab|hud|errors|fatal)\.[A-Za-z0-9_.]+)'/g;
+  const literal = /\bt\(\s*'([^'$]+)'|'((?:lab|hud|errors|fatal|capability)\.[A-Za-z0-9_.]+)'/g;
   const used = new Set();
   for (const file of sources(pkg)) {
     for (const m of readFileSync(file, 'utf8').matchAll(literal)) used.add([m[1] ?? m[2], relative(pkg, file)]);
@@ -50,6 +51,11 @@ test('every notice code the store can send has a translation', () => {
   const snapshot = readFileSync(new URL('../ui-snapshot.ts', import.meta.url), 'utf8');
   const declared = /UiNoticeCode =([^;]+);/.exec(snapshot)[1].match(/'([A-Z_]+)'/g).map((s) => s.slice(1, -1));
   assert.deepEqual(declared.sort(), [...NOTICE_CODES].sort());
+});
+
+test('every catalogued error and required capability has a translation', () => {
+  for (const code of Object.keys(ERROR_CATALOG)) assert.ok(keys.has('errors.' + code), code);
+  for (const name of REQUIRED_CAPABILITIES) assert.ok(keys.has('capability.' + name), name);
 });
 
 test('the instance is created per mount, never the global i18next', () => {

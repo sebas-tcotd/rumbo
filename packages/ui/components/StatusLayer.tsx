@@ -16,15 +16,3 @@ export function Notice({ notice }: { notice: UiNotice }) {
     </div>
   );
 }
-
-/** Provisional fatal state (the real Fatal screen arrives in 0.8): technical message shown as is. */
-export function Fatal({ message }: { message: string }) {
-  const { t } = useTranslation();
-  return (
-    <div className="fatal" role="alert">
-      <strong>{t('fatal.title')}</strong>
-      <p>{message}</p>
-      <p>{t('fatal.reload')}</p>
-    </div>
-  );
-}

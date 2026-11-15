@@ -2,6 +2,8 @@ use tiff::decoder::{Decoder, DecodingResult};
 use tiff::tags::Tag;
 use track_compiler_core::{dem::Dem, hash::Fnv64};
 
+use crate::RumboError;
+
 const TAG_PIXEL_SCALE: u16 = 33550;
 const TAG_TIEPOINT: u16 = 33922;
 const TAG_GEOKEYS: u16 = 34735;
@@ -11,9 +13,9 @@ const RASTER_PIXEL_IS_POINT: u16 = 2;
 /// Loads a georeferenced raster once.
 /// # Errors
 /// Returns file access and decoding errors.
-pub fn from_path(path: &str) -> Result<Dem, String> {
-    let bytes = std::fs::read(path).map_err(|e| format!("no se pudo leer {path}: {e}"))?;
-    from_geotiff(&bytes)
+pub fn from_path(path: &str) -> Result<Dem, RumboError> {
+    let bytes = std::fs::read(path).map_err(|e| RumboError::Io(format!("no se pudo leer {path}: {e}")))?;
+    from_geotiff(&bytes).map_err(RumboError::Compile)
 }
 
 /// Decodes a single-band GeoTIFF and records the identity of its original bytes.

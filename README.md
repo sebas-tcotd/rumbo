@@ -57,8 +57,8 @@ Cada mínimo lo fija la API más nueva que el juego necesita (datos de
 | Workers de módulo (`new Worker(url, { type: 'module' })`) | 80 | **114** | 15 | Firefox |
 | Gamepad API | 21 / 12 | 29 | 10.1 | — (opcional: sin mando se juega con teclado) |
 
-- El juego detecta **funciones, no el user agent**: si falta una de las APIs obligatorias muestra una
-  pantalla de navegador no soportado en vez de fallar a medias (llega con la historia 0.8).
+- Al arrancar, Rumbo comprueba las APIs obligatorias por función. Si falta alguna, la pantalla
+  «Algo falló» enumera las funciones ausentes y permite reintentar o copiar un diagnóstico.
 - WebGPU es opcional: se usa si está disponible y, si no, el render cae a WebGL 2.
 - En las versiones actuales de cada navegador se verifica el determinismo en CI (Chromium, Firefox, WebKit
   y Safari real; ver [S4](#s4--determinismo)).

@@ -3,6 +3,12 @@
 Browser adapters of the ports in `@rumbo/contracts`. `createWebPlatform()` is called once by
 `apps/web/src/main.tsx`; no other package instantiates these adapters.
 
+- `probeCapabilities(window)` comprueba WebGL 2, WebAssembly, compresión `deflate-raw`, workers de módulo
+  e IndexedDB antes de iniciar los adaptadores. `missingRequired(report)` devuelve todas las ausencias.
+- Cuando el navegador bloquea el acceso a mandos, el teclado sigue operativo y el logger inyectado
+  registra `GAMEPAD_UNAVAILABLE` una vez por sesión.
+- `copyText(window, text)` devuelve `false` si el portapapeles no está disponible o rechaza la escritura.
+
 | Folder | Port | State |
 |---|---|---|
 | `input/` | `InputSourcePort` | Keyboard + standard gamepad (`createKeyboardGamepadInput`) |

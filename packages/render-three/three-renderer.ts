@@ -45,6 +45,7 @@ export class ThreeRenderer implements RendererPort, RenderDebugPort {
   private readonly container: HTMLElement;
   private readonly resizeObs: ResizeObserver;
   private status: RenderBackend = 'iniciando';
+  private disposed = false;
   private I: StateIndex | null = null;
   private car: CarRig | null = null;
   private ghost: THREE.Group | null = null;
@@ -70,6 +71,7 @@ export class ThreeRenderer implements RendererPort, RenderDebugPort {
   /** Initialises the GPU backend. `frame()` must not be called before this resolves. */
   async init(): Promise<void> {
     await this.renderer.init();
+    if (this.disposed) return;
     const webgpu = (this.renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend;
     this.status = webgpu ? 'WebGPU' : 'WebGL 2';
     this.resize();
@@ -96,8 +98,11 @@ export class ThreeRenderer implements RendererPort, RenderDebugPort {
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     this.resizeObs.disconnect();
-    this.renderer.dispose();
+    // Three waits for pending initialization before stopping its own animation loop.
+    void this.renderer.dispose().catch(() => {});
     this.renderer.domElement.remove();
   }
 

@@ -45,7 +45,7 @@ function host(t, fault, deferInit = false) {
       worker.on('message', onMessage);
       worker.on('error', onError);
     });
-    worker.postMessage({ protocolVersion: 1, generation: 1, ...command }, transfer);
+    worker.postMessage({ protocolVersion: 2, generation: 1, ...command }, transfer);
     await done;
     return messages;
   };
@@ -118,7 +118,7 @@ for (const [fault, command] of [
 
 test('public control rejects bad versions, invalid fields and unsupported future loads', async (t) => {
   for (const invalid of [
-    { ...load, protocolVersion: 2 },
+    { ...load, protocolVersion: 1 },
     { type: 'input', frame: { steer: 'x' } },
     { type: 'unrecognized' },
   ]) {
@@ -151,7 +151,7 @@ test('input quantization, saturation and one-tick flags survive the wire', async
 });
 
 test('superseded and disposed async loads cannot publish a stale ready', async (t) => {
-  const first = { ...load, generation: 1, protocolVersion: 1 };
+  const first = { ...load, generation: 1, protocolVersion: 2 };
   const loadAgain = host(t, undefined, true);
   const replies = await loadAgain({ first, duringInit: { ...first, generation: 2 } });
   assert.deepEqual(
@@ -163,7 +163,7 @@ test('superseded and disposed async loads cannot publish a stale ready', async (
   );
   const cancelled = host(t, undefined, true);
   assert.deepEqual(
-    await cancelled({ first, duringInit: { type: 'dispose', generation: 1, protocolVersion: 1 } }),
+    await cancelled({ first, duringInit: { type: 'dispose', generation: 1, protocolVersion: 2 } }),
     [],
   );
 });

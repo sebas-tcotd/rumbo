@@ -23,10 +23,34 @@
     "SIM_NOT_READY": "La simulación aún no está lista.",
     "INVALID_PROFILE": "El perfil no es válido; se mantiene la sesión actual.",
     "EXPORT_FAILED": "No se pudo exportar el replay.",
+    "SIM_FAILED": "La simulación se detuvo. Intenta iniciar el juego de nuevo.",
+    "WASM_LOAD_FAILED": "No se pudo cargar la simulación.",
+    "RENDER_INIT_FAILED": "No se pudo iniciar la vista 3D.",
+    "BROWSER_UNSUPPORTED": "Tu navegador no tiene todas las funciones que Rumbo necesita.",
+    "INVALID_TRACK": "La pista no es válida.",
+    "INVALID_REPLAY": "El replay no es válido.",
+    "SCHEMA_FAILED": "No se pudo leer el esquema de ajustes.",
+    "UNSUPPORTED_CAPABILITY": "Esta función aún no está disponible.",
+    "STORAGE_UNAVAILABLE": "No se pudieron guardar los ajustes.",
+    "GAMEPAD_UNAVAILABLE": "El mando no está disponible. Puedes jugar con el teclado.",
+    "WEBGPU_UNAVAILABLE": "WebGPU no está disponible.",
     "UNSUPPORTED_OPERATION": "Operación no disponible todavía: {{operation}}"
   },
   "fatal": {
-    "title": "La simulación se detuvo.",
-    "reload": "Recarga la página para iniciar otra sesión."
+    "title": "Algo falló",
+    "retry": "Reintentar",
+    "copyDiagnostic": "Copiar diagnóstico",
+    "copied": "Diagnóstico copiado.",
+    "copyFailed": "No se pudo copiar el diagnóstico. El texto está seleccionado para que lo copies a mano.",
+    "manualCopy": "Diagnóstico para copiar a mano",
+    "minimumVersions": "Versiones mínimas: Chrome/Edge 103+, Firefox 114+ y Safari 16.4+.",
+    "supportedBrowsersLink": "Ver navegadores soportados"
+  },
+  "capability": {
+    "webgl2": "WebGL 2",
+    "wasm": "WebAssembly",
+    "compressionStream": "Compresión y descompresión (deflate-raw)",
+    "moduleWorker": "Workers de módulo",
+    "indexedDb": "IndexedDB"
   }
 }

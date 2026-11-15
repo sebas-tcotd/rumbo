@@ -8,6 +8,7 @@ description = "Compilador de circuitos desde geografía real (S1: OSM, grafo y r
 [dependencies]
 track-compiler-core = { path = "../track-compiler-core" }
 serde_json.workspace = true
+thiserror.workspace = true
 
 tiff.workspace = true
 

@@ -1,9 +1,11 @@
 import {
+  err,
   isResponse,
   PROTOCOL_VERSION,
   STATE_FIELDS,
   type HashRequest,
   type LinkCodecPort,
+  type LogPort,
   type ResponseMessage,
   type SimPort,
   type SimResponse,
@@ -11,7 +13,7 @@ import {
 } from '@rumbo/contracts';
 
 /** State views are host-owned scratch. Subscribers retaining earlier frames must copy. */
-export function createWorkerSim(receive: (response: SimResponse) => void): SimPort & LinkCodecPort {
+export function createWorkerSim(receive: (response: SimResponse) => void, logger?: LogPort): SimPort & LinkCodecPort {
   const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
   const prev = new Float32Array(STATE_FIELDS.length);
   const curr = new Float32Array(STATE_FIELDS.length);
@@ -44,12 +46,12 @@ export function createWorkerSim(receive: (response: SimResponse) => void): SimPo
     rejectPending('SIM_CLOSED');
     worker.terminate();
   }
-  function fail(error: unknown) {
+  function fail(error: unknown, code: Extract<SimResponse, { type: 'fatal' }>['code'] = 'SIM_FAILED') {
     if (closed) return;
     dispose();
-    receive({
+    deliver({
       type: 'fatal',
-      code: 'SIM_FAILED',
+      code,
       message: (error instanceof Error ? error.message : String(error)) || 'SIM_FAILED',
     });
   }
@@ -60,7 +62,7 @@ export function createWorkerSim(receive: (response: SimResponse) => void): SimPo
     try {
       receive(response);
     } catch (error) {
-      console.error('SIM_HOST_CALLBACK_FAILED', error);
+      logger?.log('error', 'sim', 'SIM_HOST_CALLBACK_FAILED', { detail: error });
     }
   }
   worker.onmessage = (event: MessageEvent<ResponseMessage>) => {
@@ -71,7 +73,7 @@ export function createWorkerSim(receive: (response: SimResponse) => void): SimPo
       if (!isResponse(msg)) throw new Error('INVALID_RESPONSE');
       // A fatal closes the single worker, even when the host has already queued a replacement load.
       if (msg.type === 'fatal') {
-        fail(msg.message);
+        fail(msg.message, msg.code);
         return;
       }
       // Content hashes are stateless and keyed by request, so they survive session changes.
@@ -149,8 +151,8 @@ export function createWorkerSim(receive: (response: SimResponse) => void): SimPo
   return {
     send,
     dispose,
-    encodeChallenge: async () => ({ ok: false, code: 'UNSUPPORTED_CAPABILITY' }),
-    decodeChallenge: async () => ({ ok: false, code: 'UNSUPPORTED_CAPABILITY' }),
+    encodeChallenge: async () => err({ code: 'UNSUPPORTED_CAPABILITY' }),
+    decodeChallenge: async () => err({ code: 'UNSUPPORTED_CAPABILITY' }),
     hashContent(bytes) {
       if (closed) return Promise.reject(new Error('SIM_CLOSED'));
       const requestId = ++nextRequest;
