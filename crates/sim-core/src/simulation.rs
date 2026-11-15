@@ -8,7 +8,7 @@ use crate::input::InputFrame;
 use crate::mathx::{basis_to_quat, is_finite3, Quat, Vec3};
 use crate::profile::{ProfileFile, VehicleProfile};
 use crate::race::{LapEvent, LapTimer};
-use crate::replay::{Recorder, ReplayManifest, StateCheck, CHECK_EVERY, REPLAY_FORMAT};
+use crate::replay::{Recorder, ReplayManifest, StateCheck, CHECK_EVERY, REPLAY_FORMAT_V1};
 use crate::track::{CompiledTrack, TrackDef};
 use crate::vehicle::{Vehicle, WHEEL_RADIUS};
 use crate::TICK_HZ;
@@ -395,7 +395,7 @@ impl Simulation {
     /// Replay de toda la sesión hasta el tick actual.
     pub fn replay(&self) -> ReplayManifest {
         ReplayManifest {
-            format: REPLAY_FORMAT.into(),
+            format: REPLAY_FORMAT_V1.into(),
             physics_version: crate::PHYSICS_VERSION.into(),
             compiler_version: crate::COMPILER_VERSION.into(),
             tick_hz: TICK_HZ,

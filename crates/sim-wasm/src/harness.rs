@@ -5,7 +5,7 @@
 //! by `apps/web/dist`) does not, and `ci/bundle/check-wasm-size.mjs` fails if `trace_replay` leaks into it.
 //! Nothing here runs inside the game loop: it only drives the public `Simulation` API from outside.
 use crate::RumboError;
-use sim_core::replay::REPLAY_FORMAT;
+use sim_core::replay::REPLAY_FORMAT_V1;
 use sim_core::{InputFrame, ReplayManifest, Simulation, TrackDef, PHYSICS_VERSION};
 use std::fmt::Write as _;
 use wasm_bindgen::prelude::*;
@@ -31,7 +31,7 @@ pub struct Trace {
 pub fn trace(track_json: &str, replay_json: &str) -> Result<Trace, RumboError> {
     let track = TrackDef::from_json(track_json).map_err(RumboError::InvalidTrack)?;
     let manifest = ReplayManifest::from_json(replay_json).map_err(RumboError::InvalidReplay)?;
-    if manifest.format != REPLAY_FORMAT {
+    if manifest.format != REPLAY_FORMAT_V1 {
         return Err(RumboError::InvalidReplay(format!("formato desconocido: {}", manifest.format)));
     }
     if manifest.physics_version != PHYSICS_VERSION {

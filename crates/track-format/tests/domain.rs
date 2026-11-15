@@ -54,9 +54,10 @@ fn input_profile_and_full_replay_roundtrip() {
 fn input_wire_fixture_and_legacy_versions() {
     use track_format::version::*;
     assert_eq!(
-        (PHYSICS_VERSION, COMPILER_VERSION, TICK_HZ, REPLAY_FORMAT),
+        (PHYSICS_VERSION, COMPILER_VERSION, TICK_HZ, REPLAY_FORMAT_V1),
         ("0.5.0", "0.2.0", 120, "race-lab-replay/1")
     );
+    assert_eq!((REPLAY_FORMAT_V2, INPUT_HZ, TICKS_PER_FRAME, CHECK_EVERY_TICKS), ("rumbo-replay/2", 60, 2, 1200));
     let input = InputFrame { steer: 0, throttle: 200, brake: 3, flags: 7 };
     assert_eq!(codec::encode(&input).unwrap(), b"RTF\0\x01\0\0\xc8\x03\x07");
 }

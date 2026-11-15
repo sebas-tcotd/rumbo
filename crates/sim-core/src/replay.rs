@@ -8,7 +8,7 @@ use serde::Serialize;
 /// Cada cuántos ticks se guarda un hash de control (5 s a 120 Hz).
 pub const CHECK_EVERY: u64 = 600;
 
-pub use track_format::domain::replay::{ReplayManifest, StateCheck, REPLAY_FORMAT};
+pub use track_format::domain::replay::{ReplayManifest, StateCheck, REPLAY_FORMAT_V1};
 
 #[derive(Clone, Debug, Default)]
 pub struct Recorder {
@@ -47,7 +47,7 @@ pub struct VerifyReport {
 /// # Errors
 /// Rejects unknown replay formats and invalid track source data.
 pub fn verify_replay(manifest: &ReplayManifest, track: &TrackDef) -> Result<VerifyReport, String> {
-    if manifest.format != REPLAY_FORMAT {
+    if manifest.format != REPLAY_FORMAT_V1 {
         return Err(format!("formato desconocido: {}", manifest.format));
     }
     let mut sim = Simulation::new(track, &manifest.profile, manifest.seed)?;
@@ -126,7 +126,7 @@ pub const MAX_SEEK_TICKS: u64 = 30 * 60 * 120;
 /// beyond the recorded inputs or beyond `MAX_SEEK_TICKS`. The bound is the inputs actually recorded,
 /// not the declared `ticks`, so the session returned is always exactly at `tick`.
 pub fn resimulate_until(manifest: &ReplayManifest, track: &TrackDef, tick: u64) -> Result<Simulation, String> {
-    if manifest.format != REPLAY_FORMAT {
+    if manifest.format != REPLAY_FORMAT_V1 {
         return Err(format!("formato desconocido: {}", manifest.format));
     }
     let recorded: u64 = manifest.inputs.iter().map(|run| u64::from(run[0])).sum();
