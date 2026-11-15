@@ -106,6 +106,17 @@ test('the same replay omitted everywhere (fixture, reference and every runner) s
   for (const e of REQUIRED_ENVS) assert.equal(m.cells[gone][e].ok, false);
 });
 
+test('a single runner still needs all eight unique cases', () => {
+  const gone = reference.cases[0].name;
+  const run = env('node', (r) => (r.case === gone ? null : r));
+  run.results.push(run.results[0]);
+  const m = evaluateMatrix([run], fixtures.filter((f) => f.name !== gone),
+    { ...reference, cases: reference.cases.slice(1) }, { requiredEnvs: ['node'] });
+  assert.equal(m.ok, false);
+  assert.match(m.problems.join('\n'), /node: caso duplicado/);
+  assert.match(m.problems.join('\n'), new RegExp(`node · ${gone}: falta el fixture`));
+});
+
 test('a hash changed in an intermediate tick fails even when the final hash is the same', () => {
   const c = reference.cases.find((x) => x.name === 'test-loop.autopilot');
   const tick = 1234;
@@ -130,6 +141,26 @@ test('an incomplete trace fails', () => {
 
 test('a missing native reference fails', () => {
   assert.equal(evaluateMatrix(full(), fixtures, undefined).ok, false);
+});
+
+test('invalid native traces fail without throwing or dropping the replay from the matrix', () => {
+  const [first, ...rest] = reference.cases;
+  for (const trace of [undefined, `${first.trace}a`, `g${first.trace.slice(1)}`]) {
+    const m = matrix(full(), fixtures, { ...reference, cases: [{ ...first, trace }, ...rest] });
+    assert.equal(m.ok, false);
+    assert.match(m.cells[first.name].safari.problems.join('\n'), /traza nativa inválida/);
+  }
+  const malformed = matrix(full(), fixtures, { ...reference, cases: {} });
+  assert.ok(malformed.problems.includes('estructura de la referencia nativa inválida'));
+  assert.ok(malformed.cases.includes(first.name));
+});
+
+test('an environment trace with a non-hex digit fails even when its length matches', () => {
+  const first = reference.cases[0];
+  const m = evaluateMatrix([env('node', (r) => (r.case === first.name ? { ...r, trace: `g${r.trace.slice(1)}` } : r))],
+    fixtures, reference, { requiredEnvs: ['node'] });
+  assert.equal(m.ok, false);
+  assert.match(m.cells[first.name].node.problems.join('\n'), /traza del entorno inválida/);
 });
 
 test('fixture checks must be consumed in order and match their ticks', () => {
@@ -161,7 +192,7 @@ test('the CLI writes the step summary and keeps a failing exit code', () => {
     const run = () => {
       const out = join(dir, 'summary.md');
       rmSync(out, { force: true });
-      const r = spawnSync(process.execPath, [join(here, 'summary.mjs'), join(dir, 'results'), '--reference', referencePath, '--step-summary', out], { encoding: 'utf8' });
+      const r = spawnSync(process.execPath, [join(here, 'summary.mjs'), join(dir, 'results'), '--artifacts', '--reference', referencePath, '--step-summary', out], { encoding: 'utf8' });
       return { status: r.status, md: readFileSync(out, 'utf8') };
     };
     write(full());
@@ -172,6 +203,20 @@ test('the CLI writes the step summary and keeps a failing exit code', () => {
     const bad = run();
     assert.equal(bad.status, 1);
     assert.match(bad.md, /falta el entorno edge/);
+    assert.match(bad.md, /falta el artefacto results-edge/);
+
+    write(full());
+    mkdirSync(join(dir, 'results', 'results-extra'));
+    writeFileSync(join(dir, 'results', 'results-extra', 'log.txt'), 'unexpected artifact');
+    const unexpected = run();
+    assert.equal(unexpected.status, 1);
+    assert.match(unexpected.md, /artefacto inesperado: results-extra/);
+
+    write(full());
+    writeFileSync(join(dir, 'results', 'results-safari', 'results-safari.json'), JSON.stringify(env('edge')));
+    const mislabeled = run();
+    assert.equal(mislabeled.status, 1);
+    assert.match(mislabeled.md, /entorno declarado edge, se esperaba safari/);
     assert.equal(summarize({ dir: join(dir, 'nada'), referencePath, root }).ok, false);
   } finally {
     rmSync(dir, { recursive: true, force: true });

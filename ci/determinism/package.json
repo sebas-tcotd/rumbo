@@ -5,7 +5,7 @@
   "description": "S4: re-simula los replays dorados con el WASM de prueba en Node, Chromium, Edge, Firefox, WebKit y Safari y los compara tick a tick con la referencia nativa.",
   "scripts": {
     "build": "pnpm run build:wasm && pnpm run build:reference",
-    "build:wasm": "wasm-pack build ../../crates/sim-wasm --target web --release --no-pack --out-dir ../../ci/determinism/wasm -- --features harness",
+    "build:wasm": "wasm-pack build ../../crates/sim-wasm --target web --release --no-pack --out-dir ../../ci/determinism/wasm -- --locked --features harness",
     "build:reference": "cargo run --release --locked -p sim-wasm --features harness --example trace_reference -- reference/native.json",
     "test": "node run.mjs --browser node",
     "node": "node run.mjs --browser node",

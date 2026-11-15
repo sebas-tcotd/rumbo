@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { listCases } from './cases.mjs';
-import { evaluateCase, REQUIRED_ENVS } from './evaluate.mjs';
+import { evaluateMatrix, REQUIRED_ENVS } from './evaluate.mjs';
 import { serve } from './server.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -106,25 +106,16 @@ try {
 }
 
 mkdirSync(outDir, { recursive: true });
-writeFileSync(join(outDir, `results-${browser}.json`), JSON.stringify({ browser, ...out }));
+const environment = { ...out, browser };
+writeFileSync(join(outDir, `results-${browser}.json`), JSON.stringify(environment));
 console.log(`${browser} · ${out.userAgent}${out.browserVersion ? ` (${out.browserVersion})` : ''} · física ${out.physics ?? '?'}`);
-let failed = 0;
-if (out.error) {
-  console.error(out.error);
-  failed++;
+const matrix = evaluateMatrix([environment], cases, reference, { requiredEnvs: [browser] });
+const results = Array.isArray(out.results) ? out.results : [];
+for (const name of matrix.cases) {
+  const result = results.find((r) => r?.case === name);
+  const { ok } = matrix.cells[name][browser];
+  console.log(`${ok ? 'OK   ' : 'FALLA'} ${name.padEnd(36)} ${String(result?.report?.actualFinal ?? '').padEnd(16)} ${result?.ms ?? '?'} ms`);
 }
-if (out.physics !== undefined && out.physics !== reference.physicsVersion) {
-  console.error(`física ${out.physics}, referencia nativa ${reference.physicsVersion}`);
-  failed++;
-}
-const refBy = new Map(reference.cases.map((c) => [c.name, c]));
-const resBy = new Map(out.results.map((r) => [r.case, r]));
-for (const c of cases) {
-  const r = resBy.get(c.name);
-  const { ok, problems, firstMismatch } = evaluateCase(c, refBy.get(c.name), r);
-  const where = firstMismatch === null ? '' : ` · entorno ${browser}, replay ${c.name}, primer tick distinto ${firstMismatch}`;
-  console.log(`${ok ? 'OK   ' : 'FALLA'} ${c.name.padEnd(36)} ${String(r?.report?.actualFinal ?? '').padEnd(16)} ${r?.ms ?? '?'} ms${ok ? '' : `${where} · ${problems.join('; ')}`}`);
-  if (!ok) failed++;
-}
-console.log(failed ? `${failed} problemas` : `los ${cases.length} replays dan el mismo hash que nativo en cada tick`);
-process.exit(failed ? 1 : 0);
+for (const problem of matrix.problems) console.error(problem);
+console.log(matrix.ok ? `los ${matrix.cases.length} replays dan el mismo hash que nativo en cada tick` : `${matrix.problems.length} problemas`);
+process.exit(matrix.ok ? 0 : 1);

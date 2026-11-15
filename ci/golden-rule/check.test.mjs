@@ -122,6 +122,38 @@ test('a missing or non-numeric constant fails', () => {
   }
 });
 
+test('only the live PHYSICS_VERSION declaration supplies the bump', () => {
+  const r = repo();
+  try {
+    r.golden('a.json', '{"a":2}');
+    const comments = '/// pub const PHYSICS_VERSION: &str = "9.0.0";\n' +
+      '/* historical values /* nested note */\npub const PHYSICS_VERSION: &str = "8.0.0";\n*/\n';
+    r.version('0.5.0', comments);
+    assert.match(violations(r.pr(r.commit('physics: unchanged version'))).join('\n'), /PHYSICS_VERSION no sube/);
+
+    const base = r.git('rev-parse', 'HEAD');
+    r.golden('a.json', '{"a":3}');
+    r.write(VERSION_FILE, `${comments}pub const PHYSICS_VERSION: /* version */ &str = r#"0.6.0"#;\n`);
+    assert.equal(r.pr(r.commit('physics: bump the live version'), base).ok, true);
+  } finally {
+    r.done();
+  }
+});
+
+test('a mode-only change to a golden still requires authorization', () => {
+  const r = repo();
+  try {
+    const path = `${GOLDEN_DIR}a.json`;
+    r.git('update-index', '--chmod=+x', path);
+    r.git('commit', '-q', '-m', 'chore: change golden mode');
+    const result = r.pr(r.git('rev-parse', 'HEAD'));
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.results[0].changes, [{ kind: 'M', path }]);
+  } finally {
+    r.done();
+  }
+});
+
 test('a bump made in another commit does not authorize the golden change', () => {
   const r = repo();
   try {

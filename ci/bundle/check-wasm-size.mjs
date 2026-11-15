@@ -33,6 +33,9 @@ export function gzipSize(bytes) {
  * export or a size above `limit` are failures.
  */
 export function checkWasm(dist, limit = LIMIT) {
+  if (!Number.isSafeInteger(limit) || limit <= 0) {
+    return { ok: false, problems: ['--limit debe ser un entero positivo en bytes'], report: [] };
+  }
   const problems = [];
   const report = [];
   if (!existsSync(dist)) return { ok: false, problems: [`no existe el build de publicación: ${dist}`], report };

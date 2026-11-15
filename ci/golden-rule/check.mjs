@@ -101,13 +101,13 @@ export function resolveRange(cwd, event) {
   return { commits: list([event.after, `^${event.before}`]), note: `push ${event.before.slice(0, 7)}..${event.after.slice(0, 7)}` };
 }
 
-/** Golden entries of a tree: path → blob id. */
+/** Golden entries of a tree: path → Git mode, type and object ID. */
 export function goldenTree(cwd, rev) {
   const out = git(cwd, ['ls-tree', '-r', '-z', rev, '--', GOLDEN_DIR]);
   const map = new Map();
   for (const entry of out.split('\0').filter(Boolean)) {
-    const [meta, path] = entry.split('\t');
-    map.set(path, meta.split(' ')[2]);
+    const tab = entry.indexOf('\t');
+    map.set(entry.slice(tab + 1), entry.slice(0, tab));
   }
   return map;
 }
@@ -115,7 +115,34 @@ export function goldenTree(cwd, rev) {
 /** PHYSICS_VERSION at `rev`, or null when the file or the constant is missing. */
 export function readVersion(cwd, rev) {
   const src = tryGit(cwd, ['show', `${rev}:${VERSION_FILE}`]);
-  return src === null ? null : (/pub const PHYSICS_VERSION: &str = "([^"]*)";/.exec(src)?.[1] ?? null);
+  if (src === null) return null;
+
+  // Read Rust tokens so comments and string literals cannot be mistaken for declarations.
+  const token = /\/\/[^\r\n]*|\/\*|[bc]?r(#*)"[\s\S]*?"\1|[bc]?"(?:\\[\s\S]|[^"\\])*"|'(?:\\.|[^'\\])'|[A-Za-z_]\w*|[^\s]/g;
+  const block = /\/\*|\*\//g;
+  const tokens = [];
+  let nesting = 0;
+  for (let match; (match = token.exec(src));) {
+    const value = match[0];
+    if (value.startsWith('//')) continue;
+    if (value === '/*') {
+      block.lastIndex = token.lastIndex;
+      let depth = 1;
+      for (let delimiter; depth && (delimiter = block.exec(src));) depth += delimiter[0] === '/*' ? 1 : -1;
+      if (depth) return null;
+      token.lastIndex = block.lastIndex;
+      continue;
+    }
+    if (nesting === 0) tokens.push(value);
+    if (value === '{' || value === '(' || value === '[') nesting++;
+    if (value === '}' || value === ')' || value === ']') nesting--;
+  }
+
+  const declaration = ['pub', 'const', 'PHYSICS_VERSION', ':', '&', 'str', '='];
+  const at = tokens.findIndex((_, i) => declaration.every((part, j) => tokens[i + j] === part));
+  if (at < 0 || tokens[at + declaration.length + 1] !== ';') return null;
+  const literal = tokens[at + declaration.length];
+  return /^"([^"\\]*)"$/.exec(literal)?.[1] ?? /^r(#*)"([\s\S]*)"\1$/.exec(literal)?.[2] ?? null;
 }
 
 export function parseVersion(v) {
@@ -140,9 +167,10 @@ export function goldenChanges(cwd, sha, parents) {
   const modified = changed.filter((p) => !added.includes(p) && !deleted.includes(p));
   const changes = modified.map((path) => ({ kind: 'M', path }));
   const usedAdds = new Set();
+  const objectId = (entry) => entry?.split(' ')[2];
   for (const from of deleted) {
-    const blobs = new Set(before.map((m) => m.get(from)).filter(Boolean));
-    const to = added.find((a) => !usedAdds.has(a) && blobs.has(cur.get(a)));
+    const blobs = new Set(before.map((m) => objectId(m.get(from))).filter(Boolean));
+    const to = added.find((a) => !usedAdds.has(a) && blobs.has(objectId(cur.get(a))));
     if (to) {
       usedAdds.add(to);
       changes.push({ kind: 'R', from, path: to });

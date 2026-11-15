@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "wasm-pack build . --target web --release --out-dir pkg"
+    "build": "wasm-pack build . --target web --release --out-dir pkg -- --locked"
   },
   "exports": {
     ".": { "types": "./pkg/sim_wasm.d.ts", "default": "./pkg/sim_wasm.js" },

@@ -1,10 +1,12 @@
 // Story 0.9: the WASM budget check passes at the limit, fails above it, fails without a binary and fails if
 // the harness export leaks into the publication build. Uses temporary hand-made modules.
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { checkWasm, gzipSize, LIMIT } from './check-wasm-size.mjs';
 
 /** Minimal valid module exporting a memory under each name (WASM binary format, sections 5 and 7). */
@@ -43,6 +45,20 @@ function dist(files) {
 
 test('the budget is 1 500 000 gzip bytes, inclusive', () => {
   assert.equal(LIMIT, 1_500_000);
+});
+
+test('invalid or missing CLI limit overrides fail', () => {
+  const dir = dist({ 'sim_wasm_bg-abc123.wasm': moduleWithExports() });
+  try {
+    const script = fileURLToPath(new URL('./check-wasm-size.mjs', import.meta.url));
+    for (const override of [[], ['nope'], ['Infinity'], ['0'], ['2.5']]) {
+      const result = spawnSync(process.execPath, [script, '--dist', dir, '--limit', ...override], { encoding: 'utf8' });
+      assert.equal(result.status, 1, result.stderr);
+      assert.match(result.stdout, /--limit debe ser un entero positivo/);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('a binary exactly at the limit passes and one byte over fails', () => {

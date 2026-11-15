@@ -115,4 +115,4 @@ jobs:
           # Nothing is installed here, so there is no pnpm store to cache.
           package-manager-cache: false
       # Writes the table to the step summary itself (no pipe), so the step keeps the script's exit code.
-      - run: node ci/determinism/summary.mjs all-results --step-summary "$GITHUB_STEP_SUMMARY"
+      - run: node ci/determinism/summary.mjs all-results --artifacts --step-summary "$GITHUB_STEP_SUMMARY"

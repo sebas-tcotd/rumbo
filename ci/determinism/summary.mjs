@@ -2,32 +2,56 @@
 // y los ocho replays por identidad, un resultado por caso y entorno con un hash por tick declarado, igual
 // a la referencia nativa en cada tick. Escribe una tabla Markdown y sale con 1 ante cualquier problema.
 //
-// Uso: node summary.mjs <carpeta con results-*.json> [--reference reference/native.json] [--step-summary <archivo>]
+// Uso: node summary.mjs <carpeta con resultados> [--artifacts] [--reference reference/native.json] [--step-summary <archivo>]
+// --artifacts exige un subdirectorio results-<entorno> por cada artefacto descargado en CI.
 // --step-summary agrega la tabla a ese archivo ($GITHUB_STEP_SUMMARY) sin tubería, así el código de
 // salida del script es el del paso.
 import { appendFileSync, existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { listCases } from './cases.mjs';
-import { evaluateMatrix } from './evaluate.mjs';
+import { evaluateMatrix, REQUIRED_ENVS } from './evaluate.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-/** Reads every results-*.json under `dir` (artifacts land in one subfolder each). Unreadable files are problems. */
-export function readEnvs(dir) {
+/** Reads flat local reports or one report per downloaded artifact directory. */
+export function readEnvs(dir, artifacts = false) {
   const problems = [];
   if (!existsSync(dir)) return { envs: [], problems: [`no existe la carpeta de resultados: ${dir}`] };
-  const files = readdirSync(dir, { recursive: true })
-    .map(String)
-    .filter((f) => /results-[\w-]+\.json$/.test(f))
-    .sort();
+  const entries = readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.name.startsWith('results-'));
+  const artifactLayout = artifacts || entries.some((entry) => entry.isDirectory());
+  const names = new Map(REQUIRED_ENVS.map((env) => [artifactLayout ? `results-${env}` : `results-${env}.json`, env]));
   const envs = [];
-  for (const f of files) {
-    try {
-      envs.push(JSON.parse(readFileSync(join(dir, f), 'utf8')));
-    } catch (e) {
-      problems.push(`${f}: ${e.message}`);
+  const seen = new Set();
+  for (const entry of entries) {
+    const env = names.get(entry.name);
+    if (!env || (artifactLayout ? !entry.isDirectory() : !entry.isFile())) {
+      problems.push(`${artifactLayout ? 'artefacto' : 'resultado'} inesperado: ${entry.name}`);
+      continue;
     }
+    seen.add(entry.name);
+    const filename = `results-${env}.json`;
+    const file = artifactLayout ? join(entry.name, filename) : filename;
+    try {
+      if (artifactLayout) {
+        const contents = readdirSync(join(dir, entry.name), { withFileTypes: true });
+        if (contents.length !== 1 || contents[0].name !== filename || !contents[0].isFile()) {
+          problems.push(`${entry.name}: se esperaba únicamente ${filename}`);
+          continue;
+        }
+      }
+      const report = JSON.parse(readFileSync(join(dir, file), 'utf8'));
+      if (report?.browser !== env) {
+        problems.push(`${file}: entorno declarado ${report?.browser ?? 'ausente'}, se esperaba ${env}`);
+        continue;
+      }
+      envs.push(report);
+    } catch (e) {
+      problems.push(`${file}: ${e.message}`);
+    }
+  }
+  if (artifactLayout) {
+    for (const name of names.keys()) if (!seen.has(name)) problems.push(`falta el artefacto ${name}`);
   }
   return { envs, problems };
 }
@@ -39,8 +63,8 @@ function cell(c) {
 }
 
 /** Builds the Markdown report and the verdict. */
-export function summarize({ dir, referencePath, root }) {
-  const { envs, problems: readProblems } = readEnvs(dir);
+export function summarize({ dir, referencePath, root, artifacts }) {
+  const { envs, problems: readProblems } = readEnvs(dir, artifacts);
   let reference;
   const problems = [...readProblems];
   try {
@@ -87,6 +111,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     dir,
     referencePath: resolve(arg('--reference', join(here, 'reference/native.json'))),
     root: resolve(here, '../..'),
+    artifacts: process.argv.includes('--artifacts'),
   });
   console.log(markdown);
   const stepSummary = arg('--step-summary');
