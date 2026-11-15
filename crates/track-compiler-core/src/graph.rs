@@ -72,7 +72,10 @@ impl RoadClass {
     }
 
     fn is_link(self) -> bool {
-        matches!(self, Self::MotorwayLink | Self::TrunkLink | Self::PrimaryLink | Self::SecondaryLink | Self::TertiaryLink)
+        matches!(
+            self,
+            Self::MotorwayLink | Self::TrunkLink | Self::PrimaryLink | Self::SecondaryLink | Self::TertiaryLink
+        )
     }
 
     /// Carriles totales cuando OSM no lo dice.
@@ -256,7 +259,10 @@ fn attrs(way: &Way) -> Result<WayAttrs, &'static str> {
         _ => Oneway::Both,
     };
 
-    let lanes_tag = tags.get("lanes").and_then(|l| l.split(';').next()?.trim().parse::<u32>().ok()).filter(|l| (1..=12).contains(l));
+    let lanes_tag = tags
+        .get("lanes")
+        .and_then(|l| l.split(';').next()?.trim().parse::<u32>().ok())
+        .filter(|l| (1..=12).contains(l));
     let lanes = lanes_tag.unwrap_or_else(|| class.default_lanes(oneway != Oneway::Both));
     let width_tag = tags.get("width").and_then(|w| parse_meters(w));
     let (width_m, width_estimated) = match width_tag {
@@ -266,10 +272,13 @@ fn attrs(way: &Way) -> Result<WayAttrs, &'static str> {
 
     let bridge = yes(tags, "bridge");
     let tunnel = yes(tags, "tunnel") && tags.get("tunnel").map(String::as_str) != Some("building_passage");
-    let layer = tags
-        .get("layer")
-        .and_then(|l| l.trim().parse::<i32>().ok())
-        .unwrap_or(if bridge { 1 } else if tunnel { -1 } else { 0 });
+    let layer = tags.get("layer").and_then(|l| l.trim().parse::<i32>().ok()).unwrap_or(if bridge {
+        1
+    } else if tunnel {
+        -1
+    } else {
+        0
+    });
 
     Ok(WayAttrs {
         class,
@@ -306,7 +315,11 @@ impl RoadGraph {
             return Err("el extracto no tiene vías conducibles por autos".into());
         }
         if let Some(n) = skipped.get("access") {
-            diags.push(Diagnostic::new(Severity::Info, "access-excluded", format!("{n} vías con acceso restringido quedaron fuera")));
+            diags.push(Diagnostic::new(
+                Severity::Info,
+                "access-excluded",
+                format!("{n} vías con acceso restringido quedaron fuera"),
+            ));
         }
 
         // 2. Marco local.
@@ -351,8 +364,12 @@ impl RoadGraph {
             }
             if missing > 0 {
                 diags.push(
-                    Diagnostic::new(Severity::Warning, "missing-nodes", format!("la vía referencia {missing} nodos que no están en el extracto; se cortó"))
-                        .way(w.id),
+                    Diagnostic::new(
+                        Severity::Warning,
+                        "missing-nodes",
+                        format!("la vía referencia {missing} nodos que no están en el extracto; se cortó"),
+                    )
+                    .way(w.id),
                 );
             }
         }
@@ -401,7 +418,8 @@ impl RoadGraph {
                 if slice.len() < 2 || (slice.len() == 2 && slice[0] == slice[1]) {
                     continue;
                 }
-                let geo: Vec<GeoPoint> = slice.iter().map(|id| GeoPoint::new(ex.nodes[id].lat, ex.nodes[id].lon)).collect();
+                let geo: Vec<GeoPoint> =
+                    slice.iter().map(|id| GeoPoint::new(ex.nodes[id].lat, ex.nodes[id].lon)).collect();
                 let en: Vec<[f64; 2]> = geo.iter().map(|g| frame.to_en(*g)).collect();
                 let length_m = polyline_length(&en);
                 if length_m < 0.05 {
@@ -438,7 +456,10 @@ impl RoadGraph {
             diags.push(Diagnostic::new(
                 Severity::Info,
                 "width-estimated",
-                format!("{estimated} de {} aristas no tienen ancho en OSM; se estimó por carriles y tipo de vía", edges.len()),
+                format!(
+                    "{estimated} de {} aristas no tienen ancho en OSM; se estimó por carriles y tipo de vía",
+                    edges.len()
+                ),
             ));
         }
         if ex.relations > 0 {

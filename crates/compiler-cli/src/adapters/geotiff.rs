@@ -25,9 +25,8 @@ pub fn from_geotiff(bytes: &[u8]) -> Result<Dem, String> {
     let err = |e: tiff::TiffError| format!("GeoTIFF inválido: {e}");
     let mut d = Decoder::new(std::io::Cursor::new(bytes)).map_err(err)?;
     let (w, h) = d.dimensions().map_err(err)?;
-    let tie = d
-        .get_tag_f64_vec(Tag::Unknown(TAG_TIEPOINT))
-        .map_err(|_| "al GeoTIFF le falta ModelTiepoint".to_string())?;
+    let tie =
+        d.get_tag_f64_vec(Tag::Unknown(TAG_TIEPOINT)).map_err(|_| "al GeoTIFF le falta ModelTiepoint".to_string())?;
     let scale = d
         .get_tag_f64_vec(Tag::Unknown(TAG_PIXEL_SCALE))
         .map_err(|_| "al GeoTIFF le falta ModelPixelScale".to_string())?;
@@ -38,14 +37,7 @@ pub fn from_geotiff(bytes: &[u8]) -> Result<Dem, String> {
     let is_point = d
         .get_tag_u16_vec(Tag::Unknown(TAG_GEOKEYS))
         .ok()
-        .and_then(|keys| {
-            keys.as_chunks::<4>()
-                .0
-                .iter()
-                .skip(1)
-                .find(|k| k[0] == KEY_RASTER_TYPE)
-                .map(|k| k[3])
-        })
+        .and_then(|keys| keys.as_chunks::<4>().0.iter().skip(1).find(|k| k[0] == KEY_RASTER_TYPE).map(|k| k[3]))
         == Some(RASTER_PIXEL_IS_POINT);
     let half = if is_point { 0.0 } else { 0.5 };
     let data = match d.read_image().map_err(err)? {

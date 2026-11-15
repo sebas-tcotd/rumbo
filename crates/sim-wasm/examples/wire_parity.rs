@@ -5,8 +5,8 @@
 //! `protocol`, `load`, `fatal`, `header`, `link` and `codec` are hand-written Rust fixtures of contracts that
 //! have no Rust types yet (replay v2, link, challenge codec arrive in 0.10 and 6.7). They pin names and
 //! shapes only; real encoders and readers must replace them when those formats are implemented.
-use serde_json::{Value, json};
-use sim_core::{InputFrame, ProfileFile, STATE_LEN, Simulation, TrackDef};
+use serde_json::{json, Value};
+use sim_core::{InputFrame, ProfileFile, Simulation, TrackDef, STATE_LEN};
 use std::io::{self, Read};
 
 fn protocol() -> Value {
@@ -32,12 +32,7 @@ fn protocol() -> Value {
 fn fixture() -> Result<Value, Box<dyn std::error::Error>> {
     let track = TrackDef::from_json(include_str!("../../../assets/tracks/test-loop.json"))?;
     let mut sim = Simulation::new(&track, &ProfileFile::default(), 7)?;
-    let frame = InputFrame {
-        steer: -31,
-        throttle: 200,
-        brake: 3,
-        flags: 1,
-    };
+    let frame = InputFrame { steer: -31, throttle: 200, brake: 3, flags: 1 };
     sim.step(frame);
     let mut values = vec![0.0_f32; STATE_LEN];
     sim.write_state(&mut values);

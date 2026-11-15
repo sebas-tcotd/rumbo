@@ -61,10 +61,7 @@ pub fn verify_replay(manifest: &ReplayManifest, track: &TrackDef) -> Result<Veri
         message,
     };
     if sim.track_hash_hex() != manifest.track_hash {
-        return Ok(fail(
-            "la pista compilada no coincide con la del replay".into(),
-            0,
-        ));
+        return Ok(fail("la pista compilada no coincide con la del replay".into(), 0));
     }
     if sim.profile_hash_hex() != manifest.profile_hash {
         return Ok(fail("el perfil no coincide con su hash".into(), 0));
@@ -98,10 +95,8 @@ pub fn verify_replay(manifest: &ReplayManifest, track: &TrackDef) -> Result<Veri
     }
     let actual = sim.state_hash_hex();
     let laps_match = sim.timer().completed == manifest.laps_ticks;
-    let ok = first_mismatch.is_none()
-        && actual == manifest.final_state_hash
-        && laps_match
-        && sim.tick() == manifest.ticks;
+    let ok =
+        first_mismatch.is_none() && actual == manifest.final_state_hash && laps_match && sim.tick() == manifest.ticks;
     let message = if ok {
         "replay reproducido de forma idéntica".to_string()
     } else if let Some(t) = first_mismatch {

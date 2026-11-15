@@ -17,13 +17,47 @@ use rapier3d::prelude::*;
 /// Nombres de los campos del estado exportado, en orden. El front los lee de aquí
 /// (vía `state_layout`) para no duplicar índices a mano.
 pub const STATE_FIELDS: &[&str] = &[
-    "tick", "px", "py", "pz", "qx", "qy", "qz", "qw", "vx", "vy", "vz",
-    "speedKmh", "slipDeg", "steerDeg", "steerInput", "drift",
-    "contactFL", "contactFR", "contactRL", "contactRR",
-    "compFL", "compFR", "compRL", "compRR",
-    "surfFL", "surfFR", "surfRL", "surfRR",
-    "lap", "lapTicks", "lastLapTicks", "bestLapTicks", "nextCheckpoint",
-    "progressS", "trackLength", "yawRate", "latG", "throttle", "brake", "invalid", "sampleIndex",
+    "tick",
+    "px",
+    "py",
+    "pz",
+    "qx",
+    "qy",
+    "qz",
+    "qw",
+    "vx",
+    "vy",
+    "vz",
+    "speedKmh",
+    "slipDeg",
+    "steerDeg",
+    "steerInput",
+    "drift",
+    "contactFL",
+    "contactFR",
+    "contactRL",
+    "contactRR",
+    "compFL",
+    "compFR",
+    "compRL",
+    "compRR",
+    "surfFL",
+    "surfFR",
+    "surfRL",
+    "surfRR",
+    "lap",
+    "lapTicks",
+    "lastLapTicks",
+    "bestLapTicks",
+    "nextCheckpoint",
+    "progressS",
+    "trackLength",
+    "yawRate",
+    "latG",
+    "throttle",
+    "brake",
+    "invalid",
+    "sampleIndex",
 ];
 pub const STATE_LEN: usize = STATE_FIELDS.len();
 
@@ -227,11 +261,8 @@ impl Simulation {
     pub fn teleport_to_s(&mut self, s: f32) {
         let n = self.track.samples.len();
         let raw = if s.is_finite() { (s / self.track.spacing).round() as i64 } else { 0 };
-        let idx = if self.track.closed {
-            raw.rem_euclid(n as i64) as usize
-        } else {
-            raw.clamp(0, n as i64 - 1) as usize
-        };
+        let idx =
+            if self.track.closed { raw.rem_euclid(n as i64) as usize } else { raw.clamp(0, n as i64 - 1) as usize };
         let (p, r) = Self::pose_at(&self.track, idx);
         self.vehicle.place(&mut self.world, p, r);
         self.near_idx = idx;
@@ -316,18 +347,44 @@ impl Simulation {
         let opt = |x: Option<u64>| x.map_or(-1.0, |v| v as f32);
         let vals: [f32; STATE_LEN] = [
             self.tick as f32,
-            t.x, t.y, t.z, q.x, q.y, q.z, q.w, v.x, v.y, v.z,
-            tel.speed_kmh, tel.slip_deg, tel.steer_deg, veh.steer, veh.drift as u8 as f32,
-            veh.contact[0] as u8 as f32, veh.contact[1] as u8 as f32,
-            veh.contact[2] as u8 as f32, veh.contact[3] as u8 as f32,
-            veh.compression[0], veh.compression[1], veh.compression[2], veh.compression[3],
-            tel.surfaces[0] as f32, tel.surfaces[1] as f32, tel.surfaces[2] as f32, tel.surfaces[3] as f32,
+            t.x,
+            t.y,
+            t.z,
+            q.x,
+            q.y,
+            q.z,
+            q.w,
+            v.x,
+            v.y,
+            v.z,
+            tel.speed_kmh,
+            tel.slip_deg,
+            tel.steer_deg,
+            veh.steer,
+            veh.drift as u8 as f32,
+            veh.contact[0] as u8 as f32,
+            veh.contact[1] as u8 as f32,
+            veh.contact[2] as u8 as f32,
+            veh.contact[3] as u8 as f32,
+            veh.compression[0],
+            veh.compression[1],
+            veh.compression[2],
+            veh.compression[3],
+            tel.surfaces[0] as f32,
+            tel.surfaces[1] as f32,
+            tel.surfaces[2] as f32,
+            tel.surfaces[3] as f32,
             self.timer.lap as f32,
             self.timer.current_ticks(self.tick) as f32,
             opt(self.timer.last_lap_ticks),
             opt(self.timer.best_lap_ticks),
             self.timer.next_cp as f32,
-            self.s, self.track.length, tel.yaw_rate, tel.lat_g, tel.throttle, tel.brake,
+            self.s,
+            self.track.length,
+            tel.yaw_rate,
+            tel.lat_g,
+            tel.throttle,
+            tel.brake,
             self.invalid as u8 as f32,
             self.near_idx as f32,
         ];

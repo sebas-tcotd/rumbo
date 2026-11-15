@@ -9,11 +9,15 @@
 //!                         [--anchor lat,lon,altura]... [--network]
 //!   rumbo-compiler stats  <grafo.json>
 
-use std::process::ExitCode;
+use compiler_cli::adapters::{
+    fs::{read, write, FileZoneWriter},
+    geotiff,
+    overpass::OverpassFile,
+};
 use compiler_cli::RumboError;
+use std::process::ExitCode;
 use track_compiler_core::export::{graph_geojson, route_geojson};
 use track_compiler_core::graph::{BuildOptions, RoadGraph};
-use compiler_cli::adapters::{fs::{read, write, FileZoneWriter}, geotiff, overpass::OverpassFile};
 use track_compiler_core::ports::ZoneWriter;
 
 use track_compiler_core::elevation::Anchor;
@@ -116,9 +120,8 @@ fn route_from_args(args: &Args, g: &RoadGraph) -> Result<(ResolvedRoute, RouteOp
     }
     pts.push(to);
     let num = |k: &str, d: f64| -> Result<f64, RumboError> {
-        args.get(k).map_or(Ok(d), |v| {
-            v.parse::<f64>().map_err(|_| RumboError::Usage(format!("--{k} debe ser un número")))
-        })
+        args.get(k)
+            .map_or(Ok(d), |v| v.parse::<f64>().map_err(|_| RumboError::Usage(format!("--{k} debe ser un número"))))
     };
     let base = RouteOptions::default();
     let opts = RouteOptions {
@@ -206,7 +209,9 @@ fn run(raw: Vec<String>) -> Result<(), RumboError> {
                     return Err(RumboError::Usage(format!("--anchor espera lat,lon,altura y recibió \"{a}\"")));
                 }
                 let at = GeoPoint::parse(&format!("{},{}", parts[0], parts[1])).map_err(RumboError::Usage)?;
-                let height_m = parts[2].trim().parse::<f64>()
+                let height_m = parts[2]
+                    .trim()
+                    .parse::<f64>()
                     .map_err(|_| RumboError::Usage(format!("altura inválida en --anchor {a}")))?;
                 opts.elevation.anchors.push(Anchor { at, height_m });
             }

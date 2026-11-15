@@ -52,7 +52,11 @@ fn filter_rejects_short_spikes_and_limits_grade() {
     }
     let opts = ElevationOptions::default();
     let f = filter(&raw, ds, &opts).unwrap();
-    assert!(f.iter().all(|h| (h - 8.0).abs() < 1.0), "el perfil debería quedar plano: {:?}", f.iter().fold((f64::MAX, f64::MIN), |a, h| (a.0.min(*h), a.1.max(*h))));
+    assert!(
+        f.iter().all(|h| (h - 8.0).abs() < 1.0),
+        "el perfil debería quedar plano: {:?}",
+        f.iter().fold((f64::MAX, f64::MIN), |a, h| (a.0.min(*h), a.1.max(*h)))
+    );
     // Escalón real de 30 m: el filtro lo convierte en una rampa dentro del límite de pendiente.
     let step: Vec<Option<f64>> = (0..800).map(|i| Some(if i < 400 { 5.0 } else { 35.0 })).collect();
     let g = filter(&step, ds, &opts).unwrap();
@@ -102,7 +106,10 @@ fn generated_track_is_smooth_and_consistent() {
     assert!(t.diagnostics.iter().all(|d| d.code != "against-oneway"), "la pista va contra el sentido de alguna calle");
     let spacing: Vec<f64> = t.samples.windows(2).map(|w| w[1].s - w[0].s).collect();
     assert!(spacing.iter().all(|d| (d - 2.0).abs() < 0.6), "paso irregular");
-    assert!((t.samples.last().unwrap().s - r.length_m).abs() / r.length_m < 0.02, "el suavizado acortó o alargó demasiado el recorrido");
+    assert!(
+        (t.samples.last().unwrap().s - r.length_m).abs() / r.length_m < 0.02,
+        "el suavizado acortó o alargó demasiado el recorrido"
+    );
     let rate = track_compiler_core::centerline::max_turn_rate_deg_per_m(&t.samples);
     assert!(rate < 6.0, "quiebre de {rate:.1}°/m en el eje");
     assert!(t.profile.max_grade <= 0.14 + 1e-9);
@@ -115,7 +122,11 @@ fn generated_track_is_smooth_and_consistent() {
     let want = base.profile.filtered[3000] - 8.0;
     opts.elevation.anchors.push(Anchor { at, height_m: want });
     let a = generate(&g, &r, &dem, &opts).unwrap();
-    assert!((a.profile.filtered[3000] - want).abs() < 0.5, "ancla no aplicada: {} en vez de {want}", a.profile.filtered[3000]);
+    assert!(
+        (a.profile.filtered[3000] - want).abs() < 0.5,
+        "ancla no aplicada: {} en vez de {want}",
+        a.profile.filtered[3000]
+    );
     assert!(a.profile.max_grade <= 0.14 + 1e-9);
     let reach = (opts.elevation.anchor_reach_m / 2.0) as usize + 60; // + margen del suavizado y la pendiente
     for i in (0..3000 - reach).chain(3000 + reach..a.samples.len()) {

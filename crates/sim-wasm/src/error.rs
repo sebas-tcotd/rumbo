@@ -18,13 +18,8 @@ pub enum RumboError {
 
 impl RumboError {
     /// Stable codes in parity order.
-    pub const CODES: &[&str] = &[
-        "INVALID_TRACK",
-        "INVALID_PROFILE",
-        "INVALID_REPLAY",
-        "EXPORT_FAILED",
-        "SCHEMA_FAILED",
-    ];
+    pub const CODES: &[&str] =
+        &["INVALID_TRACK", "INVALID_PROFILE", "INVALID_REPLAY", "EXPORT_FAILED", "SCHEMA_FAILED"];
 
     /// Machine-readable error code.
     pub const fn code(&self) -> &'static str {

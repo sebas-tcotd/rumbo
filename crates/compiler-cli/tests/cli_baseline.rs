@@ -8,26 +8,15 @@ fn mini_grid_preserves_compiled_identity() {
     let dir = std::env::temp_dir().join(format!("rumbo-cli-{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     let invoke = |args: &[&str]| {
-        Command::new(env!("CARGO_BIN_EXE_rumbo-compiler"))
-            .current_dir(&dir)
-            .args(args)
-            .output()
-            .unwrap()
+        Command::new(env!("CARGO_BIN_EXE_rumbo-compiler")).current_dir(&dir).args(args).output().unwrap()
     };
     let run = |args: &[&str]| {
         let output = invoke(args);
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     };
     run(&[
         "ingest",
-        concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/fixtures/mini-grid.overpass.json"
-        ),
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/mini-grid.overpass.json"),
         "--region",
         "fixture",
         "--origin",
@@ -69,18 +58,10 @@ fn mini_grid_preserves_compiled_identity() {
         "--descriptor",
         "descriptor.json",
     ]);
-    let read_json = |p: &str| {
-        serde_json::from_slice::<serde_json::Value>(&fs::read(dir.join(p)).unwrap()).unwrap()
-    };
+    let read_json = |p: &str| serde_json::from_slice::<serde_json::Value>(&fs::read(dir.join(p)).unwrap()).unwrap();
     assert_eq!(read_json("descriptor.json"), value["source"]["route"]);
     assert_eq!(read_json("route.geojson")["type"], "FeatureCollection");
-    assert!(
-        fs::read_to_string(dir.join("elevation.csv"))
-            .unwrap()
-            .lines()
-            .count()
-            > 100
-    );
+    assert!(fs::read_to_string(dir.join("elevation.csv")).unwrap().lines().count() > 100);
     fs::write(dir.join("invalid"), b"broken").unwrap();
     for (args, code) in [
         (vec!["stats", "missing"], "IO_FAILED:"),
@@ -93,9 +74,20 @@ fn mini_grid_preserves_compiled_identity() {
         (vec!["route", "graph.json", "--from", "-12.12,-77.03", "--to", "bad"], "USAGE:"),
         (
             vec![
-                "track", "graph.json", "--dem", MINI_DEM, "--id", "fixture", "--out", "unused.json",
-                "--from", "-12.12,-77.03", "--to", "-12.118191354675348,-77.02816244027932",
-                "--anchor", "-12.12,-77.03,bad",
+                "track",
+                "graph.json",
+                "--dem",
+                MINI_DEM,
+                "--id",
+                "fixture",
+                "--out",
+                "unused.json",
+                "--from",
+                "-12.12,-77.03",
+                "--to",
+                "-12.118191354675348,-77.02816244027932",
+                "--anchor",
+                "-12.12,-77.03,bad",
             ],
             "USAGE:",
         ),
@@ -103,7 +95,10 @@ fn mini_grid_preserves_compiled_identity() {
             vec![
                 "ingest",
                 concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/mini-grid.overpass.json"),
-                "--region", "fixture", "--out", "invalid/graph",
+                "--region",
+                "fixture",
+                "--out",
+                "invalid/graph",
             ],
             "IO_FAILED:",
         ),
@@ -121,30 +116,16 @@ fn mini_grid_preserves_compiled_identity() {
 fn published_recipes_preserve_compiled_identities() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     for (id, region, tile, hash) in [
-        (
-            "costa-verde-sprint",
-            "lima-costa-verde",
-            "078",
-            0x438fcda7191f2309u64,
-        ),
-        (
-            "san-borja-las-artes",
-            "lima-san-borja",
-            "077",
-            0xbfdf9ded9a1c3155u64,
-        ),
+        ("costa-verde-sprint", "lima-costa-verde", "078", 0x438fcda7191f2309u64),
+        ("san-borja-las-artes", "lima-san-borja", "077", 0xbfdf9ded9a1c3155u64),
     ] {
         let osm = root.join(format!("data/raw/{region}-2026-11-04.overpass.json"));
-        let dem = root.join(format!(
-            "data/raw/Copernicus_DSM_COG_10_S13_00_W{tile}_00_DEM.tif"
-        ));
+        let dem = root.join(format!("data/raw/Copernicus_DSM_COG_10_S13_00_W{tile}_00_DEM.tif"));
         if !osm.exists() || !dem.exists() {
             continue;
         }
-        let asset: serde_json::Value = serde_json::from_slice(
-            &fs::read(root.join(format!("assets/tracks/{id}.json"))).unwrap(),
-        )
-        .unwrap();
+        let asset: serde_json::Value =
+            serde_json::from_slice(&fs::read(root.join(format!("assets/tracks/{id}.json"))).unwrap()).unwrap();
         let dir = std::env::temp_dir().join(format!("rumbo-{id}-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let command = || {
@@ -190,33 +171,19 @@ fn published_recipes_preserve_compiled_identities() {
             cmd.arg("--network");
         }
         for anchor in source["elevationAnchors"].as_array().unwrap() {
-            cmd.arg("--anchor").arg(format!(
-                "{},{},{}",
-                anchor["lat"], anchor["lon"], anchor["heightM"]
-            ));
+            cmd.arg("--anchor").arg(format!("{},{},{}", anchor["lat"], anchor["lon"], anchor["heightM"]));
         }
         assert!(cmd.status().unwrap().success());
         let result = fs::read_to_string(dir.join("track.json")).unwrap();
-        assert_eq!(
-            serde_json::from_str::<serde_json::Value>(&result).unwrap(),
-            asset
-        );
-        assert_eq!(
-            compile_track(&TrackDef::from_json(&result).unwrap())
-                .unwrap()
-                .hash,
-            hash
-        );
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&result).unwrap(), asset);
+        assert_eq!(compile_track(&TrackDef::from_json(&result).unwrap()).unwrap().hash, hash);
         fs::remove_dir_all(dir).unwrap();
     }
 }
 #[test]
 fn cli_failures_expose_stable_codes() {
     let bin = env!("CARGO_BIN_EXE_rumbo-compiler");
-    for (args, code) in [
-        (&["unknown"][..], "USAGE:"),
-        (&["stats", "nonexistent-0-8-graph.json"][..], "IO_FAILED:"),
-    ] {
+    for (args, code) in [(&["unknown"][..], "USAGE:"), (&["stats", "nonexistent-0-8-graph.json"][..], "IO_FAILED:")] {
         let output = std::process::Command::new(bin).args(args).output().unwrap();
         assert!(!output.status.success());
         assert!(String::from_utf8_lossy(&output.stderr).starts_with(code));

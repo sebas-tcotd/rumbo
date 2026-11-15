@@ -1,6 +1,9 @@
 //! Per-tick state trace fingerprints for experimental physics 0.5.0.
 //! Hash every little-endian u64 state hash, including all ticks between replay checks.
-#![allow(clippy::disallowed_methods, reason = "test harness outside the core: it reads fixtures from disk (golden.rs also honours an env var to record them)")]
+#![allow(
+    clippy::disallowed_methods,
+    reason = "test harness outside the core: it reads fixtures from disk (golden.rs also honours an env var to record them)"
+)]
 use sim_core::{InputFrame, ReplayManifest, Simulation, TrackDef};
 use std::{fs, path::PathBuf};
 #[test]
@@ -16,18 +19,15 @@ fn all_golden_ticks_match_handling_baseline() {
         ("test-loop.autopilot.json", "04fa2f51034dabdb"),
         ("test-loop.scripted.json", "a5d492d2d8eedb4e"),
     ];
-    let mut files: Vec<_> = fs::read_dir(root.join("crates/sim-core/tests/golden"))
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .collect();
+    let mut files: Vec<_> =
+        fs::read_dir(root.join("crates/sim-core/tests/golden")).unwrap().map(|e| e.unwrap().path()).collect();
     files.sort();
     assert_eq!(files.len(), EXPECTED.len());
     for path in files {
         let m = ReplayManifest::from_json(&fs::read_to_string(&path).unwrap()).unwrap();
-        let t = TrackDef::from_json(
-            &fs::read_to_string(root.join(format!("assets/tracks/{}.json", m.track_id))).unwrap(),
-        )
-        .unwrap();
+        let t =
+            TrackDef::from_json(&fs::read_to_string(root.join(format!("assets/tracks/{}.json", m.track_id))).unwrap())
+                .unwrap();
         let mut sim = Simulation::new(&t, &m.profile, m.seed).unwrap();
         let mut trace = Vec::new();
         for run in &m.inputs {

@@ -73,7 +73,11 @@ fn junctions_are_found_and_classified() {
     assert_eq!(kinds.get("cruce"), Some(&2), "{kinds:?}");
     // Una barrera de carrera por calle lateral (incluida Milet, cerrada en sus dos extremos).
     assert_eq!(net.barriers.len(), 9);
-    assert!(net.junctions.iter().all(|j| j.status == Status::Valid), "{:?}", net.junctions.iter().map(|j| (&j.kind, j.status, &j.reason)).collect::<Vec<_>>());
+    assert!(
+        net.junctions.iter().all(|j| j.status == Status::Valid),
+        "{:?}",
+        net.junctions.iter().map(|j| (&j.kind, j.status, &j.reason)).collect::<Vec<_>>()
+    );
     // Los dos cruces que eligió el usuario: Monet × Rousseau (T) y Milet × Rousseau (cruce).
     let at = |lat: f64, lon: f64| {
         let p = g.frame.to_en(GeoPoint::new(lat, lon));
@@ -136,12 +140,8 @@ fn reference_line_stays_on_the_road() {
     }
     let g = graph();
     let net = network::build(&g, &circuit(&g), &NetworkOptions::default()).unwrap();
-    let road: Vec<[[f64; 2]; 3]> = net
-        .triangles
-        .iter()
-        .filter(|(_, s)| *s == ASPHALT)
-        .map(|(t, _)| t.map(|i| net.vertices[i as usize]))
-        .collect();
+    let road: Vec<[[f64; 2]; 3]> =
+        net.triangles.iter().filter(|(_, s)| *s == ASPHALT).map(|(t, _)| t.map(|i| net.vertices[i as usize])).collect();
     let inside = |p: [f64; 2]| {
         road.iter().any(|t| {
             let c = |a: [f64; 2], b: [f64; 2]| (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);

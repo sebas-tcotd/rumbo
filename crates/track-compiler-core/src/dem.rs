@@ -42,16 +42,7 @@ impl Dem {
         {
             return Err("invalid elevation raster".into());
         }
-        Ok(Self {
-            width,
-            height,
-            lon0,
-            lat0,
-            dlon,
-            dlat,
-            data,
-            hash,
-        })
+        Ok(Self { width, height, lon0, lat0, dlon, dlat, data, hash })
     }
     fn at(&self, c: usize, r: usize) -> f64 {
         self.data[r * self.width + c] as f64
@@ -62,9 +53,7 @@ impl Dem {
     pub fn height(&self, p: GeoPoint) -> Option<f64> {
         let fc = (p.lon - self.lon0) / self.dlon;
         let fr = (self.lat0 - p.lat) / self.dlat;
-        if !(0.0..=(self.width - 1) as f64).contains(&fc)
-            || !(0.0..=(self.height - 1) as f64).contains(&fr)
-        {
+        if !(0.0..=(self.width - 1) as f64).contains(&fc) || !(0.0..=(self.height - 1) as f64).contains(&fr) {
             return None;
         }
         let (c0, r0) = (fc.floor() as usize, fr.floor() as usize);

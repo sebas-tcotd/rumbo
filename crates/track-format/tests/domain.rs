@@ -12,22 +12,13 @@ fn json_defaults_and_binary_network_options() {
     let base = r#"{"id":"x","name":"x","closed":true,"points":[]}"#;
     let absent = TrackDef::from_json(base).unwrap();
     assert!(absent.network.is_none());
-    let null =
-        TrackDef::from_json(&base.replace("\"points\":[]", "\"points\":[],\"network\":null"))
-            .unwrap();
+    let null = TrackDef::from_json(&base.replace("\"points\":[]", "\"points\":[],\"network\":null")).unwrap();
     assert!(null.network.is_none());
     for mut t in [absent, null] {
         for net in [
             None,
             Some(NetworkDef {
-                vertices: vec![
-                    [0., 0., 0.],
-                    [1., 0., 0.],
-                    [0., 0., 1.],
-                    [0., 8., 0.],
-                    [1., 8., 0.],
-                    [0., 8., 1.],
-                ],
+                vertices: vec![[0., 0., 0.], [1., 0., 0.], [0., 0., 1.], [0., 8., 0.], [1., 8., 0.], [0., 8., 1.]],
                 triangles: vec![[0, 1, 2], [3, 4, 5]],
                 surfaces: vec![0, 0],
                 walls: vec![],
@@ -51,29 +42,12 @@ fn json_defaults_and_binary_network_options() {
 }
 #[test]
 fn input_profile_and_full_replay_roundtrip() {
-    let i = InputFrame {
-        steer: -127,
-        throttle: 200,
-        brake: 3,
-        flags: 7,
-    };
-    assert_eq!(
-        codec::decode::<InputFrame>(&codec::encode(&i).unwrap()).unwrap(),
-        i
-    );
+    let i = InputFrame { steer: -127, throttle: 200, brake: 3, flags: 7 };
+    assert_eq!(codec::decode::<InputFrame>(&codec::encode(&i).unwrap()).unwrap(), i);
     let p = ProfileFile::default();
-    assert_eq!(
-        codec::decode::<ProfileFile>(&codec::encode(&p).unwrap()).unwrap(),
-        p
-    );
-    let m = ReplayManifest::from_json(include_str!(
-        "../../sim-core/tests/golden/test-loop.scripted.json"
-    ))
-    .unwrap();
-    assert_eq!(
-        codec::decode::<ReplayManifest>(&codec::encode(&m).unwrap()).unwrap(),
-        m
-    );
+    assert_eq!(codec::decode::<ProfileFile>(&codec::encode(&p).unwrap()).unwrap(), p);
+    let m = ReplayManifest::from_json(include_str!("../../sim-core/tests/golden/test-loop.scripted.json")).unwrap();
+    assert_eq!(codec::decode::<ReplayManifest>(&codec::encode(&m).unwrap()).unwrap(), m);
 }
 
 #[test]
@@ -83,12 +57,7 @@ fn input_wire_fixture_and_legacy_versions() {
         (PHYSICS_VERSION, COMPILER_VERSION, TICK_HZ, REPLAY_FORMAT),
         ("0.5.0", "0.2.0", 120, "race-lab-replay/1")
     );
-    let input = InputFrame {
-        steer: 0,
-        throttle: 200,
-        brake: 3,
-        flags: 7,
-    };
+    let input = InputFrame { steer: 0, throttle: 200, brake: 3, flags: 7 };
     assert_eq!(codec::encode(&input).unwrap(), b"RTF\0\x01\0\0\xc8\x03\x07");
 }
 

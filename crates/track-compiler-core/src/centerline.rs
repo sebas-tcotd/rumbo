@@ -118,7 +118,8 @@ pub fn build(g: &RoadGraph, r: &ResolvedRoute, opts: &CenterlineOptions) -> Resu
         return Err(format!("el recorrido mide {:.0} m: hace falta al menos 50 m", r.length_m));
     }
     // Aristas recorridas, en orden, para heredar sus atributos.
-    let index: std::collections::BTreeMap<&str, usize> = g.edges.iter().enumerate().map(|(i, e)| (e.id.as_str(), i)).collect();
+    let index: std::collections::BTreeMap<&str, usize> =
+        g.edges.iter().enumerate().map(|(i, e)| (e.id.as_str(), i)).collect();
     let route_edges: Vec<usize> =
         r.legs.iter().flat_map(|l| l.steps.iter()).filter_map(|s| index.get(&s.0[1..]).copied()).collect();
 

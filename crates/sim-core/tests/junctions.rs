@@ -93,7 +93,10 @@ fn barrier_holds_and_reset_never_moves_ahead() {
     sim.write_state(&mut st);
     let after = sim.view().pos;
     let s_after = st[33];
-    eprintln!("avance máximo {max_s:.0} m · tras R en s = {s_after:.0} m · se movió {:.1} m", (after - before).length());
+    eprintln!(
+        "avance máximo {max_s:.0} m · tras R en s = {s_after:.0} m · se movió {:.1} m",
+        (after - before).length()
+    );
     assert!(s_after <= max_s + 1.0, "R adelantó el auto: {s_after} > {max_s}");
     assert!(max_s < 200.0, "pasó la barrera: avanzó hasta s = {max_s}");
 }

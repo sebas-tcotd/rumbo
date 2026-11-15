@@ -96,7 +96,11 @@ fn maneuver(s: &mut sim_core::Simulation, entry: InputFrame) -> (bool, f32) {
     let mut max_slip = 0.0f32;
     let mut entered = false;
     for t in 0..HZ {
-        let i = if t < 20 { InputFrame { steer: 127, ..entry } } else { InputFrame { steer: 127, throttle: 255, ..Default::default() } };
+        let i = if t < 20 {
+            InputFrame { steer: 127, ..entry }
+        } else {
+            InputFrame { steer: 127, throttle: 255, ..Default::default() }
+        };
         s.step(i);
         let st = state(s);
         entered |= st[DRIFT] > 0.5;
@@ -117,7 +121,8 @@ fn brake_and_steer_turns_without_drifting() {
 #[test]
 fn handbrake_and_steer_starts_a_controlled_drift() {
     let mut s = at_speed(profile(), 110.0);
-    let (entered, max_slip) = maneuver(&mut s, InputFrame { flags: sim_core::input::FLAG_HANDBRAKE, ..Default::default() });
+    let (entered, max_slip) =
+        maneuver(&mut s, InputFrame { flags: sim_core::input::FLAG_HANDBRAKE, ..Default::default() });
     assert!(entered, "el freno de mano no inició el derrape");
     assert!((15.0..40.0).contains(&max_slip), "ángulo de derrape fuera de rango: {max_slip:.1}°");
 }

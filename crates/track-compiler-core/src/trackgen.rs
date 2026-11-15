@@ -9,11 +9,11 @@
 //! precisas en `f32`.
 
 use crate::centerline::{self, CenterSample, CenterlineOptions};
-use crate::ports::ElevationSource;
 use crate::diagnostics::{Diagnostic, Severity};
 use crate::elevation::{self, ElevationOptions, Profile};
 use crate::graph::RoadGraph;
 use crate::network::{self, NetworkOptions};
+use crate::ports::ElevationSource;
 use crate::routing::ResolvedRoute;
 use crate::terrain::{HeightField, TerrainOptions};
 use serde_json::{json, Value};
@@ -83,7 +83,12 @@ fn round(v: f64, digits: usize) -> f64 {
     (v * k).round() / k
 }
 
-pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &dyn ElevationSource, opts: &TrackOptions) -> Result<GeneratedTrack, String> {
+pub fn generate(
+    g: &RoadGraph,
+    r: &ResolvedRoute,
+    dem: &dyn ElevationSource,
+    opts: &TrackOptions,
+) -> Result<GeneratedTrack, String> {
     let mut cl = opts.centerline;
     if let Some(n) = &opts.network {
         cl.min_width_m = n.min_width_m;
@@ -146,8 +151,12 @@ pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &dyn ElevationSource, opt
                 Status::Unsupported => (Severity::Error, "junction-unsupported"),
             };
             diags.push(
-                Diagnostic::new(sev, code, format!("{} de {} brazos: {}", j.kind, j.arms, j.reason.clone().unwrap_or_default()))
-                    .at(g.frame.en_to_geo(j.en)),
+                Diagnostic::new(
+                    sev,
+                    code,
+                    format!("{} de {} brazos: {}", j.kind, j.arms, j.reason.clone().unwrap_or_default()),
+                )
+                .at(g.frame.en_to_geo(j.en)),
             );
         }
         let o = samples[0].en;
@@ -188,7 +197,8 @@ pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &dyn ElevationSource, opt
         degree[e.from] += 1;
         degree[e.to] += 1;
     }
-    let index: std::collections::BTreeMap<&str, usize> = g.edges.iter().enumerate().map(|(i, e)| (e.id.as_str(), i)).collect();
+    let index: std::collections::BTreeMap<&str, usize> =
+        g.edges.iter().enumerate().map(|(i, e)| (e.id.as_str(), i)).collect();
     let steps: Vec<(usize, bool)> = r
         .legs
         .iter()
@@ -267,7 +277,8 @@ pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &dyn ElevationSource, opt
         .collect();
 
     let origin = g.frame.en_to_geo(o);
-    let (min_h, max_h) = profile.filtered.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), &h| (a.min(h), b.max(h)));
+    let (min_h, max_h) =
+        profile.filtered.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), &h| (a.min(h), b.max(h)));
     let length = samples[samples.len() - 1].s; // non-empty: samples[0] was read above
     let json = json!({
         "id": opts.id,
@@ -329,10 +340,18 @@ pub fn generate(g: &RoadGraph, r: &ResolvedRoute, dem: &dyn ElevationSource, opt
 
 /// Perfil en CSV para revisarlo en una planilla: s, altura cruda, filtrada, ancho, estructura.
 pub fn profile_csv(t: &GeneratedTrack) -> String {
-    let mut out = String::from("s_m,elevacion_eje_m,elevacion_a_lo_ancho_m,elevacion_pista_m,variacion_lateral_m,ancho_m,estructura\n");
+    let mut out = String::from(
+        "s_m,elevacion_eje_m,elevacion_a_lo_ancho_m,elevacion_pista_m,variacion_lateral_m,ancho_m,estructura\n",
+    );
     let opt = |v: Option<f64>| v.map_or(String::new(), |h| format!("{h:.2}"));
     for (i, c) in t.samples.iter().enumerate() {
-        let kind = if c.bridge { "puente" } else if c.tunnel { "tunel" } else { "" };
+        let kind = if c.bridge {
+            "puente"
+        } else if c.tunnel {
+            "tunel"
+        } else {
+            ""
+        };
         out.push_str(&format!(
             "{:.1},{},{},{:.2},{:.1},{:.2},{}\n",
             c.s,

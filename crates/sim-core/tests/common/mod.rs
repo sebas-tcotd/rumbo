@@ -1,4 +1,9 @@
-#![allow(dead_code, clippy::unwrap_used, clippy::expect_used, reason = "shared test helpers: each test binary uses a different subset, and a panic is the failure report")]
+#![allow(
+    dead_code,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "shared test helpers: each test binary uses a different subset, and a panic is the failure report"
+)]
 use sim_core::autopilot::Autopilot;
 use sim_core::input::{FLAG_HANDBRAKE, FLAG_RESET};
 use sim_core::{InputFrame, ProfileFile, Simulation, TrackDef};
