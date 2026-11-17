@@ -2,6 +2,7 @@
 //!
 //! Reglas de determinismo (ver documento de arquitectura):
 //! - Paso fijo (`TICK_HZ`). El llamador decide cuándo avanzar; aquí no hay reloj.
+//! - Entrada canónica a 60 Hz (D7): cada `InputFrame` cubre dos ticks (`Simulation::step`).
 //! - Trigonometría solo vía `libm` (nunca funciones de la plataforma).
 //! - Rapier con `enhanced-determinism`, que además fuerza matemática escalar en glam.
 //! - Sin colecciones con orden aleatorio en el estado simulado.
@@ -23,7 +24,8 @@ pub use profile::{ProfileFile, VehicleProfile};
 pub use replay::{ReplayManifest, VerifyReport};
 pub use simulation::{Simulation, StateView, STATE_LEN};
 pub use track::{CompiledTrack, TrackDef};
+pub use track_format::domain::replay_v2::ReplayV2;
 
 pub use replay::verify_replay;
 pub use track::compile_track;
-pub use track_format::version::{COMPILER_VERSION, PHYSICS_VERSION, TICK_HZ};
+pub use track_format::version::{COMPILER_VERSION, INPUT_HZ, PHYSICS_VERSION, TICK_HZ};

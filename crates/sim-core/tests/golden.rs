@@ -1,10 +1,15 @@
 //! S4 · Replays dorados: el set que se verifica en nativo, en Node y en cada navegador.
 //!
-//! Cada caso corre en nativo y guarda su replay (entradas + hashes de control cada 5 s) en
-//! `tests/golden/<pista>.<caso>.json`. La pista se busca por su id en `assets/tracks/`.
-//! El arnés de CI (`ci/determinism`) re-simula los mismos archivos con el WASM y exige los
-//! mismos hashes: si coinciden en todas partes, la simulación es determinista entre
-//! plataformas. Para regenerarlos (al cambiar la física): `UPDATE_GOLDEN=1 cargo test --test golden`.
+//! Cada caso es un `rumbo-replay/2` (entradas a 60 Hz + hash de control cada 10 s + hash final) en
+//! `tests/golden/<pista>.<caso>.bin`. La pista sale del nombre del archivo y el perfil es
+//! `ProfileFile::default()` (el replay lleva `LEGACY_VEHICLE`). El arnés de CI (`ci/determinism`)
+//! re-simula los mismos archivos con el WASM y exige los mismos hashes por tick.
+//!
+//! Desde la 0.10 los dorados son **flujos de entrada fijos**. Nacieron de la migración de
+//! `tests/golden-v1/` (`examples/replay_v1_to_v2.rs`). Para regenerarlos al cambiar la física, en un
+//! commit `physics:` que sube `PHYSICS_VERSION`: `UPDATE_GOLDEN=1 cargo test --release --test golden`.
+//! Eso **re-simula las mismas entradas** y reescribe controles y hash final; nunca vuelve a grabar desde
+//! los conductores, así la comparación entre versiones de física es de lo mismo con lo mismo.
 #![allow(
     clippy::disallowed_methods,
     reason = "test harness outside the core: it reads fixtures from disk (golden.rs also honours an env var to record them)"
@@ -14,7 +19,8 @@ mod common;
 use common::{scripted_input, HZ};
 use sim_core::autopilot::Autopilot;
 use sim_core::input::{FLAG_HANDBRAKE, FLAG_RESET, FLAG_RESTART};
-use sim_core::{InputFrame, ProfileFile, ReplayManifest, Simulation, TrackDef};
+use sim_core::replay::{migrate_v1, v1_frames};
+use sim_core::{InputFrame, ProfileFile, ReplayManifest, ReplayV2, Simulation, TrackDef};
 use std::path::PathBuf;
 
 #[derive(Clone, Copy)]
@@ -63,7 +69,9 @@ impl Lcg {
     }
 }
 
-fn record(case: &Case) -> ReplayManifest {
+/// Records a case at 60 Hz: the driver is asked every tick and the simulation keeps the first tick of
+/// each pair (D7), as the worker does.
+fn record(case: &Case) -> ReplayV2 {
     let mut sim = Simulation::new(&track(case.track), &ProfileFile::default(), case.seed).unwrap();
     let ap = Autopilot::default();
     let mut rng = Lcg(case.seed);
@@ -98,21 +106,39 @@ fn record(case: &Case) -> ReplayManifest {
     sim.replay()
 }
 
+fn golden_path(case: &Case) -> PathBuf {
+    root().join(format!("crates/sim-core/tests/golden/{}.{}.bin", case.track, case.name))
+}
+
+/// Current physics over the same 60 Hz frames: what `UPDATE_GOLDEN` writes.
+fn resimulate(replay: &ReplayV2, track: &TrackDef) -> ReplayV2 {
+    let mut sim = Simulation::new(track, &ProfileFile::default(), replay.header.seed).unwrap();
+    for frame in replay.tick_frames() {
+        sim.step(frame);
+    }
+    sim.replay()
+}
+
 #[test]
 fn golden_replays_match() {
-    let dir = root().join("crates/sim-core/tests/golden");
-    std::fs::create_dir_all(&dir).unwrap();
     let update = std::env::var("UPDATE_GOLDEN").is_ok();
-    let mut created = Vec::new();
+    let dir = root().join("crates/sim-core/tests/golden");
+    let mut names: Vec<String> =
+        std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
+    names.sort();
+    let mut expected: Vec<String> = CASES.iter().map(|c| format!("{}.{}.bin", c.track, c.name)).collect();
+    expected.sort();
+    assert_eq!(names, expected, "el set de dorados es fijo; agregar o quitar uno es un cambio de P1");
     for case in CASES {
-        let path = dir.join(format!("{}.{}.json", case.track, case.name));
-        if update || !path.exists() {
-            std::fs::write(&path, serde_json::to_string(&record(case)).unwrap()).unwrap();
-            created.push(path.display().to_string());
+        let path = golden_path(case);
+        let replay = ReplayV2::decode(&std::fs::read(&path).unwrap()).unwrap();
+        let def = track(case.track);
+        if update {
+            std::fs::write(&path, resimulate(&replay, &def).encode().unwrap()).unwrap();
+            continue;
         }
-        let manifest = ReplayManifest::from_json(&std::fs::read_to_string(&path).unwrap()).unwrap();
-        assert_eq!(manifest.track_id, case.track);
-        let report = sim_core::verify_replay(&manifest, &track(case.track)).unwrap();
+        assert_eq!(replay.header.seed, case.seed, "{}.{}", case.track, case.name);
+        let report = sim_core::verify_replay(&replay, &def, &ProfileFile::default()).unwrap();
         assert!(
             report.ok,
             "{}.{}: {} (esperado {}, obtenido {})",
@@ -120,17 +146,63 @@ fn golden_replays_match() {
         );
         eprintln!("{}.{}: {} ticks, final {}", case.track, case.name, report.ticks, report.actual_final);
     }
-    if !created.is_empty() && !update {
-        panic!("faltaban replays dorados; se generaron: {created:?}. Vuelve a correr las pruebas.");
-    }
+    assert!(!update, "dorados re-simulados con la física actual; vuelve a correr las pruebas sin UPDATE_GOLDEN");
 }
 
-/// Grabar dos veces el mismo caso da el mismo replay, byte a byte.
+/// Grabar dos veces el mismo caso a 60 Hz da el mismo replay, byte a byte.
 #[test]
 fn recording_is_reproducible() {
     for case in CASES.iter().filter(|c| matches!(c.driver, Driver::Adversarial)) {
-        let a = serde_json::to_string(&record(case)).unwrap();
-        let b = serde_json::to_string(&record(case)).unwrap();
+        let a = record(case).encode().unwrap();
+        let b = record(case).encode().unwrap();
         assert_eq!(a, b, "{}.{}", case.track, case.name);
+    }
+}
+
+/// The autopilot goldens are the autopilot driven at 60 Hz (closed loop) from the case's seed: the
+/// migration re-drove them instead of converting a controller's output (story 0.10).
+#[test]
+fn autopilot_goldens_are_the_60_hz_autopilot() {
+    for case in CASES.iter().filter(|c| matches!(c.driver, Driver::Autopilot)) {
+        let golden = std::fs::read(golden_path(case)).unwrap();
+        assert_eq!(record(case).encode().unwrap(), golden, "{}.{}", case.track, case.name);
+    }
+}
+
+/// The open-loop goldens are the deterministic conversion of their v1 originals (`tests/golden-v1`).
+#[test]
+fn converted_goldens_match_a_deterministic_migration() {
+    for case in CASES.iter().filter(|c| !matches!(c.driver, Driver::Autopilot)) {
+        let v1_path = root().join(format!("crates/sim-core/tests/golden-v1/{}.{}.json", case.track, case.name));
+        let v1 = ReplayManifest::from_json(&std::fs::read_to_string(v1_path).unwrap()).unwrap();
+        let a = migrate_v1(&v1, &track(case.track)).unwrap().encode().unwrap();
+        let b = migrate_v1(&v1, &track(case.track)).unwrap().encode().unwrap();
+        assert_eq!(a, b);
+        assert_eq!(a, std::fs::read(golden_path(case)).unwrap(), "{}.{}", case.track, case.name);
+    }
+}
+
+/// v1 → 60 Hz: axes and handbrake from the first tick of the pair, events from both ticks.
+#[test]
+fn v1_frames_keep_every_event() {
+    let v1 = ReplayManifest::from_json(
+        &std::fs::read_to_string(root().join("crates/sim-core/tests/golden-v1/test-loop.adversarial.json")).unwrap(),
+    )
+    .unwrap();
+    let ticks: Vec<InputFrame> =
+        v1.inputs.iter().flat_map(|r| std::iter::repeat_n(InputFrame::unpack(r[1]), r[0] as usize)).collect();
+    let frames = v1_frames(&v1);
+    assert_eq!(frames.len() as u64, ReplayV2::frames_for(v1.ticks));
+    let events = |f: &InputFrame| f.flags & (FLAG_RESET | FLAG_RESTART);
+    assert_eq!(
+        ticks.iter().filter(|f| events(f) != 0).count(),
+        frames.iter().filter(|f| events(f) != 0).count(),
+        "this golden never has events on both ticks of a pair, so the counts match"
+    );
+    for (k, f) in frames.iter().enumerate() {
+        assert_eq!((f.steer, f.throttle, f.brake, f.flags & FLAG_HANDBRAKE), {
+            let t = ticks[2 * k];
+            (t.steer, t.throttle, t.brake, t.flags & FLAG_HANDBRAKE)
+        });
     }
 }

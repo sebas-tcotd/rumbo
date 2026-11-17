@@ -4,7 +4,7 @@
 
 import {
   buildIndex,
-  DEV_SEEK_MAX_CHARS,
+  DEV_SEEK_MAX_BYTES,
   DEV_SEEK_MAX_TICKS,
   type DevCommand,
   type FatalCode,
@@ -90,22 +90,11 @@ type Listener = () => void;
 const UI_INTERVAL_MS = 66;
 
 /** Why a seek would be refused before reaching the worker (same bounds as its wire validation). */
-function seekProblem(json: string, tick: number): string | null {
-  if (json.length > DEV_SEEK_MAX_CHARS) return 'El replay es demasiado grande para re-simularlo en el laboratorio.';
+function seekProblem(bytes: Uint8Array, tick: number): string | null {
+  if (bytes.byteLength === 0) return 'El archivo está vacío.';
+  if (bytes.byteLength > DEV_SEEK_MAX_BYTES) return 'El replay es demasiado grande para re-simularlo en el laboratorio.';
   if (!Number.isInteger(tick) || tick < 0 || tick > DEV_SEEK_MAX_TICKS) return `Tick fuera de rango: ${tick}.`;
   return null;
-}
-
-/** The profile embedded in a replay manifest, or null if it does not look like one. */
-function replayProfile(json: string): ProfileFile | null {
-  try {
-    const profile = (JSON.parse(json) as { profile?: unknown }).profile as Partial<ProfileFile> | undefined;
-    const valid =
-      typeof profile?.id === 'string' && typeof profile.name === 'string' && typeof profile.params === 'object';
-    return valid && profile.params !== null ? (profile as ProfileFile) : null;
-  } catch {
-    return null;
-  }
 }
 
 /** Store of the lab session; the composition root wires its callbacks to the renderer and controller. */
@@ -127,7 +116,8 @@ export class LabSession {
   latest: StateMsg | null = null;
   onReady: (m: ReadyMsg, index: StateIndex) => void = () => {};
   onGhost: (frames: Float32Array | null) => void = () => {};
-  onReplay: (json: string, ticks: number) => void = () => {};
+  /** `rumbo-replay/2` bytes of an export. */
+  onReplay: (bytes: Uint8Array, ticks: number) => void = () => {};
   /** Called when the worker rejects a command, so the host can drop state tied to it. */
   onCommandError: (operation: string) => void = () => {};
   /** Called when a confirmed session runs a different profile (applied, or a seek's replay profile). */
@@ -180,14 +170,15 @@ export class LabSession {
       if (!Number.isFinite(cmd.s)) return;
       this.patch({ altered: true });
     } else {
-      const problem = seekProblem(cmd.json, cmd.tick);
+      const problem = seekProblem(cmd.bytes, cmd.tick);
       if (problem) {
         this.patch({ verifyError: problem });
         return;
       }
       this.seekPending = true;
-      // The seek's session runs the replay's own profile: it becomes the applied one when it arrives.
-      this.pendingProfile = replayProfile(cmd.json);
+      // A `rumbo-replay/2` does not carry the profile (D17): the worker re-simulates with the current
+      // one, so the applied profile stays as it is.
+      this.pendingProfile = null;
     }
     this.worker.send(cmd);
   }
@@ -243,7 +234,7 @@ export class LabSession {
         this.handleSession(msg.hashes);
         break;
       case 'replay':
-        this.onReplay(msg.json, msg.ticks);
+        this.onReplay(msg.bytes, msg.ticks);
         break;
       case 'verify':
         this.patch({ verify: msg.report, verifyError: null });

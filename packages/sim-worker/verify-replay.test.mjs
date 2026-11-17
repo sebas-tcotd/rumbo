@@ -12,12 +12,14 @@ test('a malformed replay allows retry on the same live session', () => {
   const lab = new Lab(track, default_profile(), 1);
   try {
     lab.step(0, 0, 0, 0);
-    const rejected = verifyReplay(verify_replay, track, '{');
+    const rejected = verifyReplay(verify_replay, track, Uint8Array.of(1, 2, 3), lab.profile_json());
     assert.equal(rejected.code, 'INVALID_REPLAY');
     assert.doesNotMatch(rejected.message, /^INVALID_REPLAY:/);
     lab.step(0, 0, 0, 0);
     assert.equal(lab.tick(), 2);
-    assert.equal(verifyReplay(verify_replay, track, lab.replay_json()).report.ok, true);
+    const report = verifyReplay(verify_replay, track, lab.replay_bytes(), lab.profile_json()).report;
+    assert.equal(report.ok, true);
+    assert.equal(report.profileVerified, false);
   } finally {
     lab.free();
   }
@@ -30,5 +32,5 @@ test('a WebAssembly trap reaches the terminal failure handler', async () => {
     3, 0, 0, 11,
   ]);
   const { instance } = await WebAssembly.instantiate(binary);
-  assert.throws(() => verifyReplay(instance.exports.trap, track, '{}'), WebAssembly.RuntimeError);
+  assert.throws(() => verifyReplay(instance.exports.trap, track, Uint8Array.of(0), '{}'), WebAssembly.RuntimeError);
 });

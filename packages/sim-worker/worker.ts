@@ -174,36 +174,27 @@ function currentLab(): Lab {
   return lab;
 }
 
-function quant(v: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, Math.round(v)));
-}
-
+/**
+ * One tick. Input is canonical at 60 Hz (D7): the simulation takes a frame only on the first tick of each
+ * pair (`accepts_frame`) and ignores the argument on the second. One-shot events (reset, restart) are
+ * consumed only on accepting ticks, so one requested on the second tick waits for the next pair instead
+ * of being lost. Analog axes are quantized in Rust (`step_axes`, with the steering deadband).
+ */
 function stepOnce(l: Lab) {
-  let steer: number;
-  let throttle: number;
-  let brake: number;
-  let flags: number;
+  if (!l.accepts_frame()) {
+    l.step(0, 0, 0, 0); // ignored by the simulation: it reapplies the pair's frame
+    return;
+  }
+  let flags = 0;
+  if (resetPending) flags |= FLAG_RESET;
+  if (restartPending) flags |= FLAG_RESTART;
+  resetPending = restartPending = false;
   if (autopilot) {
     const p = l.autopilot_input();
-    steer = ((p & 0xff) << 24) >> 24; // i8 con signo
-    throttle = (p >> 8) & 0xff;
-    brake = (p >> 16) & 0xff;
-    flags = (p >>> 24) & 0xff;
-  } else {
-    steer = quant(input.steer * 127, -127, 127);
-    throttle = quant(input.throttle * 255, 0, 255);
-    brake = quant(input.brake * 255, 0, 255);
-    flags = input.handbrake ? FLAG_HANDBRAKE : 0;
+    l.step(((p & 0xff) << 24) >> 24, (p >> 8) & 0xff, (p >> 16) & 0xff, ((p >>> 24) & 0xff) | flags);
+    return;
   }
-  if (resetPending) {
-    flags |= FLAG_RESET;
-    resetPending = false;
-  }
-  if (restartPending) {
-    flags |= FLAG_RESTART;
-    restartPending = false;
-  }
-  l.step(steer, throttle, brake, flags);
+  l.step_axes(input.steer, input.throttle, input.brake, (input.handbrake ? FLAG_HANDBRAKE : 0) | flags);
 }
 
 function recordGhost(s: Float32Array) {
@@ -263,10 +254,11 @@ function devTeleport(l: Lab, s: number) {
  * AR28: replace the session with a replay re-simulated up to `tick`, paused there. A rejected replay
  * (thrown string) is reported like a failed verification and leaves the live session untouched.
  */
-function devSeekReplay(json: string, tick: number) {
+function devSeekReplay(bytes: Uint8Array, tick: number) {
   let next: Lab;
   try {
-    next = Lab.from_replay(trackJson, json, tick);
+    // The replay does not carry the profile (D17): the lab re-simulates with its current one.
+    next = Lab.from_replay(trackJson, bytes, currentLab().profile_json(), tick);
   } catch (cause) {
     if (typeof cause !== 'string') throw cause;
     post({ type: 'verifyError', code: 'INVALID_REPLAY', message: parseEdgeError(cause)?.detail ?? cause });
@@ -468,7 +460,8 @@ ctx.onmessage = async (ev: MessageEvent<CommandMessage>) => {
       case 'exportReplay':
         if (lab) {
           try {
-            post({ type: 'replay', json: lab.replay_json(), ticks: lab.tick() });
+            const bytes = lab.replay_bytes();
+            post({ type: 'replay', bytes, ticks: lab.tick() }, [bytes.buffer]);
           } catch (e) {
             if (typeof e !== 'string') throw e;
             post({ type: 'commandError', operation: 'exportReplay', code: 'EXPORT_FAILED' });
@@ -479,11 +472,11 @@ ctx.onmessage = async (ev: MessageEvent<CommandMessage>) => {
         devTeleport(currentLab(), msg.s);
         break;
       case 'devSeekReplay':
-        devSeekReplay(msg.json, msg.tick);
+        devSeekReplay(msg.bytes, msg.tick);
         break;
       case 'verifyReplay': {
         const t0 = performance.now();
-        const result = verifyReplay(verify_replay, trackJson, msg.json);
+        const result = verifyReplay(verify_replay, trackJson, msg.bytes, currentLab().profile_json());
         if (result.type === 'verify')
           result.report.message += ' (' + Math.round(performance.now() - t0) + ' ms)';
         post(result);

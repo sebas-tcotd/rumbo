@@ -4,13 +4,14 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import init, { Lab, default_profile, hash_content, snapshot_descriptor } from '@rumbo/sim-wasm';
+import init, { Lab, default_profile, hash_content, replay_summary, snapshot_descriptor } from '@rumbo/sim-wasm';
 import {
   STATE_FIELDS,
   STATE_BYTES,
   SNAPSHOT_VERSION,
   PROTOCOL_VERSION,
   SIM_EDGE_ERROR_CODES,
+  DEV_SEEK_MAX_BYTES,
   DEV_SEEK_MAX_TICKS,
   protocolDescriptor,
   validateSnapshotDescriptor,
@@ -22,10 +23,13 @@ import {
 import { createChallenge, createCommand, createFatal } from '@rumbo/contracts/testing';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
+/** JSON form of a command carrying `bytes` (the native fixture writes a Uint8Array as its values). */
+const plainBytes = (cmd) => ({ ...cmd, bytes: [...cmd.bytes] });
 const read = (path) => readFileSync(join(root, path));
-// Real on both sides: layout, bits, input word, RTF envelope, BLAKE3 hash (Rust types and WASM binding).
-// Prospective: protocol, header, link and codec compare names and shapes against hand-written Rust fixtures
-// because their Rust types do not exist yet (0.10 / 6.7). See crates/sim-wasm/examples/wire_parity.rs.
+// Real on both sides: layout, bits, input word, RTF envelope, BLAKE3 hash and the rumbo-replay/2 header
+// (Rust ReplayHeader::wire_json natively, replay_summary of a real session in WASM; story 0.10).
+// Prospective: protocol, link and codec compare names and shapes against hand-written Rust fixtures because
+// their Rust types do not exist yet (6.7). See crates/sim-wasm/examples/wire_parity.rs.
 test('native Rust and TypeScript independently produce and reject parity fixtures', async () => {
   execFileSync('cargo', ['build', '--release', '--locked', '-p', 'sim-wasm', '--example', 'wire_parity'], {
     cwd: root,
@@ -68,15 +72,8 @@ test('native Rust and TypeScript independently produce and reject parity fixture
       load: createCommand({ type: 'load', zone: null, race: null, track: 'track', profile: 'profile' }, 2),
       fatal: { ...base, ...createFatal('trap') },
       devTeleport: createCommand({ type: 'devTeleport', s: 120.5 }, 2),
-      devSeekReplay: createCommand({ type: 'devSeekReplay', json: '{}', tick: DEV_SEEK_MAX_TICKS }, 2),
-      header: {
-        format: 'rumbo-replay/2',
-        physicsVersion: '0.5.0',
-        trackHash: 't',
-        raceHash: 'r',
-        profileRef: { id: 'p', hash: 'h' },
-        seed: '18446744073709551615',
-      },
+      devSeekReplay: plainBytes(createCommand({ type: 'devSeekReplay', bytes: Uint8Array.of(1), tick: DEV_SEEK_MAX_TICKS }, 2)),
+      header: JSON.parse(replay_summary(lab.replay_bytes())).header,
       link: '#v1.i.YQ',
       codec: {
         encodeChallenge: Object.keys(createChallenge()),
@@ -86,6 +83,9 @@ test('native Rust and TypeScript independently produce and reject parity fixture
       },
     };
     assert.deepEqual(native, ts);
+    assert.ok(isReplayHeader(ts.header) && ts.header.vehicleRef.id === 'legacy-vehicle');
+    /** Native fixture as it travels: `bytes` back to a Uint8Array. */
+    const wired = (key) => (key === 'devSeekReplay' ? { ...native[key], bytes: Uint8Array.from(native[key].bytes) } : native[key]);
     validateSnapshotDescriptor(native.layout);
     for (const change of [{ name: 'bad' }, { type: 'f64' }, { offset: 1 }]) {
       const bad = structuredClone(native.layout);
@@ -105,21 +105,24 @@ test('native Rust and TypeScript independently produce and reject parity fixture
       ['header', isReplayHeader],
       ['link', isLinkHeader],
     ]) {
-      assert.ok(reader(native[key]));
+      assert.ok(reader(wired(key)));
       if (key === 'link') {
         for (const bad of ['#v2.i.a', '#v1.r.a', '#v1.i.']) assert.equal(reader(bad), false);
       } else
         for (const field of Object.keys(native[key])) {
-          const bad = { ...native[key] };
+          const bad = { ...wired(key) };
           delete bad[field];
           assert.equal(reader(bad), false, key + '.' + field);
         }
     }
     // Dev command bounds: one tick past the shared limit, a non-finite s and an oversized replay are rejected.
-    assert.equal(isCommand({ ...native.devSeekReplay, tick: DEV_SEEK_MAX_TICKS + 1 }), false);
-    assert.equal(isCommand({ ...native.devSeekReplay, tick: 1.5 }), false);
+    const seek = wired('devSeekReplay');
+    assert.equal(isCommand({ ...seek, tick: DEV_SEEK_MAX_TICKS + 1 }), false);
+    assert.equal(isCommand({ ...seek, tick: 1.5 }), false);
     assert.equal(isCommand({ ...native.devTeleport, s: Number.POSITIVE_INFINITY }), false);
-    assert.equal(isCommand({ ...native.devSeekReplay, json: 'x'.repeat(16 * 1024 * 1024 + 1) }), false);
+    assert.equal(isCommand({ ...seek, bytes: new Uint8Array(DEV_SEEK_MAX_BYTES + 1) }), false);
+    assert.equal(isCommand({ ...seek, bytes: new Uint8Array(0) }), false);
+    assert.equal(isCommand({ ...seek, bytes: [1] }), false, 'bytes must be a Uint8Array');
   } finally {
     lab.free();
   }

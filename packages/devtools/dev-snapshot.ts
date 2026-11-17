@@ -43,12 +43,13 @@ export interface DevActions {
   restartSession(): void;
   exportReplay(): void;
   verifyCurrentSession(): void;
-  verifyReplayFile(json: string): void;
+  /** Verifies a `rumbo-replay/2` file with the current profile (the replay does not carry it). */
+  verifyReplayFile(bytes: Uint8Array): void;
   switchTrack(id: string): void;
   /** AR28: car to lap distance `s`; the session becomes altered. */
   teleport(s: number): void;
   /** AR28: re-simulates a replay up to `tick` in the lab and pauses there. */
-  seekReplay(json: string, tick: number): void;
+  seekReplay(bytes: Uint8Array, tick: number): void;
 }
 
 /** A compiler diagnostic attached to a track. */
@@ -79,7 +80,8 @@ export interface DevStore {
 
 /** Replays exported by the worker reach devtools here (it downloads them). */
 export interface DevEvents {
-  onReplay(listener: (json: string, ticks: number) => void): () => void;
+  /** `rumbo-replay/2` bytes of an export. */
+  onReplay(listener: (bytes: Uint8Array, ticks: number) => void): () => void;
   /** The worker rejected an export: no replay will arrive for it. Returns the unsubscribe function. */
   onExportFailed(listener: () => void): () => void;
 }

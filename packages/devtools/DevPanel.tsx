@@ -1,4 +1,4 @@
-import { DEV_SEEK_MAX_CHARS, DEV_SEEK_MAX_TICKS, type OverlayKind, type RenderDebugPort } from '@rumbo/contracts';
+import { DEV_SEEK_MAX_BYTES, DEV_SEEK_MAX_TICKS, type OverlayKind, type RenderDebugPort } from '@rumbo/contracts';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import type { DevActions, DevCameraMode, DevEvents, DevSnapshot, DevStore, DevTrack } from './dev-snapshot.ts';
@@ -45,16 +45,16 @@ function PanelToggle({ open, actions, toolbar }: { open: boolean; actions: DevAc
 }
 
 /**
- * Downloads exported replays, as `<track>.<case>.json` when the export was asked for as a golden. The
+ * Downloads exported `rumbo-replay/2` replays, as `<track>.<case>.bin` when the export was asked for as a golden. The
  * golden name is dropped when the export fails, so it never renames a later ordinary download.
  */
 function useReplayDownloads(actions: DevActions, events: DevEvents, track: DevTrack) {
   const golden = useRef<string | null>(null);
   useEffect(() => {
-    const stopReplay = events.onReplay((json, ticks) => {
+    const stopReplay = events.onReplay((bytes, ticks) => {
       const name = golden.current;
       golden.current = null;
-      download(name ? `${track.id}.${name}.json` : `replay-${ticks}-ticks.json`, json);
+      download(name ? `${track.id}.${name}.bin` : `replay-${ticks}-ticks.bin`, new Uint8Array(bytes));
     });
     const stopFailed = events.onExportFailed(() => {
       golden.current = null;
@@ -72,7 +72,7 @@ function useReplayDownloads(actions: DevActions, events: DevEvents, track: DevTr
 
 /** A verified file and the report that was on screen when it was sent (stale until a new one arrives). */
 interface VerifiedFile {
-  json: string;
+  bytes: Uint8Array;
   staleReport: DevSnapshot['verify'];
 }
 
@@ -92,16 +92,17 @@ function useReplaySeek(snap: DevSnapshot, actions: DevActions) {
   const seekTick = seekTickOf(snap, file);
   const seek = () => {
     if (file === null || seekTick === null) return;
-    if (file.json.length > DEV_SEEK_MAX_CHARS || seekTick > DEV_SEEK_MAX_TICKS) {
+    if (file.bytes.byteLength > DEV_SEEK_MAX_BYTES || seekTick > DEV_SEEK_MAX_TICKS) {
       setSeekError('El replay es demasiado grande para re-simularlo en el laboratorio.');
       return;
     }
-    actions.seekReplay(file.json, seekTick);
+    actions.seekReplay(file.bytes.slice(), seekTick);
   };
-  const verifyFile = (json: string) => {
-    setFile({ json, staleReport: snap.verify });
+  const verifyFile = (bytes: Uint8Array) => {
+    setFile({ bytes, staleReport: snap.verify });
     setSeekError(null);
-    actions.verifyReplayFile(json);
+    // A copy: the seek reuses the file after the verification has been sent.
+    actions.verifyReplayFile(bytes.slice());
   };
   const verifyCurrent = () => {
     setFile(null);

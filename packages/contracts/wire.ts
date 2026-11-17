@@ -1,5 +1,5 @@
 import type { CommandMessage, ResponseMessage } from './protocol.js';
-import { DEV_SEEK_MAX_CHARS, DEV_SEEK_MAX_TICKS, PROTOCOL_VERSION } from './protocol.js';
+import { DEV_SEEK_MAX_BYTES, DEV_SEEK_MAX_TICKS, PROTOCOL_VERSION } from './protocol.js';
 import { SNAPSHOT_BYTES, SNAPSHOT_SLOTS, SNAPSHOT_VERSION } from './snapshot.js';
 
 type Check = ((value: unknown) => boolean) & { requiredKeys?: readonly string[] };
@@ -38,13 +38,16 @@ const mesh = fields({
 });
 const input = fields({ steer: number, throttle: number, brake: number, handbrake: bool });
 const empty: Check = () => true;
+/** `rumbo-replay/2` bytes, opaque to TypeScript (D15, D16: only Rust decodes postcard). */
+const replayBytes: Check = (v) => v instanceof Uint8Array && v.byteLength > 0 && v.byteLength <= DEV_SEEK_MAX_BYTES;
 const report = fields({
   ok: bool,
   ticks: integer,
   expectedFinal: string,
   actualFinal: string,
   firstMismatchTick: (v) => v === null || integer(v),
-  lapsMatch: bool,
+  checksMatch: bool,
+  profileVerified: bool,
   message: string,
 });
 
@@ -64,14 +67,14 @@ const commands = {
   exportReplay: empty,
   input: fields({ frame: input }),
   loadGhost: fields({ replay: string }),
-  verifyReplay: fields({ json: string }),
+  verifyReplay: fields({ bytes: replayBytes }),
   newSession: fields({ profileJson: string }),
   autopilot: fields({ on: bool }),
   hashContent: fields({ bytes: (v) => v instanceof Uint8Array, requestId: integer }),
   returnBuffer: fields({ slot, buffer }),
   devTeleport: fields({ s: number }),
   devSeekReplay: fields({
-    json: (v) => typeof v === 'string' && v.length <= DEV_SEEK_MAX_CHARS,
+    bytes: replayBytes,
     tick: (v) => integer(v) && (v as number) <= DEV_SEEK_MAX_TICKS,
   }),
 } satisfies Record<CommandMessage['type'], Check>;
@@ -129,7 +132,7 @@ const responses = {
   }),
   session: fields({ hashes }),
   lap: fields({ ticks: integer, best: bool, ghost: (v) => nil(v) || f32(v) }),
-  replay: fields({ json: string, ticks: integer }),
+  replay: fields({ bytes: replayBytes, ticks: integer }),
   verify: fields({ report }),
   verifyError: fields({ code: (v) => v === 'INVALID_REPLAY', message: string }),
   fatal: fields({ code: (v) => v === 'SIM_FAILED' || v === 'WASM_LOAD_FAILED', message: string }),
@@ -160,13 +163,19 @@ export function isResponse(value: unknown): value is ResponseMessage {
   return valid(responses, value);
 }
 
-/** Prospective header only. A decimal string preserves the full unsigned 64-bit seed on the JSON boundary. */
+const hash128: Check = (v) => typeof v === 'string' && /^[a-f0-9]{32}$/.test(v);
+/**
+ * `rumbo-replay/2` header as `replay_summary` (WASM) returns it, from Rust's `ReplayHeader::wire_json`.
+ * Hashes are BLAKE3-128 hex; `vehicleRef` is the player's vehicle (ADR-009, ADR-010); `players` is 1 in
+ * the MVP. A decimal string preserves the full unsigned 64-bit seed on the JSON boundary.
+ */
 export const isReplayHeader = fields({
   format: (v) => v === 'rumbo-replay/2',
   physicsVersion: string,
-  trackHash: string,
-  raceHash: string,
-  profileRef: fields({ id: string, hash: string }),
+  trackHash: hash128,
+  raceHash: hash128,
+  vehicleRef: fields({ id: string, hash: hash128 }),
+  players: (v) => v === 1,
   seed: (v) => typeof v === 'string' && /^(0|[1-9][0-9]{0,19})$/.test(v) && BigInt(v) <= 0xffffffffffffffffn,
 });
 /** A base64url payload never has length 1 modulo 4. */

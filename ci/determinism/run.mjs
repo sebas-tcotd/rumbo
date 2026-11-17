@@ -1,6 +1,6 @@
 // S4 · Re-simula los replays dorados (grabados en nativo) con el binario WASM de prueba y exige, en cada
-// tick, el mismo hash de estado que la referencia nativa. Conserva la verificación heredada (controles,
-// hash final y vueltas) de `verify_replay`.
+// tick, el mismo hash de estado que la referencia nativa. Conserva la verificación de `verify_replay`
+// (controles y hash final; el cronómetro va dentro del hash). Los dorados son `rumbo-replay/2` binarios.
 //
 // Uso: node run.mjs --browser node|chromium|edge|firefox|webkit|safari [--out dir] [--reference file]
 // Requiere `pnpm --filter rumbo-determinism build` (o `pnpm turbo run build`): el WASM de prueba en
@@ -34,18 +34,19 @@ for (const [what, path] of [['WASM de prueba', join(wasmDir, 'sim_wasm_bg.wasm')
     process.exit(2);
   }
 }
-const cases = listCases(root);
 const reference = JSON.parse(readFileSync(referencePath, 'utf8'));
+const cases = listCases(root, reference);
 
 async function runNode() {
-  const { default: init, verify_replay, trace_replay, physics_version } = await import(pathToFileURL(join(wasmDir, 'sim_wasm.js')).href);
+  const { default: init, default_profile, verify_replay, trace_replay, physics_version } = await import(pathToFileURL(join(wasmDir, 'sim_wasm.js')).href);
   await init({ module_or_path: readFileSync(join(wasmDir, 'sim_wasm_bg.wasm')) });
   const results = cases.map((c) => {
     const t0 = performance.now();
     const track = readFileSync(join(root, c.track), 'utf8');
-    const replay = readFileSync(join(root, c.replay), 'utf8');
+    const replay = readFileSync(join(root, c.replay));
     try {
-      const report = JSON.parse(verify_replay(track, replay));
+      // The goldens carry LEGACY_VEHICLE and were recorded with the default profile parameters.
+      const report = JSON.parse(verify_replay(track, replay, default_profile()));
       const { ticks, trace } = JSON.parse(trace_replay(track, replay));
       return { case: c.name, report, ticks, trace, ms: Math.round(performance.now() - t0) };
     } catch (e) {

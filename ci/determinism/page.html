@@ -5,7 +5,7 @@
 <pre id="log">Verificando replays…</pre>
 <script type="module">
   // WASM de prueba (sim-wasm con la feature `harness`), nunca el binario de publicación.
-  import init, { verify_replay, trace_replay, physics_version } from '/ci/determinism/wasm/sim_wasm.js';
+  import init, { default_profile, verify_replay, trace_replay, physics_version } from '/ci/determinism/wasm/sim_wasm.js';
   const out = { userAgent: navigator.userAgent, results: [] };
   const log = document.getElementById('log');
   try {
@@ -13,11 +13,12 @@
     out.physics = physics_version();
     const cases = await (await fetch('/__cases.json')).json();
     for (const c of cases) {
-      const [track, replay] = await Promise.all([fetch(c.track).then((r) => r.text()), fetch(c.replay).then((r) => r.text())]);
+      const [track, replay] = await Promise.all([fetch(c.track).then((r) => r.text()), fetch(c.replay).then(async (r) => new Uint8Array(await r.arrayBuffer()))]);
       const t0 = performance.now();
       const res = { case: c.name };
       try {
-        res.report = JSON.parse(verify_replay(track, replay));
+        // Goldens: LEGACY_VEHICLE, recorded with the default profile parameters.
+        res.report = JSON.parse(verify_replay(track, replay, default_profile()));
         const t = JSON.parse(trace_replay(track, replay));
         res.ticks = t.ticks;
         res.trace = t.trace;

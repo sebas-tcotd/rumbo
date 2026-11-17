@@ -81,10 +81,11 @@ crates/
     src/vehicle.rs     Auto: suspensión por raycast, neumáticos arcade, capa de asistencias
     src/profile.rs     Reexports del perfil compartido en track-format/domain/profile.rs
     src/race.rs        Vueltas y checkpoints sobre la coordenada s
-    src/replay.rs      Grabación RLE y verificación; DTO en track-format/domain/replay.rs
+    src/replay.rs      Grabación a 60 Hz, verificación y migración v1; formato en track-format/domain/replay_v2.rs
     src/simulation.rs  Sesión completa y hash canónico del estado
     src/autopilot.rs   Piloto automático (prueba de manejo automática y replays de referencia)
-    tests/             Determinismo, replays dorados, casos adversos y pruebas de manejo
+    tests/             Determinismo, replays dorados (golden/, rumbo-replay/2; golden-v1/, origen de la migración), casos adversos y pruebas de manejo
+    examples/replay_v1_to_v2.rs  Migración determinista de los dorados v1 → v2 con su tabla de tolerancias
   sim-wasm/   Capa fina de wasm-bindgen; no tiene lógica de simulación
 packages/contracts/     Puertos, protocolo versionado, layout de 41 campos f32, ajustes y tiempo de frame
 packages/sim-worker/    Worker, binding WASM, reloj fijo y cliente de SimPort
@@ -101,11 +102,15 @@ assets/
 
 ## Worker de simulación
 
-El worker ejecuta hasta ocho ticks de 1/120 s por despertar y conserva la fracción restante. Una pausa manual y una pestaña oculta suspenden el reloj. El laboratorio conserva la entrada por tick y el formato `race-lab-replay/1`.
+El worker ejecuta hasta ocho ticks de 1/120 s por despertar y conserva la fracción restante. Una pausa manual y una pestaña oculta suspenden el reloj.
+
+**Entrada canónica a 60 Hz (D7).** Cada `InputFrame` cubre dos ticks. La simulación toma un frame nuevo solo en el primer tick de cada par (`accepts_frame`) y en el segundo lo vuelve a aplicar sin los eventos (`RESET`, `RESTART`). Los ejes y el freno de mano actúan en los dos ticks. El worker consume los eventos pedidos solo en ticks que aceptan frame, así un reset que llega en el segundo tick espera al par siguiente en lugar de perderse. La cuantización de los ejes (con la zona muerta `STEER_DEADBAND` de la dirección) vive en Rust: `InputFrame::from_axes`, llamada por `Lab::step_axes`.
+
+**Replays `rumbo-replay/2` (D17).** El laboratorio exporta, verifica y re-simula replays binarios (protocolo del worker v3: `replay{bytes}`, `verifyReplay{bytes}`, `devSeekReplay{bytes, tick}`). El replay no lleva el perfil: el worker verifica y re-simula con el perfil de la sesión. JavaScript no decodifica postcard; lee los metadatos con `replay_summary` (WASM).
 
 Tres slots de 328 bytes transportan los estados anterior y actual (41 f32 cada uno). El mensaje lleva la versión del layout, generación, slot y timestamp. El cliente copia ambos estados a memoria propia antes de devolver el buffer mediante transferencia. El renderer puede leer hasta la próxima entrega. React conserva una copia a unos 15 Hz. Una vuelta completada y sus frames de fantasma viajan por un mensaje independiente del pool.
 
-`hashContent` usa BLAKE3-128 de Rust. La codificación de retos con Race, Replay y RouteMeta y la carga de fantasmas externos devuelven `UNSUPPORTED_CAPABILITY`. Las fixtures prospectivas comprueban la cabecera de replay v2 y el prefijo de link inline. La semilla se expresa como decimal u64 en la fixture JSON. La escritura de ambos formatos corresponde a 0.10 y 6.7.
+`hashContent` usa BLAKE3-128 de Rust. La codificación de retos con Race, Replay y RouteMeta y la carga de fantasmas externos devuelven `UNSUPPORTED_CAPABILITY`. La paridad compara la cabecera real de `rumbo-replay/2` (Rust `ReplayHeader::wire_json` contra `replay_summary` en WASM) y el prefijo prospectivo del link inline, que llega en la 6.7. La semilla se expresa como decimal u64 en JSON.
 
 `pnpm turbo run build` compila los paquetes. `pnpm turbo run test --force` ejecuta paridad, transferencias, negativos de capas y el resto de las pruebas (ver [CI](#ci)). Para revisar Biome usa `pnpm exec biome lint` (paquetes y `apps/`). Con Chromium instalado en Playwright, `node ci/determinism/lab-smoke.mjs` prueba los bundles (laboratorio en `dist-lab/` y publicación en `dist/`) y `node ci/determinism/lab-smoke.mjs --dev` prueba Vite. `node ci/bundle/check-devtools.mjs` comprueba que `@rumbo/devtools` no está en `dist/` y sí en `dist-lab/`.
 
@@ -138,9 +143,16 @@ instancia a otro adapter ni hay singletons; con HMR, `import.meta.hot.dispose` d
 
 ## Kernel compartido
 
-`track-format` contiene los DTO de pista, replay v1, entrada y perfil, sin dependencias de
-simulación ni I/O. `sim-core` conserva los reexports de datos; las operaciones de runtime
-son `sim_core::compile_track(&TrackDef)` y `sim_core::verify_replay(&ReplayManifest, &TrackDef)`.
+`track-format` contiene los DTO de pista, replay (`rumbo-replay/2` y el v1 solo para migrar), entrada y perfil, sin
+dependencias de simulación ni I/O. `sim-core` conserva los reexports de datos; las operaciones de runtime
+son `sim_core::compile_track(&TrackDef)` y `sim_core::verify_replay(&ReplayV2, &TrackDef, &ProfileFile)`.
+
+`rumbo-replay/2` (`domain/replay_v2.rs`) va dentro del sobre `RTF\0`: cabecera (`format`, `physicsVersion`,
+`trackHash`, `raceHash`, `vehicleRef`, `seed`, `players`), ticks, un flujo de entradas a 60 Hz por jugador
+(tandas + máscara de campos + deltas zigzag varint, codificación canónica), un hash de control FNV cada 10 s y el
+hash final. En E0 la carrera y el vehículo son centinelas (`LEGACY_RACE`, `LEGACY_VEHICLE`) y `trackHash` deriva del
+FNV legado de la pista (`legacy_track_hash`); las historias 1.1, 1.3 y 2.5 traen los valores reales sin cambiar el
+layout. El lector rechaza formatos desconocidos, más de un jugador, más de dos horas de ticks y flujos no canónicos.
 
 FNV-1a tiene un solo acumulador, con texto prefijado por `u32` para simulación y por `u64`
 para compilador. Se preservan los hashes legados. La API nueva `codec::{encode, decode}` usa
@@ -151,7 +163,7 @@ El sobre binario es independiente de los lectores JSON y rechaza versiones desco
 `rng::Pcg32` implementa XSH-RR 64/32: siembra de referencia, `initstate=seed`,
 `initseq=id`; ids estables: bots=1, start=2, rules=3 (63 bits). Los streams se crean por separado
 con `for_subsystem`; consumir uno no avanza los demás. Todavía no se conectan al tick.
-El RNG de decoración sigue separado. El replay legado conserva 120 Hz y las versiones existentes.
+El RNG de decoración sigue separado.
 
 `NetworkDef` conserva vértices 3D y su pertenencia a triángulos: admite alturas distintas sobre
 el mismo (x,z). Esto prepara los datos; la conducción por pasos a desnivel queda pendiente de D11.
@@ -166,8 +178,8 @@ cargo check -p track-format --target wasm32-unknown-unknown
 cargo clippy -p track-format --all-targets -- -D warnings -A clippy::pedantic
 ```
 
-La prueba `per_tick` compara huellas de todos los ticks de los ocho replays con las capturadas
-antes de la extracción en `18649c3`, además de los controles y hashes finales dorados.
+La prueba `per_tick` compara huellas de todos los ticks de los ocho dorados `rumbo-replay/2` con las fijadas para
+la física 0.6.0 (historia 0.10), además de los controles y hashes finales dorados.
 
 ## Capas (ADR-005)
 
@@ -243,11 +255,14 @@ cargo test -p sim-core --release
 
 Incluyen:
 
-- **Determinismo:** mismas entradas dan el mismo hash; una entrada alterada se detecta en el siguiente control (cada 600 ticks).
-- **Replays dorados:** los 8 de `crates/sim-core/tests/golden/` (ver [S4](#s4--determinismo)) se reproducen
-  bit a bit. Regenéralos con `UPDATE_GOLDEN=1 cargo test -p sim-core --release --test golden` cuando cambie la
-  física, en un commit `physics:` que suba `PHYSICS_VERSION` en `track-format/src/version.rs` (ver
-  [Regla de dorados](#regla-de-dorados-p1)).
+- **Determinismo:** mismas entradas dan el mismo hash; una entrada alterada se detecta en el siguiente control (cada 1200 ticks, 10 s). La regla de pares de 60 Hz está cubierta por pruebas propias.
+- **Replays dorados:** los 8 `.bin` de `crates/sim-core/tests/golden/` (ver [S4](#s4--determinismo)) se reproducen
+  bit a bit. Son flujos de entrada fijos: `UPDATE_GOLDEN=1 cargo test -p sim-core --release --test golden`
+  **re-simula las mismas entradas** con la física vigente y reescribe controles y hash final. Se usa cuando cambia
+  la física, en un commit `physics:` que sube `PHYSICS_VERSION` en `track-format/src/version.rs` (ver
+  [Regla de dorados](#regla-de-dorados-p1)). Nacieron de la migración v1 → v2 (historia 0.10):
+  `cargo run --release --locked -p sim-core --example replay_v1_to_v2 -- --check` comprueba que siguen siendo su
+  salida; sin `--check` imprime la tabla de tolerancias.
 - **Casos adversos:** choques a fondo, volante al tope y resets repetidos; el estado nunca deja de ser finito.
 - **Prueba de manejo automática:** el piloto automático da varias vueltas; falla ante golpes verticales,
   ruedas en el aire o contacto con el muro.
@@ -488,10 +503,11 @@ deja ver para lo que falta:
 
 ## S4 · Determinismo
 
-Ocho replays dorados se graban en nativo (`crates/sim-core/tests/golden.rs`) y se re-simulan con un único
-WASM de prueba en cada entorno. Se compara el hash canónico del estado (`Simulation::state_hash()`, un `u64`
-en 16 dígitos hex) **después de cada tick** con la referencia nativa, y además se conservan los controles del
-replay (cada 5 s), el hash final y las vueltas.
+Ocho replays dorados `rumbo-replay/2` (`crates/sim-core/tests/golden/*.bin`) se re-simulan con un único WASM de
+prueba en cada entorno. Se compara el hash canónico del estado (`Simulation::state_hash()`, un `u64` en 16 dígitos
+hex) **después de cada tick** con la referencia nativa, y además se conservan los controles del replay (cada 10 s) y
+el hash final (el cronómetro de vueltas forma parte del hash). Los metadatos de cada dorado (ticks, controles, hash
+final) los decodifica Rust en la referencia nativa: JavaScript no lee postcard.
 
 | Pista | Casos |
 |---|---|

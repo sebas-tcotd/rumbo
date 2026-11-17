@@ -18,14 +18,15 @@ export interface LabController {
   restartSession(): void;
   exportReplay(): void;
   verifyCurrentSession(): void;
-  verifyReplayFile(json: string): void;
+  /** Verifies a `rumbo-replay/2` file with the current profile (the replay does not carry it). */
+  verifyReplayFile(bytes: Uint8Array): void;
   switchTrack(id: string): void;
   /** AR28: car to lap distance `s` (marks the session altered). */
   teleport(s: number): void;
   /** AR28: re-simulates a replay up to `tick` and stays paused there. */
-  seekReplay(json: string, tick: number): void;
+  seekReplay(bytes: Uint8Array, tick: number): void;
   /** Replays exported for download (devtools subscribes); returns the unsubscribe function. */
-  onReplay(listener: (json: string, ticks: number) => void): () => void;
+  onReplay(listener: (bytes: Uint8Array, ticks: number) => void): () => void;
   /** Exports the worker rejected (no replay will arrive); returns the unsubscribe function. */
   onExportFailed(listener: () => void): () => void;
 }
@@ -44,7 +45,7 @@ type ReplayActions = Pick<
 
 /** Replay export/verify flow: "verify this session" exports first and verifies the export it gets back. */
 function createReplayActions(session: LabSession): ReplayActions {
-  const replayListeners = new Set<(json: string, ticks: number) => void>();
+  const replayListeners = new Set<(bytes: Uint8Array, ticks: number) => void>();
   const failedListeners = new Set<() => void>();
   let verifyAfterExport = false;
   session.onCommandError = (operation) => {
@@ -52,13 +53,13 @@ function createReplayActions(session: LabSession): ReplayActions {
     verifyAfterExport = false;
     for (const l of failedListeners) l();
   };
-  session.onReplay = (json, ticks) => {
+  session.onReplay = (bytes, ticks) => {
     if (verifyAfterExport) {
       verifyAfterExport = false;
-      session.send({ type: 'verifyReplay', json });
+      session.send({ type: 'verifyReplay', bytes });
       return;
     }
-    for (const l of replayListeners) l(json, ticks);
+    for (const l of replayListeners) l(bytes, ticks);
   };
   const subscribe = <T>(set: Set<T>, listener: T) => {
     set.add(listener);
@@ -73,12 +74,12 @@ function createReplayActions(session: LabSession): ReplayActions {
       verifyAfterExport = true;
       session.send({ type: 'exportReplay' });
     },
-    verifyReplayFile: (json) => session.send({ type: 'verifyReplay', json }),
+    verifyReplayFile: (bytes) => session.send({ type: 'verifyReplay', bytes }),
     // The worker pauses the seek's session itself and the session adopts that pause when it arrives,
     // so a rejected seek leaves the lab running as it was.
-    seekReplay(json, tick) {
+    seekReplay(bytes, tick) {
       verifyAfterExport = false;
-      session.sendDev({ type: 'devSeekReplay', json, tick });
+      session.sendDev({ type: 'devSeekReplay', bytes, tick });
     },
     onReplay: (listener) => subscribe(replayListeners, listener),
     onExportFailed: (listener) => subscribe(failedListeners, listener),

@@ -74,7 +74,7 @@ export function summarize({ dir, referencePath, root, artifacts }) {
   }
   let fixtures = [];
   try {
-    fixtures = listCases(root);
+    fixtures = listCases(root, reference);
   } catch (e) {
     problems.push(`fixtures ilegibles: ${e.message}`);
   }

@@ -3,6 +3,9 @@ import test from 'node:test';
 import { Worker } from 'node:worker_threads';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import initSim, { Lab, default_profile, replay_summary } from '../../crates/sim-wasm/pkg/sim_wasm.js';
+
+await initSim({ module_or_path: readFileSync(new URL('../../crates/sim-wasm/pkg/sim_wasm_bg.wasm', import.meta.url)) });
 
 const assets = new URL('../../apps/web/dist/assets/', import.meta.url);
 const files = readdirSync(assets);
@@ -45,7 +48,7 @@ function host(t, fault, deferInit = false) {
       worker.on('message', onMessage);
       worker.on('error', onError);
     });
-    worker.postMessage({ protocolVersion: 2, generation: 1, ...command }, transfer);
+    worker.postMessage({ protocolVersion: 3, generation: 1, ...command }, transfer);
     await done;
     return messages;
   };
@@ -89,7 +92,7 @@ test('real worker keeps racing with three slots held, publishes lap and resumes 
   await send({ type: 'resume' });
   assert.equal((await send({ type: 'exportReplay' }))[0].ticks, TICKS + 8);
   assert.equal((await send({ type: 'loadGhost', replay: '{}' }))[0].code, 'UNSUPPORTED_CAPABILITY');
-  assert.equal((await send({ type: 'verifyReplay', json: '{' }))[0].code, 'INVALID_REPLAY');
+  assert.equal((await send({ type: 'verifyReplay', bytes: Uint8Array.of(1) }))[0].code, 'INVALID_REPLAY');
   await send({
     type: 'newSession',
     profileJson: JSON.stringify({ id: 'p', name: 'P', params: {} }),
@@ -100,9 +103,11 @@ test('real worker keeps racing with three slots held, publishes lap and resumes 
 
 for (const [fault, command] of [
   ['lab_new', load],
-  ['lab_step', { wakes: 1, elapsed: 10 }],
+  // 60 Hz input (D7): the first tick of a pair steps with the player's axes, the second with `step`.
+  ['lab_step_axes', { wakes: 1, elapsed: 10 }],
+  ['lab_step', { wakes: 1, elapsed: 20 }],
   ['lab_state_ptr', { wakes: 1, elapsed: 10 }],
-  ['verify_replay', { type: 'verifyReplay', json: '{}' }],
+  ['verify_replay', { type: 'verifyReplay', bytes: Uint8Array.of(1) }],
 ]) {
   test('terminal WASM trap in ' + fault, async (t) => {
     const send = host(t, fault);
@@ -134,7 +139,18 @@ test('public control rejects bad versions, invalid fields and unsupported future
     'af1349b9f5f9a1a6a0404dea36dcc949',
   );
 });
-test('input quantization, saturation and one-tick flags survive the wire', async (t) => {
+/** The bytes a Lab records for these per-tick inputs (the simulation keeps one frame per pair, D7). */
+function expectedReplay(ticks) {
+  const lab = new Lab(track, default_profile(), 1);
+  try {
+    for (const t of ticks) lab.step(...t);
+    return lab.replay_bytes();
+  } finally {
+    lab.free();
+  }
+}
+
+test('input quantization, saturation and one-tick flags survive the wire at 60 Hz', async (t) => {
   const send = host(t);
   await send(load);
   await send({ type: 'start' });
@@ -142,16 +158,41 @@ test('input quantization, saturation and one-tick flags survive the wire', async
   await send({ type: 'reset' });
   await send({ type: 'restart' });
   await send({ wakes: 2, elapsed: 9 });
-  const replay = JSON.parse((await send({ type: 'exportReplay' }))[0].json);
-  assert.deepEqual(replay.inputs, [
-    [1, 0x0700ff81],
-    [1, 0x0100ff81],
-  ]);
-  assert.equal(replay.format, 'race-lab-replay/1');
+  const [exported] = await send({ type: 'exportReplay' });
+  assert.equal(exported.ticks, 2);
+  // One frame for the pair: saturated axes (Rust quantization), handbrake, reset and restart on its first tick.
+  assert.deepEqual(exported.bytes, expectedReplay([[-127, 255, 0, 7], [0, 0, 0, 0]]));
+  const summary = JSON.parse(replay_summary(exported.bytes));
+  assert.equal(summary.header.format, 'rumbo-replay/2');
+  assert.equal(summary.frames, 1);
+});
+
+test('a reset requested on the second tick of a pair waits for the next frame instead of being lost', async (t) => {
+  const send = host(t);
+  await send(load);
+  await send({ type: 'start' });
+  await send({ type: 'input', frame: { steer: 0.5, throttle: 1, brake: 0, handbrake: false } });
+  await send({ wakes: 1, elapsed: 9 }); // tick 1: first of the pair, takes the frame
+  await send({ type: 'reset' });
+  await send({ wakes: 1, elapsed: 9 }); // tick 2: second of the pair, the reset waits
+  await send({ wakes: 1, elapsed: 9 }); // tick 3: next pair, the reset is applied
+  const [exported] = await send({ type: 'exportReplay' });
+  assert.equal(exported.ticks, 3);
+  assert.deepEqual(exported.bytes, expectedReplay([[64, 255, 0, 0], [0, 0, 0, 0], [64, 255, 0, 2]]));
+});
+
+test('the steering deadband is applied in the worker', async (t) => {
+  const send = host(t);
+  await send(load);
+  await send({ type: 'start' });
+  await send({ type: 'input', frame: { steer: 0.02, throttle: 0, brake: 0, handbrake: false } });
+  await send({ wakes: 2, elapsed: 9 });
+  const [exported] = await send({ type: 'exportReplay' });
+  assert.deepEqual(exported.bytes, expectedReplay([[0, 0, 0, 0], [0, 0, 0, 0]]));
 });
 
 test('superseded and disposed async loads cannot publish a stale ready', async (t) => {
-  const first = { ...load, generation: 1, protocolVersion: 2 };
+  const first = { ...load, generation: 1, protocolVersion: 3 };
   const loadAgain = host(t, undefined, true);
   const replies = await loadAgain({ first, duringInit: { ...first, generation: 2 } });
   assert.deepEqual(
@@ -163,7 +204,7 @@ test('superseded and disposed async loads cannot publish a stale ready', async (
   );
   const cancelled = host(t, undefined, true);
   assert.deepEqual(
-    await cancelled({ first, duringInit: { type: 'dispose', generation: 1, protocolVersion: 2 } }),
+    await cancelled({ first, duringInit: { type: 'dispose', generation: 1, protocolVersion: 3 } }),
     [],
   );
 });
@@ -227,8 +268,9 @@ test('AR28 dev commands: teleport moves the car, seek re-simulates a replay up t
   assert.equal(moved.type, 'snapshot');
   assert.equal(moved.paused, true);
   assert.ok(Math.abs(field(moved, 'progressS') - 200) < 3, String(field(moved, 'progressS')));
-  const golden = readFileSync(new URL('../../crates/sim-core/tests/golden/test-loop.scripted.json', import.meta.url), 'utf8');
-  const seek = (tick) => send({ type: 'devSeekReplay', json: golden, tick });
+  // `rumbo-replay/2`: the worker re-simulates it with the session's profile (the default one, as the golden).
+  const golden = new Uint8Array(readFileSync(new URL('../../crates/sim-core/tests/golden/test-loop.scripted.bin', import.meta.url)));
+  const seek = (tick) => send({ type: 'devSeekReplay', bytes: golden.slice(), tick });
   const first = await seek(600);
   assert.deepEqual(
     first.map((m) => m.type),
@@ -238,12 +280,12 @@ test('AR28 dev commands: teleport moves the car, seek re-simulates a replay up t
   assert.equal(first[1].paused, true);
   const again = await seek(600);
   assert.deepEqual(new Float32Array(again[1].buffer), new Float32Array(first[1].buffer), 'deterministic seek');
-  const ticks = JSON.parse(golden).ticks;
-  for (const [json, tick] of [
-    [golden, ticks + 1],
-    ['{', 10],
+  const ticks = JSON.parse(replay_summary(golden)).ticks;
+  for (const [bytes, tick] of [
+    [golden.slice(), ticks + 1],
+    [Uint8Array.of(1, 2, 3), 10],
   ]) {
-    const [rejected] = await send({ type: 'devSeekReplay', json, tick });
+    const [rejected] = await send({ type: 'devSeekReplay', bytes, tick });
     assert.deepEqual([rejected.type, rejected.code], ['verifyError', 'INVALID_REPLAY']);
   }
   // The session survives a rejected seek.

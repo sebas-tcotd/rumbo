@@ -21,13 +21,15 @@ The «Depuración» tab and the Session tab add:
   injected `RenderDebugPort`; the renderer builds each one the first time it is switched on.
 - **Teleport** to a lap distance `s` (worker command `devTeleport`). Not recorded in the replay: the session
   becomes *altered*, recording a golden is blocked and the replay section warns.
-- **Record a golden**: downloads the current session's `race-lab-replay/1` as `<track>.<case>.json`, the format
+- **Record a golden**: downloads the current session's `rumbo-replay/2` as `<track>.<case>.bin`, the format
   of `crates/sim-core/tests/golden/`. Adding it to `CASES` in `golden.rs` is a separate change under the golden
-  rules; this tool adds nothing to the set.
+  rules (a `physics:` commit); this tool adds nothing to the set.
 - **Jump to `firstMismatchTick`**: after verifying a file that diverges, «Ir al tick N» re-simulates that replay in
-  the lab up to the first mismatched check and pauses there (`devSeekReplay`, bounded by `DEV_SEEK_MAX_CHARS` and
-  `DEV_SEEK_MAX_TICKS`; the worker rejects anything else as `INVALID_REPLAY`). The session becomes altered and the
-  replay's own profile becomes the applied one (tuning panel, car rest height, «Reiniciar sesión»).
+  the lab up to the first mismatched check and pauses there (`devSeekReplay`, bounded by `DEV_SEEK_MAX_BYTES` and
+  `DEV_SEEK_MAX_TICKS`; the worker rejects anything else as `INVALID_REPLAY`). The session becomes altered. A
+  `rumbo-replay/2` does not carry its profile (D17): verification and the seek use the lab's current profile, and
+  until story 1.3 (`LEGACY_VEHICLE`) nothing checks that it is the profile the replay was recorded with. To verify
+  a replay recorded with a tuned profile, apply that profile first.
 - **Teleport on a sprint** past the start line leaves no timed attempt until T: the sprint only starts timing when
   the car crosses the start going forward. The Debug tab says so; the timing rules are not changed for dev tools.
 

@@ -1,6 +1,8 @@
-//! Legacy JSON replay DTO, unchanged field order and input packing.
+//! `race-lab-replay/1`: legacy JSON replay DTO, unchanged field order and input packing.
+//! Migration only (story 0.10): nothing outside the v1 → v2 tool and its tests reads it.
+//! The current format is `replay_v2`.
 use super::profile::ProfileFile;
-pub use crate::version::REPLAY_FORMAT;
+pub use crate::version::REPLAY_FORMAT_V1;
 use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StateCheck {
@@ -8,7 +10,7 @@ pub struct StateCheck {
     pub hash: String,
 }
 
-/// Todo lo necesario para reproducir una sesión exactamente.
+/// A v1 session (migration only): embedded profile and per-tick RLE inputs.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplayManifest {

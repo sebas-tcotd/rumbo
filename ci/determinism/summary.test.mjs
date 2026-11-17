@@ -16,7 +16,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
 const referencePath = join(here, 'reference/native.json');
 const reference = JSON.parse(readFileSync(referencePath, 'utf8'));
-const fixtures = listCases(root);
+const fixtures = listCases(root, reference);
 
 /** A passing result file for `browser`, built from the native reference. */
 function env(browser, mutate = (r) => r) {

@@ -4,13 +4,21 @@
 use sim_core::autopilot::Autopilot;
 use sim_core::profile::{self, ProfileFile};
 use sim_core::simulation::STATE_FIELDS;
-use sim_core::{InputFrame, ReplayManifest, Simulation, TrackDef, STATE_LEN};
+use sim_core::{InputFrame, ReplayV2, Simulation, TrackDef, STATE_LEN};
 use wasm_bindgen::prelude::*;
 
 mod error;
 pub use error::RumboError;
 #[cfg(feature = "harness")]
 pub mod harness;
+
+fn parse_profile(json: &str) -> Result<ProfileFile, RumboError> {
+    serde_json::from_str(json).map_err(|e| RumboError::InvalidProfile(e.to_string()))
+}
+
+fn decode_replay(bytes: &[u8]) -> Result<ReplayV2, RumboError> {
+    ReplayV2::decode(bytes).map_err(|e| RumboError::InvalidReplay(e.to_string()))
+}
 
 /// Una sesión del laboratorio: pista + perfil congelado + auto.
 #[wasm_bindgen]
@@ -29,25 +37,26 @@ impl Lab {
     #[wasm_bindgen(constructor)]
     pub fn new(track_json: &str, profile_json: &str, seed: u32) -> Result<Lab, JsValue> {
         let track = TrackDef::from_json(track_json).map_err(RumboError::InvalidTrack)?;
-        let profile: ProfileFile =
-            serde_json::from_str(profile_json).map_err(|e| RumboError::InvalidProfile(e.to_string()))?;
+        let profile = parse_profile(profile_json)?;
         let sim = Simulation::new(&track, &profile, seed as u64).map_err(RumboError::InvalidTrack)?;
         Ok(Lab { sim, autopilot: Autopilot::default(), state: vec![0.0; STATE_LEN] })
     }
 
-    /// Dev tool (AR28): a session re-simulated from `replay_json` up to `tick`
-    /// (`sim_core::replay::resimulate_until`).
+    /// Dev tool (AR28): a session re-simulated from `rumbo-replay/2` bytes up to `tick`
+    /// (`sim_core::replay::resimulate_until`). The replay does not carry the profile (D17): the host
+    /// passes the one to use (the lab passes its current profile).
     ///
     /// # Errors
-    /// Returns a coded string for an invalid track, replay, or seek tick.
-    pub fn from_replay(track_json: &str, replay_json: &str, tick: f64) -> Result<Lab, JsValue> {
+    /// Returns a coded string for an invalid track, profile, replay, or seek tick.
+    pub fn from_replay(track_json: &str, replay: &[u8], profile_json: &str, tick: f64) -> Result<Lab, JsValue> {
         if !(tick.is_finite() && tick >= 0.0 && tick.fract() == 0.0) {
             return Err(RumboError::InvalidReplay(format!("tick inválido: {tick}")).into());
         }
         let track = TrackDef::from_json(track_json).map_err(RumboError::InvalidTrack)?;
-        let manifest = ReplayManifest::from_json(replay_json).map_err(RumboError::InvalidReplay)?;
-        let sim =
-            sim_core::replay::resimulate_until(&manifest, &track, tick as u64).map_err(RumboError::InvalidReplay)?;
+        let profile = parse_profile(profile_json)?;
+        let replay = decode_replay(replay)?;
+        let sim = sim_core::replay::resimulate_until(&replay, &track, &profile, tick as u64)
+            .map_err(RumboError::InvalidReplay)?;
         Ok(Lab { sim, autopilot: Autopilot::default(), state: vec![0.0; STATE_LEN] })
     }
 
@@ -56,9 +65,30 @@ impl Lab {
         self.sim.teleport_to_s(s);
     }
 
-    /// Avanza un tick con la entrada dada.
+    /// Avanza un tick con una entrada ya cuantizada. En el segundo tick de cada par la simulación ignora
+    /// la entrada (D7): ver `accepts_frame`.
     pub fn step(&mut self, steer: i8, throttle: u8, brake: u8, flags: u8) {
         self.sim.step(InputFrame { steer, throttle, brake, flags });
+    }
+
+    /// Avanza un tick con ejes analógicos (dirección en [-1, 1], acelerador y freno en [0, 1]) usando la
+    /// cuantización canónica con deadband (`InputFrame::from_axes`, D7).
+    pub fn step_axes(&mut self, steer: f32, throttle: f32, brake: f32, flags: u8) {
+        self.sim.step(InputFrame::from_axes(steer, throttle, brake, flags));
+    }
+
+    /// Si el próximo `step` toma una entrada nueva (primer tick del par, D7). El host solo consume
+    /// eventos de un tick (reset, reinicio) cuando es verdadero; si no, se perderían.
+    pub fn accepts_frame(&self) -> bool {
+        self.sim.accepts_frame()
+    }
+
+    /// Perfil de la sesión (JSON de `ProfileFile`), para verificar su replay: el replay no lo lleva (D17).
+    ///
+    /// # Errors
+    /// Devuelve el mensaje de serialización si el perfil no puede codificarse.
+    pub fn profile_json(&self) -> Result<String, JsValue> {
+        serde_json::to_string(self.sim.profile_file()).map_err(|e| RumboError::ExportFailed(e.to_string()).into())
     }
 
     /// Entrada que daría el piloto automático en el estado actual, empaquetada en un u32.
@@ -158,13 +188,13 @@ impl Lab {
         self.sim.track().ground_y
     }
 
-    /// Replay de la sesión completa (JSON del manifest).
+    /// Replay de la sesión completa en bytes `rumbo-replay/2`.
     ///
     /// # Errors
     ///
-    /// Devuelve el mensaje de serialización si el replay no puede codificarse.
-    pub fn replay_json(&self) -> Result<String, JsValue> {
-        serde_json::to_string(&self.sim.replay()).map_err(|e| RumboError::ExportFailed(e.to_string()).into())
+    /// Devuelve el mensaje del códec si el replay no puede codificarse.
+    pub fn replay_bytes(&self) -> Result<Vec<u8>, JsValue> {
+        self.sim.replay().encode().map_err(|e| RumboError::ExportFailed(e.to_string()).into())
     }
 
     fn part(&self, name: &str) -> Option<&sim_core::track::MeshPart> {
@@ -204,16 +234,44 @@ pub fn default_profile() -> String {
     .unwrap_or_default()
 }
 
-/// Re-simula un replay y devuelve el informe (JSON de `VerifyReport`).
+/// Re-simula un replay `rumbo-replay/2` con el perfil dado y devuelve el informe (JSON de `VerifyReport`).
 ///
 /// # Errors
-/// Returns a coded string when verification or report serialization fails.
+/// Returns a coded string when the inputs are invalid or report serialization fails.
 #[wasm_bindgen]
-pub fn verify_replay(track_json: &str, replay_json: &str) -> Result<String, JsValue> {
+pub fn verify_replay(track_json: &str, replay: &[u8], profile_json: &str) -> Result<String, JsValue> {
     let track = TrackDef::from_json(track_json).map_err(RumboError::InvalidTrack)?;
-    let manifest = ReplayManifest::from_json(replay_json).map_err(RumboError::InvalidReplay)?;
-    let report = sim_core::verify_replay(&manifest, &track).map_err(RumboError::InvalidReplay)?;
+    let profile = parse_profile(profile_json)?;
+    let replay = decode_replay(replay)?;
+    let report = sim_core::verify_replay(&replay, &track, &profile).map_err(RumboError::InvalidReplay)?;
     serde_json::to_string(&report).map_err(|e| RumboError::ExportFailed(e.to_string()).into())
+}
+
+/// Metadatos de un replay `rumbo-replay/2` (JSON), para que JavaScript los lea sin un segundo códec
+/// postcard (D15, D16): `{ header, ticks, frames, checks: [{ tick, hash }], finalHash }`, con la cabecera
+/// en la forma de `isReplayHeader` y los hashes en hexadecimal.
+///
+/// # Errors
+/// Returns a coded string when the bytes are not a valid replay.
+#[wasm_bindgen]
+pub fn replay_summary(replay: &[u8]) -> Result<String, JsValue> {
+    Ok(summary(&decode_replay(replay)?).to_string())
+}
+
+/// Summary JSON of a decoded replay (see `replay_summary`).
+pub fn summary(replay: &ReplayV2) -> serde_json::Value {
+    let checks: Vec<_> = replay
+        .checks
+        .iter()
+        .map(|c| serde_json::json!({ "tick": c.tick, "hash": track_format::hash::to_hex(c.hash) }))
+        .collect();
+    serde_json::json!({
+        "header": replay.header.wire_json(),
+        "ticks": replay.ticks,
+        "frames": ReplayV2::frames_for(replay.ticks),
+        "checks": checks,
+        "finalHash": track_format::hash::to_hex(replay.final_hash),
+    })
 }
 
 /// Geometría del auto para el render: semiejes del chasis, radio de rueda y anclajes.
