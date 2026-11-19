@@ -44,7 +44,7 @@ catalog:
   '@types/react': 19.3.0
   '@types/react-dom': 19.3.0
   '@types/three': 0.187.0
-  '@vitejs/plugin-react': 6.2.1
+  '@vitejs/plugin-react': 6.3.0
   i18next: 26.7.2
   playwright: 1.64.1
   react: 19.3.1
